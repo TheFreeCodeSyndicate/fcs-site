@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Free Code Syndicate — RFC 0001</title>
-  <meta name="description" content="The Free Code Syndicate — an open-source community. Software as right, not privilege. Free as in freedom." />
+  <meta name="description" content="The Free Code Syndicate is a public group for free code, study, and careful work." />
 
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png" />
@@ -35,7 +35,7 @@
       </div>
       <div class="doc-meta-col">
         <span class="doc-meta-label">Category</span>
-        <span class="doc-meta-value">Community Standard</span>
+        <span class="doc-meta-value">Public Standard</span>
       </div>
       <div class="doc-meta-col doc-meta-col--status">
         <span class="doc-meta-label">Status</span>
@@ -62,10 +62,14 @@
 
     <ul class="nav-links" id="nav-links">
       <li><a href="#abstract" data-section="abstract">&sect;1 Abstract</a></li>
-      <li><a href="#repositories" data-section="repositories">&sect;2 Repositories</a></li>
-      <li><a href="#study-groups" data-section="study-groups">&sect;3 Study Groups</a></li>
-      <li><a href="#join" data-section="join">&sect;4 Join</a></li>
-      <li><a href="#references" data-section="references">&sect;5 References</a></li>
+      <li><a href="#icarus" data-section="icarus">&sect;2 Icarus</a></li>
+      <li><a href="#protocol" data-section="protocol">&sect;3 Protocol</a></li>
+      <li><a href="#repositories" data-section="repositories">&sect;4 Code</a></li>
+      <li><a href="#study-groups" data-section="study-groups">&sect;5 Groups</a></li>
+      <li><a href="#contribute" data-section="contribute">&sect;6 Work</a></li>
+      <li><a href="#maintainers" data-section="maintainers">&sect;7 Maintainers</a></li>
+      <li><a href="#join" data-section="join">&sect;8 Entry</a></li>
+      <li><a href="#references" data-section="references">&sect;9 Refs</a></li>
     </ul>
   </nav>
 
@@ -74,20 +78,45 @@
          HERO
          ======================================================== -->
     <section class="hero">
-      <div class="hero-mark">
-        <img
-          src="assets/fcs-mark-header.png"
-          alt="The Free Code Syndicate emblem — a fractured, wing-shaped geometric mark"
-          width="240"
-          height="399"
-        />
+      <div class="hero-art">
+        <div class="hero-lockup">
+          <img
+            src="assets/fcs-lockup.png"
+            alt="The Free Code Syndicate logo"
+            width="2894"
+            height="4093"
+          />
+        </div>
+        <div class="hero-stamp" aria-hidden="true">
+          <span>STUDY MUST STAY PUBLIC</span>
+          <span>NO MASTER / NO LOCK</span>
+        </div>
       </div>
       <div class="hero-text">
+        <p class="kicker">RFC 0001 / public rule</p>
         <h1>THE&nbsp;FREE<br />CODE<br />SYNDICATE</h1>
         <p class="hero-sub">
-          A public working memo on free software &mdash; maintained in the open,
-          amended by anyone who shows up.
+          A public note on free code, shared study, and work that can be read,
+          changed, and kept alive by others.
         </p>
+        <div class="hero-actions" aria-label="Primary links">
+          <a href="#join">Enter the rooms</a>
+          <a href="#contribute">Choose the work</a>
+        </div>
+        <dl class="hero-ledger">
+          <div>
+            <dt>rule</dt>
+            <dd>freedom first</dd>
+          </div>
+          <div>
+            <dt>format</dt>
+            <dd>study + work</dd>
+          </div>
+          <div>
+            <dt>entry</dt>
+            <dd>arrive plainly</dd>
+          </div>
+        </dl>
       </div>
     </section>
 
@@ -100,44 +129,131 @@
       <h2><span class="sec-num">1</span> Abstract</h2>
       <div class="sec-body">
         <p class="mission-line">
-          The Free Code Syndicate &mdash; Software as Right, not Privilege:
-          <mark>Free as in Freedom.</mark>
+          The Free Code Syndicate holds one clear line:
+          <mark>software is a right, not a privilege.</mark>
         </p>
         <p>
-          We're a community of people who write, read, break, and study code
-          together, in public. No paywalled knowledge, no gatekept
-          repositories &mdash; if you're willing to learn, you're already in.
+          We write, read, test, break, and study code in public. Knowledge
+          must not sit behind a locked door. A person who wants to learn must
+          be able to start.
         </p>
         <p>
-          This page works like the rest of what we do: it's source you can
-          read, fork, and send a pull request against. Sections&nbsp;2
-          and&nbsp;3 below are pulled straight from our GitHub organization
-          and our own project data &mdash; nobody has to hand-edit a slide
-          deck to keep this current.
+          This page follows the same rule. Its source can be read, changed,
+          and reviewed. The repository list and group list come from public
+          data, so the record can stay close to the work.
         </p>
+        <p class="quote-line">
+          "Sapere aude." &mdash; Immanuel Kant
+        </p>
+      </div>
+      <div class="abstract-grid">
+        <article>
+          <span class="mini-label">scope</span>
+          <h3>Public learning material.</h3>
+          <p>Notes, repositories, reading lists, reviews, and tests are common records. They must be easy to find and hard to hide.</p>
+        </article>
+        <article>
+          <span class="mini-label">method</span>
+          <h3>Read with care. Build with care.</h3>
+          <p>We prefer basic ideas, work that can be repeated, small changes, and text that remains useful after the chat ends.</p>
+        </article>
+        <article>
+          <span class="mini-label">standard</span>
+          <h3>Use is the test.</h3>
+          <p>A project must teach, solve a real problem, or make the next person's path less dark.</p>
+        </article>
       </div>
     </section>
 
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 2 — REPOSITORIES (live from GitHub API)
+         SECTION 2 — ICARUS
+         ======================================================== -->
+    <section class="doc-section" id="icarus">
+      <h2><span class="sec-num">2</span> The Icarus Mark</h2>
+      <div class="icarus-layout">
+        <div class="icarus-copy">
+          <p class="sec-intro">
+            The mark is inspired by Icarus. We do not read his flight only as
+            a warning. We read it as a refusal to live low when the mind asks
+            for height.
+          </p>
+          <p>
+            Icarus was right to rise. A fall can wound the body, but fear can
+            close the sky before the first wing opens. We accept failure when
+            it comes from a true attempt. It is better to meet the sun and
+            fall than to never know what height demands.
+          </p>
+          <p class="quote-line">
+            "Never regret thy fall, O Icarus of the fearless flight. For the
+            greatest tragedy of them all is never to feel the burning light."
+            &mdash; attributed to Oscar Wilde
+          </p>
+        </div>
+        <div class="icarus-mark">
+          <img
+            src="assets/fcs-mark-large.png"
+            alt="The Free Code Syndicate mark, inspired by Icarus"
+            width="696"
+            height="1158"
+          />
+        </div>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 3 — PROTOCOL
+         ======================================================== -->
+    <section class="doc-section" id="protocol">
+      <h2><span class="sec-num">3</span> Operating Protocol</h2>
+      <p class="sec-intro">
+        These rules are plain by design. They are small enough to remember
+        and firm enough to protect the work.
+      </p>
+
+      <div class="protocol-layout">
+        <div class="protocol-panel">
+          <div class="protocol-plate" aria-label="Protocol record">
+            <span class="protocol-stamp">RFC 0001</span>
+            <p>PUBLIC RECORD</p>
+            <pre aria-hidden="true">read
+  write
+    test
+      fail
+        repair
+          publish</pre>
+            <p>NO PRIVATE GATE</p>
+          </div>
+        </div>
+        <div class="principle-list" id="principle-list">
+          <!-- populated by js/main.js from js/data.js -->
+        </div>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 4 — REPOSITORIES (live from GitHub API)
          ======================================================== -->
     <section class="doc-section" id="repositories">
-      <h2><span class="sec-num">2</span> Repositories</h2>
+      <h2><span class="sec-num">4</span> Repositories</h2>
       <p class="sec-intro">
-        Pulled live from
+        This list comes from
         <a
           href="https://github.com/TheFreeCodeSyndicate"
           target="_blank"
           rel="noopener"
           >github.com/TheFreeCodeSyndicate</a
-        >. This list updates itself whenever a repo does &mdash; nothing here
-        is hand-maintained.
+        >. It changes when the public repositories change. The record should
+        follow the source.
       </p>
 
       <p id="repo-status" class="repo-status" role="status" aria-live="polite">
-        Fetching object list<span class="cursor" aria-hidden="true">_</span>
+        Reading repository list<span class="cursor" aria-hidden="true">_</span>
       </p>
 
       <div id="repo-grid" class="repo-grid" hidden></div>
@@ -146,14 +262,16 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 3 — STUDY GROUPS (from js/data.js)
+         SECTION 5 — STUDY GROUPS (from js/data.js)
          ======================================================== -->
     <section class="doc-section" id="study-groups">
-      <h2><span class="sec-num">3</span> Study Groups</h2>
+      <h2><span class="sec-num">5</span> Study Groups</h2>
       <p class="sec-intro">
-        Small groups working through a subject together, from first
-        principles. Listed here, maintained in
-        <code>js/data.js</code>.
+        Study groups move slowly through one subject. They begin with first
+        principles and end with public notes, code, or questions.
+      </p>
+      <p class="quote-line">
+        "There is no royal road to geometry." &mdash; Euclid
       </p>
 
       <div id="study-group-grid" class="study-group-grid"></div>
@@ -162,26 +280,88 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 4 — HOW TO JOIN
+         SECTION 6 — CONTRIBUTION LANES
          ======================================================== -->
-    <section class="doc-section" id="join">
-      <h2><span class="sec-num">4</span> How to Join</h2>
+    <section class="doc-section" id="contribute">
+      <h2><span class="sec-num">6</span> Contribution Lanes</h2>
       <p class="sec-intro">
-        No application, no gate. Pick a room and say hello.
+        Permission is not the first step. Useful work is the first step. Pick
+        a small task, finish it, and leave a clear path for the next person.
       </p>
 
-      <div class="join-grid" id="join-grid">
+      <div class="lane-grid" id="lane-grid">
         <!-- populated by js/main.js from js/data.js -->
+      </div>
+
+      <div class="dispatch">
+        <div>
+          <span class="mini-label">cadence</span>
+          <h3>Weekly public note</h3>
+        </div>
+        <p>
+          State what changed, what failed, what was learned, and what still
+          needs hands. A short true note is better than long silence.
+        </p>
       </div>
     </section>
 
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 5 — REFERENCES
+         SECTION 7 — MAINTAINERS
+         ======================================================== -->
+    <section class="doc-section" id="maintainers">
+      <h2><span class="sec-num">7</span> Maintainers</h2>
+      <p class="sec-intro">
+        Maintainers keep the public record usable. They review, repair,
+        answer, and decide when silence would harm the work.
+      </p>
+
+      <p id="maintainer-status" class="repo-status" role="status" aria-live="polite">
+        Reading maintainer profiles<span class="cursor" aria-hidden="true">_</span>
+      </p>
+
+      <div id="maintainer-grid" class="maintainer-grid" hidden></div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 8 — HOW TO JOIN
+         ======================================================== -->
+    <section class="doc-section" id="join">
+      <h2><span class="sec-num">8</span> Entry</h2>
+      <p class="sec-intro">
+        There is no form and no gate. Choose a room. State your purpose.
+      </p>
+
+      <div class="join-layout">
+        <div class="join-grid" id="join-grid">
+          <!-- populated by js/main.js from js/data.js -->
+        </div>
+        <aside class="join-note">
+          <img
+            src="assets/fcs-mark-large.png"
+            alt=""
+            aria-hidden="true"
+            width="696"
+            height="1158"
+          />
+          <p>
+            A first message can be simple: what you study, what you build, or
+            what you do not yet understand.
+          </p>
+        </aside>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 9 — REFERENCES
          ======================================================== -->
     <section class="doc-section" id="references">
-      <h2><span class="sec-num">5</span> References</h2>
+      <h2><span class="sec-num">9</span> References</h2>
       <ul class="ref-list">
         <li>
           <span class="ref-tag">[GITHUB]</span>
@@ -209,7 +389,8 @@
   </main>
 
   <footer class="doc-footer">
-    <p>This document has no expiration date. Distribution of this memo is unlimited.</p>
+    <p>"No great thing is created suddenly." &mdash; Epictetus</p>
+    <p>This document has no end date. Distribution of this memo is unlimited.</p>
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
 

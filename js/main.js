@@ -12,8 +12,11 @@
  */
 
 document.addEventListener("DOMContentLoaded", () => {
+  renderPrinciples();
+  renderContributionLanes();
   renderJoinLinks();
   renderStudyGroups();
+  fetchMaintainers();
   fetchRepositories();
   setupMobileNav();
   setupScrollSpy();
@@ -23,7 +26,45 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ------------------------------------------------------------------
- * Section 4 — Join links
+ * Section 3 — Operating protocol
+ * ---------------------------------------------------------------- */
+function renderPrinciples() {
+  const list = document.getElementById("principle-list");
+  if (!list) return;
+
+  list.innerHTML = PRINCIPLES.map(
+    (item, index) => `
+      <article class="principle-item">
+        <span class="principle-index">${String(index + 1).padStart(2, "0")}</span>
+        <div>
+          <h3>${escapeHTML(item.title)}</h3>
+          <p>${escapeHTML(item.text)}</p>
+        </div>
+      </article>
+    `
+  ).join("");
+}
+
+/* ------------------------------------------------------------------
+ * Section 6 — Contribution lanes
+ * ---------------------------------------------------------------- */
+function renderContributionLanes() {
+  const grid = document.getElementById("lane-grid");
+  if (!grid) return;
+
+  grid.innerHTML = CONTRIBUTION_LANES.map(
+    (lane) => `
+      <article class="lane-card">
+        <span class="mini-label">${escapeHTML(lane.label)}</span>
+        <h3>${escapeHTML(lane.title)}</h3>
+        <p>${escapeHTML(lane.text)}</p>
+      </article>
+    `
+  ).join("");
+}
+
+/* ------------------------------------------------------------------
+ * Section 8 — Join links
  * ---------------------------------------------------------------- */
 function renderJoinLinks() {
   const grid = document.getElementById("join-grid");
@@ -43,14 +84,14 @@ function renderJoinLinks() {
 }
 
 /* ------------------------------------------------------------------
- * Section 3 — Study groups
+ * Section 5 — Study groups
  * ---------------------------------------------------------------- */
 function renderStudyGroups() {
   const grid = document.getElementById("study-group-grid");
   if (!grid) return;
 
   if (!STUDY_GROUPS || STUDY_GROUPS.length === 0) {
-    grid.innerHTML = `<p class="empty-note">No study groups listed yet — propose one in Discord.</p>`;
+    grid.innerHTML = `<p class="empty-note">No study groups are listed yet. Propose one in Discord.</p>`;
     return;
   }
 
@@ -74,7 +115,105 @@ function studyGroupCardHTML(group) {
 }
 
 /* ------------------------------------------------------------------
- * Section 2 — GitHub repositories (live API pull)
+ * Section 7 — Maintainers
+ * ---------------------------------------------------------------- */
+async function fetchMaintainers() {
+  const statusEl = document.getElementById("maintainer-status");
+  const gridEl = document.getElementById("maintainer-grid");
+  if (!statusEl || !gridEl) return;
+
+  try {
+    const profiles = await Promise.all(
+      MAINTAINERS.map(async (maintainer) => {
+        const res = await fetch(`https://api.github.com/users/${maintainer.username}`, {
+          headers: { Accept: "application/vnd.github+json" },
+        });
+
+        if (!res.ok) {
+          throw new Error(`GitHub API responded with ${res.status}`);
+        }
+
+        const profile = await res.json();
+        return { ...maintainer, profile };
+      })
+    );
+
+    gridEl.innerHTML = profiles.map(maintainerCardHTML).join("");
+    statusEl.hidden = true;
+    gridEl.hidden = false;
+  } catch (err) {
+    gridEl.innerHTML = MAINTAINERS.map(maintainerFallbackCardHTML).join("");
+    statusEl.textContent = "GitHub profiles cannot be read now. Maintainer links remain available.";
+    gridEl.hidden = false;
+    // eslint-disable-next-line no-console
+    console.error("[FCS] Maintainer profile fetch failed:", err);
+  }
+}
+
+function maintainerCardHTML(maintainer) {
+  const profile = maintainer.profile || {};
+  const displayName = profile.name || maintainer.name;
+  const bio = profile.bio || "No public profile note is present.";
+  const location = profile.location || "Location not listed";
+  const repoCount = Number.isFinite(profile.public_repos) ? profile.public_repos : 0;
+  const followers = Number.isFinite(profile.followers) ? profile.followers : 0;
+
+  return `
+    <article class="maintainer-card">
+      <div class="maintainer-top">
+        <img
+          src="${profile.avatar_url}"
+          alt=""
+          aria-hidden="true"
+          width="96"
+          height="96"
+          loading="lazy"
+        />
+        <div>
+          <h3>${escapeHTML(maintainer.name)}</h3>
+          <a href="${maintainer.url}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
+        </div>
+      </div>
+      <p class="maintainer-bio">${escapeHTML(bio)}</p>
+      <dl class="maintainer-meta">
+        <div>
+          <dt>profile name</dt>
+          <dd>${escapeHTML(displayName)}</dd>
+        </div>
+        <div>
+          <dt>location</dt>
+          <dd>${escapeHTML(location)}</dd>
+        </div>
+        <div>
+          <dt>public repos</dt>
+          <dd>${repoCount}</dd>
+        </div>
+        <div>
+          <dt>followers</dt>
+          <dd>${followers}</dd>
+        </div>
+      </dl>
+    </article>
+  `;
+}
+
+function maintainerFallbackCardHTML(maintainer) {
+  return `
+    <article class="maintainer-card">
+      <div class="maintainer-top">
+        <span class="maintainer-avatar" aria-hidden="true">${escapeHTML(maintainer.name.charAt(0))}</span>
+        <div>
+          <h3>${escapeHTML(maintainer.name)}</h3>
+          <a href="${maintainer.url}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
+        </div>
+      </div>
+      <p class="maintainer-bio">Open the GitHub profile for the current public overview.</p>
+    </article>
+  `;
+}
+
+/* ------------------------------------------------------------------
+ * Section 4 — GitHub repositories
  * ---------------------------------------------------------------- */
 async function fetchRepositories() {
   const statusEl = document.getElementById("repo-status");
@@ -94,7 +233,7 @@ async function fetchRepositories() {
     const repos = await res.json();
 
     if (!Array.isArray(repos) || repos.length === 0) {
-      statusEl.textContent = "No public repositories found.";
+      statusEl.textContent = "No public repositories were found.";
       return;
     }
 
@@ -107,9 +246,9 @@ async function fetchRepositories() {
     gridEl.hidden = false;
   } catch (err) {
     statusEl.innerHTML = `
-      Couldn't reach the GitHub API right now.
+      The GitHub API cannot be reached now.
       <a href="https://github.com/${GITHUB_ORG}" target="_blank" rel="noopener">
-        View the org directly on GitHub &rarr;
+        Open the organization on GitHub &rarr;
       </a>
     `;
     // eslint-disable-next-line no-console
@@ -120,7 +259,7 @@ async function fetchRepositories() {
 function repoCardHTML(repo) {
   const description = repo.description
     ? escapeHTML(repo.description)
-    : "No description provided.";
+    : "No description is present.";
   const language = repo.language || "\u2014"; // em dash fallback
   const updated = formatDate(repo.updated_at);
 
