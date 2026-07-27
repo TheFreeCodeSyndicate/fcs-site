@@ -2,7 +2,7 @@
  * js/data.js
  * ------------------------------------------------------------------
  * All the content that changes over time lives in this file.
- * To update the site — add a study group, change a link, point the
+ * To update the site — add a study group, add an event, change a link, point the
  * repo list at a different org — edit this file only. You should not
  * need to touch index.html, style.css, or main.js for routine
  * updates.
@@ -14,7 +14,7 @@
 const GITHUB_ORG = "TheFreeCodeSyndicate";
 
 /*
- * Maintainers (Section 7).
+ * Maintainers (Section 8).
  */
 const MAINTAINERS = [
   {
@@ -57,7 +57,7 @@ const PRINCIPLES = [
 ];
 
 /*
- * Contribution lanes (Section 6).
+ * Contribution lanes (Section 7).
  */
 const CONTRIBUTION_LANES = [
   {
@@ -83,7 +83,7 @@ const CONTRIBUTION_LANES = [
 ];
 
 /*
- * Entry links (Section 8).
+ * Entry links (Section 9).
  * Add or remove an entry to add or remove a card on the page.
  *
  *   label - text on the card
@@ -149,5 +149,44 @@ const STUDY_GROUPS = [
   //   status: "Forming",
   //   link: "https://discord.gg/nH2PRmbB5",
   //   linkText: "Join on Discord",
+  // },
+];
+
+/*
+ * Events (Section 6).
+ * Add a new event by copying an existing object below and editing
+ * its fields. The order of this array is the order shown on the page.
+ *
+ *   title    - event name, shown as the card title
+ *   group    - study group, chapter, or room running the event
+ *   date     - calendar date as readable text
+ *   time     - start time with timezone
+ *   status   - "Scheduled" | "Open" | "Done" — shown as a small tag
+ *   details  - one line describing what will happen
+ *   link     - optional event/repository/community link
+ *   linkText - label for that link
+ */
+const EVENTS = [
+  {
+    title: "Explain-3 Session",
+    group: "Crypto Study Group",
+    date: "Tuesday, 28 July 2026",
+    time: "21:00 IST",
+    status: "Scheduled",
+    details: "A study session for the next Explain track discussion.",
+    link: "https://github.com/TheFreeCodeSyndicate/CRYPTO_STUDY_GROUP",
+    linkText: "Check the repository",
+  },
+
+  // Add the next event by copying the block below and filling it in:
+  // {
+  //   title: "Event Title",
+  //   group: "Study Group Name",
+  //   date: "Tuesday, 28 July 2026",
+  //   time: "21:00 IST",
+  //   status: "Scheduled",
+  //   details: "One line on what will happen.",
+  //   link: "https://discord.gg/nH2PRmbB5",
+  //   linkText: "Join the room",
   // },
 ];

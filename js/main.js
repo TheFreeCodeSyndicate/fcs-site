@@ -16,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
   renderContributionLanes();
   renderJoinLinks();
   renderStudyGroups();
+  renderEvents();
   fetchMaintainers();
   fetchRepositories();
   setupMobileNav();
@@ -46,7 +47,7 @@ function renderPrinciples() {
 }
 
 /* ------------------------------------------------------------------
- * Section 6 — Contribution lanes
+ * Section 7 — Contribution lanes
  * ---------------------------------------------------------------- */
 function renderContributionLanes() {
   const grid = document.getElementById("lane-grid");
@@ -64,7 +65,7 @@ function renderContributionLanes() {
 }
 
 /* ------------------------------------------------------------------
- * Section 8 — Join links
+ * Section 9 — Join links
  * ---------------------------------------------------------------- */
 function renderJoinLinks() {
   const grid = document.getElementById("join-grid");
@@ -115,7 +116,49 @@ function studyGroupCardHTML(group) {
 }
 
 /* ------------------------------------------------------------------
- * Section 7 — Maintainers
+ * Section 6 — Events
+ * ---------------------------------------------------------------- */
+function renderEvents() {
+  const list = document.getElementById("event-list");
+  if (!list) return;
+
+  if (!EVENTS || EVENTS.length === 0) {
+    list.innerHTML = `<p class="empty-note">No events are listed yet. Add the next one in js/data.js.</p>`;
+    return;
+  }
+
+  list.innerHTML = EVENTS.map(eventCardHTML).join("");
+}
+
+function eventCardHTML(event) {
+  const statusClass = `tag-${(event.status || "").toLowerCase()}`;
+  const linkHTML = event.link
+    ? `<a href="${event.link}" target="_blank" rel="noopener">${escapeHTML(event.linkText || "Open event")} &rarr;</a>`
+    : "";
+
+  return `
+    <article class="event-card">
+      <div class="event-date">
+        <span>${escapeHTML(event.date)}</span>
+        <strong>${escapeHTML(event.time)}</strong>
+      </div>
+      <div class="event-main">
+        <div class="event-card-top">
+          <div>
+            <span class="mini-label">${escapeHTML(event.group)}</span>
+            <h3>${escapeHTML(event.title)}</h3>
+          </div>
+          <span class="tag ${statusClass}">${escapeHTML(event.status)}</span>
+        </div>
+        <p>${escapeHTML(event.details)}</p>
+        ${linkHTML}
+      </div>
+    </article>
+  `;
+}
+
+/* ------------------------------------------------------------------
+ * Section 8 — Maintainers
  * ---------------------------------------------------------------- */
 async function fetchMaintainers() {
   const statusEl = document.getElementById("maintainer-status");

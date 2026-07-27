@@ -45,6 +45,7 @@ body {
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 img {
@@ -424,10 +425,12 @@ mark {
 .doc-section h2 {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap;
   gap: 0.85rem;
   font-size: clamp(1.4rem, 3vw, 1.9rem);
   font-weight: 700;
   margin-bottom: 1.25rem;
+  overflow-wrap: anywhere;
 }
 
 .sec-num {
@@ -672,7 +675,7 @@ mark {
 
 .repo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
   gap: var(--gap);
 }
 
@@ -733,7 +736,7 @@ mark {
 /* ---------- Study groups (Section 5) ---------- */
 .study-group-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: var(--gap);
 }
 
@@ -805,10 +808,97 @@ mark {
   font-size: 0.9rem;
 }
 
+/* ---------- Events (Section 6) ---------- */
+.event-list {
+  display: grid;
+  gap: var(--gap);
+}
+
+.event-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.32fr) 1fr;
+  border: var(--border-w) solid var(--black);
+  background: var(--white);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+}
+
+.event-date {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 100%;
+  padding: 1.15rem 1.2rem;
+  background: var(--yellow);
+  border-right: var(--border-w) solid var(--black);
+}
+
+.event-date span {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.event-date strong {
+  font-size: clamp(1.25rem, 3vw, 1.8rem);
+  line-height: 1.1;
+}
+
+.event-main {
+  padding: 1.15rem 1.25rem;
+}
+
+.event-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.event-card h3 {
+  font-size: 1.08rem;
+  line-height: 1.35;
+}
+
+.event-card p {
+  max-width: 68ch;
+  margin-bottom: 0.9rem;
+  color: var(--gray);
+  font-size: 0.88rem;
+}
+
+.event-card a {
+  display: inline-block;
+  color: var(--yellow-deep);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1px solid var(--yellow-deep);
+}
+
+.event-card a:hover {
+  color: var(--black);
+  border-bottom-color: var(--black);
+}
+
+.tag-scheduled,
+.tag-open {
+  background: var(--yellow);
+  color: var(--black);
+  border-color: var(--black);
+}
+
+.tag-done {
+  color: var(--black);
+  border-color: var(--black);
+  background: var(--paper);
+}
+
 /* ---------- Join cards ---------- */
 .join-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: var(--gap);
 }
 
@@ -858,7 +948,7 @@ mark {
   opacity: 0.75;
 }
 
-/* ---------- Contribution lanes (Section 6) ---------- */
+/* ---------- Contribution lanes (Section 7) ---------- */
 .lane-grid {
   grid-template-columns: repeat(4, 1fr);
 }
@@ -892,9 +982,9 @@ mark {
   color: var(--yellow);
 }
 
-/* ---------- Maintainers (Section 7) ---------- */
+/* ---------- Maintainers (Section 8) ---------- */
 .maintainer-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
 }
 
 .maintainer-card {
@@ -986,7 +1076,7 @@ mark {
   overflow-wrap: anywhere;
 }
 
-/* ---------- Join (Section 8) ---------- */
+/* ---------- Join (Section 9) ---------- */
 .join-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 0.36fr);
@@ -1022,7 +1112,7 @@ mark {
   font-weight: 700;
 }
 
-/* ---------- References (Section 9) ---------- */
+/* ---------- References (Section 10) ---------- */
 .ref-list li {
   display: flex;
   gap: 0.75rem;
@@ -1104,9 +1194,18 @@ mark {
   .maintainer-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .event-card {
+    grid-template-columns: 1fr;
+  }
+
+  .event-date {
+    border-right: 0;
+    border-bottom: var(--border-w) solid var(--black);
+  }
 }
 
-@media (max-width: 940px) {
+@media (max-width: 1100px) {
   .nav-toggle {
     display: flex;
   }
@@ -1143,22 +1242,63 @@ mark {
 }
 
 @media (max-width: 520px) {
+  :root {
+    --border-w: 2px;
+    --shadow-off: 4px;
+    --gap: 0.85rem;
+    --section-pad: 2rem;
+    --page-pad: 0.9rem;
+  }
+
+  body {
+    font-size: 15px;
+  }
+
   .doc-meta {
     grid-template-columns: 1fr 1fr;
     font-size: 0.65rem;
+    column-gap: 0.8rem;
   }
 
   .doc-meta-col--status {
     text-align: left;
   }
 
+  .doc-nav {
+    height: 3rem;
+  }
+
+  .nav-brand-sub {
+    display: none;
+  }
+
+  .hero {
+    padding-top: 2rem;
+  }
+
+  .hero-lockup {
+    max-height: 300px;
+    box-shadow: none;
+  }
+
   .hero-lockup img {
-    min-height: 260px;
+    min-height: 220px;
   }
 
   .hero-stamp {
     right: 0.5rem;
     bottom: 0.7rem;
+  }
+
+  .hero-stamp span {
+    max-width: calc(100vw - 2.6rem);
+  }
+
+  .hero-actions a {
+    flex: 1 1 100%;
+    justify-content: center;
+    min-height: 2.75rem;
+    text-align: center;
   }
 
   .hero-ledger,
@@ -1181,7 +1321,54 @@ mark {
     grid-template-columns: 1fr;
   }
 
+  .abstract-grid article,
+  .lane-card,
+  .principle-item,
+  .maintainer-card,
+  .repo-card,
+  .group-card,
+  .event-card,
+  .join-card,
+  .protocol-panel,
+  .icarus-mark,
+  .dispatch {
+    box-shadow: none;
+  }
+
+  .repo-card-top,
+  .group-card-top,
+  .event-card-top,
+  .join-card-top {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .repo-meta {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
   .principle-item {
+    grid-template-columns: 1fr;
+  }
+
+  .protocol-plate {
+    min-height: 260px;
+  }
+
+  .protocol-plate::before {
+    inset: 0.65rem;
+  }
+
+  .protocol-plate pre {
+    margin: 1.4rem 0;
+  }
+
+  .event-date strong {
+    font-size: 1.35rem;
+  }
+
+  .maintainer-top {
     grid-template-columns: 1fr;
   }
 
@@ -1202,5 +1389,10 @@ mark {
 
   .join-note {
     min-height: 210px;
+  }
+
+  .join-note img {
+    right: -5.5rem;
+    top: -3.5rem;
   }
 }
