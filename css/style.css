@@ -1,0 +1,643 @@
+/* ====================================================================
+   The Free Code Syndicate — stylesheet
+   A page laid out like a memo: hard rules, numbered sections, flat
+   colour, monospace throughout. Brutalist, not decorated.
+   ==================================================================== */
+
+/* ---------- Design tokens ---------- */
+:root {
+  --black: #0a0a0a;
+  --white: #faf8f2;
+  --paper: #f3f0e6;
+  --yellow: #ffc72c;
+  --yellow-deep: #f0972a;
+  --yellow-pale: #ffe9ac;
+  --gray: #6b6a62;
+  --line: #0a0a0a;
+
+  --border-w: 3px;
+  --shadow-off: 6px;
+
+  --font-mono: "Fira Code", ui-monospace, "SFMono-Regular", Consolas,
+    "Liberation Mono", Menlo, monospace;
+
+  --gap: clamp(1rem, 2vw, 1.75rem);
+  --section-pad: clamp(2.5rem, 6vw, 5rem);
+  --page-pad: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* ---------- Reset ---------- */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+code {
+  font-family: var(--font-mono);
+  background: var(--paper);
+  border: 1px solid var(--black);
+  padding: 0.05em 0.35em;
+  font-size: 0.9em;
+}
+
+mark {
+  background: var(--yellow);
+  color: var(--black);
+  padding: 0 0.15em;
+}
+
+:focus-visible {
+  outline: 3px solid var(--yellow-deep);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- Document header (RFC meta block) ---------- */
+.doc-header {
+  border-bottom: var(--border-w) solid var(--black);
+  padding: 0.85rem var(--page-pad);
+  background: var(--white);
+}
+
+.doc-meta {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem 1.5rem;
+  font-size: 0.72rem;
+}
+
+.doc-meta-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.doc-meta-col--status {
+  text-align: right;
+}
+
+.doc-meta-label {
+  color: var(--gray);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.doc-meta-value {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-active {
+  color: var(--black);
+  position: relative;
+  padding-left: 0.9rem;
+}
+
+.status-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  width: 0.5rem;
+  height: 0.5rem;
+  background: var(--yellow);
+  border: 1px solid var(--black);
+  border-radius: 50%;
+}
+
+/* ---------- Sticky nav ---------- */
+.doc-nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--black);
+  color: var(--white);
+  border-bottom: var(--border-w) solid var(--yellow);
+  padding: 0 var(--page-pad);
+  height: 3.25rem;
+}
+
+.nav-brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.nav-brand-sub {
+  color: var(--yellow);
+  font-weight: 400;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1.5rem;
+  height: 100%;
+}
+
+.nav-links a {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  text-decoration: none;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  color: var(--white);
+  border-bottom: 3px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.nav-links a:hover {
+  color: var(--yellow);
+}
+
+.nav-links a.is-active {
+  color: var(--yellow);
+  border-bottom-color: var(--yellow);
+}
+
+.nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 2rem;
+  height: 2rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nav-toggle span {
+  display: block;
+  height: 2px;
+  background: var(--white);
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  display: flex;
+  align-items: center;
+  gap: clamp(1.5rem, 5vw, 4rem);
+  padding: var(--section-pad) var(--page-pad) calc(var(--section-pad) * 0.7);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.hero-mark {
+  flex: 0 0 auto;
+  position: relative;
+}
+
+.hero-mark::before {
+  content: "";
+  position: absolute;
+  inset: -18% -30%;
+  background: radial-gradient(
+    circle at 40% 45%,
+    var(--yellow-pale) 0%,
+    var(--yellow) 35%,
+    transparent 72%
+  );
+  z-index: -1;
+  opacity: 0.9;
+}
+
+.hero-mark img {
+  width: clamp(140px, 18vw, 240px);
+  height: auto;
+}
+
+.hero-text h1 {
+  font-size: clamp(2.2rem, 6vw, 4.2rem);
+  line-height: 0.98;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.hero-sub {
+  margin-top: 1.1rem;
+  max-width: 34ch;
+  color: var(--gray);
+  font-size: 0.95rem;
+}
+
+/* ---------- Rule (section divider) ---------- */
+.rule {
+  height: var(--border-w);
+  background: var(--black);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ---------- Section shell ---------- */
+.doc-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--section-pad) var(--page-pad);
+  scroll-margin-top: 3.25rem;
+}
+
+.doc-section h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.85rem;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+.sec-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.1rem;
+  height: 2.1rem;
+  background: var(--yellow);
+  border: var(--border-w) solid var(--black);
+  font-size: 1.1rem;
+}
+
+.sec-intro {
+  color: var(--gray);
+  max-width: 62ch;
+  margin-bottom: 2rem;
+  font-size: 0.92rem;
+}
+
+.sec-body p {
+  max-width: 68ch;
+  margin-bottom: 1rem;
+}
+
+.sec-body p:last-child {
+  margin-bottom: 0;
+}
+
+.mission-line {
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+  font-weight: 600;
+  max-width: 46ch !important;
+  margin-bottom: 1.75rem !important;
+}
+
+/* ---------- Repositories (Section 2) ---------- */
+.repo-status {
+  font-size: 0.9rem;
+  color: var(--gray);
+}
+
+.cursor {
+  display: inline-block;
+  animation: blink 1s steps(1) infinite;
+  color: var(--yellow-deep);
+  font-weight: 700;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.repo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--gap);
+}
+
+.repo-card {
+  display: block;
+  text-decoration: none;
+  background: var(--white);
+  border: var(--border-w) solid var(--black);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  padding: 1.1rem 1.2rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.repo-card:hover,
+.repo-card:focus-visible {
+  transform: translate(-3px, -3px);
+  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--black);
+  background: var(--yellow-pale);
+}
+
+.repo-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.repo-card-top h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.repo-stars {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  color: var(--yellow-deep);
+  font-weight: 600;
+}
+
+.repo-card p {
+  font-size: 0.85rem;
+  color: var(--gray);
+  margin-bottom: 0.9rem;
+  min-height: 2.6em;
+}
+
+.repo-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--black);
+  border-top: 1px solid var(--black);
+  padding-top: 0.6rem;
+}
+
+/* ---------- Study groups (Section 3) ---------- */
+.study-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--gap);
+}
+
+.group-card {
+  background: var(--black);
+  color: var(--white);
+  border: var(--border-w) solid var(--black);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--yellow);
+  padding: 1.25rem 1.35rem;
+}
+
+.group-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.group-card-top h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.tag {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--yellow);
+  color: var(--yellow);
+}
+
+.tag-active {
+  background: var(--yellow);
+  color: var(--black);
+  border-color: var(--yellow);
+}
+
+.group-card p {
+  font-size: 0.88rem;
+  color: var(--paper);
+  margin-bottom: 1rem;
+}
+
+.group-card a {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--yellow);
+  text-decoration: none;
+  border-bottom: 1px solid var(--yellow);
+}
+
+.group-card a:hover {
+  color: var(--white);
+  border-color: var(--white);
+}
+
+.empty-note {
+  color: var(--gray);
+  font-size: 0.9rem;
+}
+
+/* ---------- Join (Section 4) ---------- */
+.join-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--gap);
+}
+
+.join-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  text-decoration: none;
+  color: var(--black);
+  background: var(--yellow);
+  border: var(--border-w) solid var(--black);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  padding: 1.4rem 1.5rem;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.join-card:hover,
+.join-card:focus-visible {
+  transform: translate(-3px, -3px);
+  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--black);
+  background: var(--white);
+}
+
+.join-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.join-label {
+  font-weight: 700;
+  font-size: 1.02rem;
+}
+
+.join-arrow {
+  font-size: 1.2rem;
+  transition: transform 0.12s ease;
+}
+
+.join-card:hover .join-arrow {
+  transform: translateX(4px);
+}
+
+.join-hint {
+  font-size: 0.82rem;
+  color: var(--black);
+  opacity: 0.75;
+}
+
+/* ---------- References (Section 5) ---------- */
+.ref-list li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--black);
+  font-size: 0.88rem;
+  flex-wrap: wrap;
+}
+
+.ref-list li:first-child {
+  border-top: 1px solid var(--black);
+}
+
+.ref-tag {
+  flex: 0 0 auto;
+  color: var(--yellow-deep);
+  font-weight: 700;
+}
+
+.ref-list a {
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.ref-list a:hover {
+  border-bottom-color: var(--black);
+}
+
+/* ---------- Footer ---------- */
+.doc-footer {
+  border-top: var(--border-w) solid var(--black);
+  padding: 1.5rem var(--page-pad) 2.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--gray);
+}
+
+.doc-footer p {
+  margin-bottom: 0.3rem;
+}
+
+.doc-footer p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 900px) {
+  .doc-meta {
+    grid-template-columns: repeat(2, 1fr);
+    row-gap: 0.9rem;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 720px) {
+  .nav-toggle {
+    display: flex;
+  }
+
+  .nav-links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    height: auto;
+    background: var(--black);
+    border-bottom: var(--border-w) solid var(--yellow);
+    padding: 0.5rem 0;
+    gap: 0;
+    display: none;
+  }
+
+  .nav-links.is-open {
+    display: flex;
+  }
+
+  .nav-links a {
+    height: auto;
+    padding: 0.85rem var(--page-pad);
+    border-bottom: 1px solid #333;
+    border-left: 3px solid transparent;
+  }
+
+  .nav-links a.is-active {
+    border-bottom: 1px solid #333;
+    border-left-color: var(--yellow);
+  }
+}
+
+@media (max-width: 520px) {
+  .doc-meta {
+    grid-template-columns: 1fr 1fr;
+    font-size: 0.65rem;
+  }
+
+  .doc-meta-col--status {
+    text-align: left;
+  }
+}

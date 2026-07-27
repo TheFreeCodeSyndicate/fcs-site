@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Free Code Syndicate — RFC 0001</title>
+  <meta name="description" content="The Free Code Syndicate — an open-source community. Software as right, not privilege. Free as in freedom." />
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/favicon-192.png" />
+  <link rel="apple-touch-icon" href="assets/favicon-192.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- ============================================================
+       DOCUMENT HEADER — styled after a real RFC memo header block
+       ============================================================ -->
+  <header class="doc-header">
+    <div class="doc-meta">
+      <div class="doc-meta-col">
+        <span class="doc-meta-label">Network Working Group</span>
+        <span class="doc-meta-value">The Free Code Syndicate</span>
+      </div>
+      <div class="doc-meta-col">
+        <span class="doc-meta-label">Request for Comments</span>
+        <span class="doc-meta-value">0001</span>
+      </div>
+      <div class="doc-meta-col">
+        <span class="doc-meta-label">Category</span>
+        <span class="doc-meta-value">Community Standard</span>
+      </div>
+      <div class="doc-meta-col doc-meta-col--status">
+        <span class="doc-meta-label">Status</span>
+        <span class="doc-meta-value status-active">Active</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================
+       STICKY NAV — section jump links, doubles as mobile menu
+       ============================================================ -->
+  <nav class="doc-nav" id="doc-nav">
+    <a href="#top" class="nav-brand">TFCS<span class="nav-brand-sub">/RFC-0001</span></a>
+
+    <button
+      class="nav-toggle"
+      id="nav-toggle"
+      aria-expanded="false"
+      aria-controls="nav-links"
+      aria-label="Toggle navigation"
+    >
+      <span></span><span></span><span></span>
+    </button>
+
+    <ul class="nav-links" id="nav-links">
+      <li><a href="#abstract" data-section="abstract">&sect;1 Abstract</a></li>
+      <li><a href="#repositories" data-section="repositories">&sect;2 Repositories</a></li>
+      <li><a href="#study-groups" data-section="study-groups">&sect;3 Study Groups</a></li>
+      <li><a href="#join" data-section="join">&sect;4 Join</a></li>
+      <li><a href="#references" data-section="references">&sect;5 References</a></li>
+    </ul>
+  </nav>
+
+  <main id="top">
+    <!-- ========================================================
+         HERO
+         ======================================================== -->
+    <section class="hero">
+      <div class="hero-mark">
+        <img
+          src="assets/fcs-mark-header.png"
+          alt="The Free Code Syndicate emblem — a fractured, wing-shaped geometric mark"
+          width="240"
+          height="399"
+        />
+      </div>
+      <div class="hero-text">
+        <h1>THE&nbsp;FREE<br />CODE<br />SYNDICATE</h1>
+        <p class="hero-sub">
+          A public working memo on free software &mdash; maintained in the open,
+          amended by anyone who shows up.
+        </p>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 1 — ABSTRACT
+         ======================================================== -->
+    <section class="doc-section" id="abstract">
+      <h2><span class="sec-num">1</span> Abstract</h2>
+      <div class="sec-body">
+        <p class="mission-line">
+          The Free Code Syndicate &mdash; Software as Right, not Privilege:
+          <mark>Free as in Freedom.</mark>
+        </p>
+        <p>
+          We're a community of people who write, read, break, and study code
+          together, in public. No paywalled knowledge, no gatekept
+          repositories &mdash; if you're willing to learn, you're already in.
+        </p>
+        <p>
+          This page works like the rest of what we do: it's source you can
+          read, fork, and send a pull request against. Sections&nbsp;2
+          and&nbsp;3 below are pulled straight from our GitHub organization
+          and our own project data &mdash; nobody has to hand-edit a slide
+          deck to keep this current.
+        </p>
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 2 — REPOSITORIES (live from GitHub API)
+         ======================================================== -->
+    <section class="doc-section" id="repositories">
+      <h2><span class="sec-num">2</span> Repositories</h2>
+      <p class="sec-intro">
+        Pulled live from
+        <a
+          href="https://github.com/TheFreeCodeSyndicate"
+          target="_blank"
+          rel="noopener"
+          >github.com/TheFreeCodeSyndicate</a
+        >. This list updates itself whenever a repo does &mdash; nothing here
+        is hand-maintained.
+      </p>
+
+      <p id="repo-status" class="repo-status" role="status" aria-live="polite">
+        Fetching object list<span class="cursor" aria-hidden="true">_</span>
+      </p>
+
+      <div id="repo-grid" class="repo-grid" hidden></div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 3 — STUDY GROUPS (from js/data.js)
+         ======================================================== -->
+    <section class="doc-section" id="study-groups">
+      <h2><span class="sec-num">3</span> Study Groups</h2>
+      <p class="sec-intro">
+        Small groups working through a subject together, from first
+        principles. Listed here, maintained in
+        <code>js/data.js</code>.
+      </p>
+
+      <div id="study-group-grid" class="study-group-grid"></div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 4 — HOW TO JOIN
+         ======================================================== -->
+    <section class="doc-section" id="join">
+      <h2><span class="sec-num">4</span> How to Join</h2>
+      <p class="sec-intro">
+        No application, no gate. Pick a room and say hello.
+      </p>
+
+      <div class="join-grid" id="join-grid">
+        <!-- populated by js/main.js from js/data.js -->
+      </div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 5 — REFERENCES
+         ======================================================== -->
+    <section class="doc-section" id="references">
+      <h2><span class="sec-num">5</span> References</h2>
+      <ul class="ref-list">
+        <li>
+          <span class="ref-tag">[GITHUB]</span>
+          <a href="https://github.com/TheFreeCodeSyndicate" target="_blank" rel="noopener"
+            >The Free Code Syndicate &mdash; GitHub Organization</a
+          >
+        </li>
+        <li>
+          <span class="ref-tag">[DISCORD]</span>
+          <a href="https://discord.gg/nH2PRmbB5" target="_blank" rel="noopener"
+            >The Free Code Syndicate &mdash; Discord Server</a
+          >
+        </li>
+        <li>
+          <span class="ref-tag">[WHATSAPP]</span>
+          <a
+            href="https://chat.whatsapp.com/Dks4VUe0E5n7xmilaKTqXS"
+            target="_blank"
+            rel="noopener"
+            >The Free Code Syndicate &mdash; WhatsApp Community</a
+          >
+        </li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="doc-footer">
+    <p>This document has no expiration date. Distribution of this memo is unlimited.</p>
+    <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
+  </footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
