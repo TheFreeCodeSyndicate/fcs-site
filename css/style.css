@@ -93,6 +93,7 @@ mark {
   html {
     scroll-behavior: auto;
   }
+
   * {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
@@ -249,12 +250,10 @@ mark {
   content: "";
   position: absolute;
   inset: 18% 0 5% -7%;
-  background: radial-gradient(
-    circle at 40% 45%,
-    var(--yellow-pale) 0%,
-    var(--yellow) 35%,
-    transparent 72%
-  );
+  background: radial-gradient(circle at 40% 45%,
+      var(--yellow-pale) 0%,
+      var(--yellow) 35%,
+      transparent 72%);
   z-index: -1;
   opacity: 0.9;
 }
@@ -265,6 +264,9 @@ mark {
   box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
   overflow: hidden;
   max-height: 460px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .hero-lockup img {
@@ -273,6 +275,9 @@ mark {
   min-height: 340px;
   object-fit: cover;
   object-position: 44% 49%;
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .hero-stamp {
@@ -349,7 +354,7 @@ mark {
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 
-.hero-actions a + a {
+.hero-actions a+a {
   background: var(--white);
 }
 
