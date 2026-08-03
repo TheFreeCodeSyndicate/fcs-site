@@ -172,10 +172,20 @@ const EVENTS = [
     group: "Crypto Study Group",
     date: "Tuesday, 28 July 2026",
     time: "21:00 IST",
-    status: "Scheduled",
+    status: "Done",
     details: "A study session for the next Explain track discussion.",
     link: "https://github.com/TheFreeCodeSyndicate/CRYPTO_STUDY_GROUP",
     linkText: "Check the repository",
+  },
+   {
+    title: "CryptoMeet-3 Session",
+    group: "Crypto Study Group",
+    date: "Tuesday, 04 August 2026",
+    time: "21:00 IST",
+    status: "Scheduled",
+    details: "A meeting for discussing PCSP Project, DES and AES also some public key cryptography.",
+    link: "https://discord.gg/nH2PRmbB5",
+    linkText: "Join Discord",
   },
 
   // Add the next event by copying the block below and filling it in:
