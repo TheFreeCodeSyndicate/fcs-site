@@ -182,10 +182,20 @@ const EVENTS = [
     group: "Crypto Study Group",
     date: "Tuesday, 04 August 2026",
     time: "21:00 IST",
-    status: "Scheduled",
+    status: "Done",
     details: "A meeting for discussing PCSP Project, DES and AES also some public key cryptography.",
     link: "https://discord.gg/nH2PRmbB5",
     linkText: "Join Discord",
+  },
+   {
+    title: "Quantum Computing and PQC Session",
+    group: "Crypto Study Group",
+    date: "Sunday, 09 August 2026",
+    time: "21:00 IST",
+    status: "Scheduled",
+    details: "A meeting for discussing Quantum Computing and Post Quantum Cryptography.",
+    link: "https://calendar.app.google/4agDYABbWPYyvWQc9",
+    linkText: "Add to Calendar",
   },
 
   // Add the next event by copying the block below and filling it in:
