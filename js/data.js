@@ -123,7 +123,7 @@ const STUDY_GROUPS = [
   {
     name: "Crypto Study Group",
     topic: "Study cryptography from first principles. Prove before you trust.",
-    status: "Active",
+    status: "COMPLETED!",
     link: "https://github.com/TheFreeCodeSyndicate/CRYPTO_STUDY_GROUP",
     linkText: "Check the repository",
   },
@@ -192,7 +192,7 @@ const EVENTS = [
     group: "Crypto Study Group",
     date: "Sunday, 09 August 2026",
     time: "21:00 IST",
-    status: "Scheduled",
+    status: "Done",
     details: "A meeting for discussing Quantum Computing and Post Quantum Cryptography.",
     link: "https://calendar.app.google/4agDYABbWPYyvWQc9",
     linkText: "Add to Calendar",
