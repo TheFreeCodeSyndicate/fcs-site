@@ -173,11 +173,59 @@ create trigger on_auth_user_created
 -- secret. These policies are what actually protect your data. Without
 -- them, anyone could delete your events. Never put the SERVICE-ROLE
 -- key in js/config.js; that one really is a secret.
+--
+-- GRANTS vs POLICIES — read this, it is the one thing people get wrong.
+-- These are two different layers and BOTH are required:
+--
+--   GRANT  = table-level. "May this role touch this table at all?"
+--   POLICY = row-level. "Which rows of that table may it see?"
+--
+-- This project was created with "Automatically expose new tables" OFF,
+-- which means no GRANTs were issued. RLS alone is not enough: a policy
+-- saying "anon may read events" is never even consulted if anon has no
+-- table privilege. The symptom is a 401 whose body reads
+-- "permission denied for table events".
+--
+-- So the GRANTs below are explicit and minimal, and the policies decide
+-- the rows. Do not remove the GRANTs, and do not grant anon any write.
 
 create or replace function public.current_role()
 returns text language sql stable security definer set search_path = public as $$
   select coalesce((select role from public.profiles where id = auth.uid()), 'anon');
 $$;
+
+-- ------------------------------------------------------- table privileges
+
+grant usage on schema public to anon, authenticated;
+
+-- Anyone, signed in or not, may READ the public content tables.
+-- Which rows they see is decided by the policies below.
+grant select on
+  public.events,
+  public.class_sessions,
+  public.resources,
+  public.study_groups,
+  public.social_links,
+  public.repo_kinds
+to anon, authenticated;
+
+-- profiles is NOT granted to anon. A signed-in user may read and update
+-- their own row only; the policy below restricts it to auth.uid().
+grant select, update on public.profiles to authenticated;
+
+-- Signed-in users get write privileges at the TABLE level. Whether a
+-- given editor or admin may actually perform the write is decided by the
+-- policies below — that is why delete is granted here but policed to
+-- admins only.
+grant insert, update, delete on
+  public.events,
+  public.class_sessions,
+  public.resources,
+  public.study_groups,
+  public.social_links,
+  public.repo_kinds
+to authenticated;
+
 
 alter table public.profiles       enable row level security;
 alter table public.events         enable row level security;
