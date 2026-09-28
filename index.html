@@ -78,6 +78,7 @@
     <ul class="nav-links" id="nav-links">
       <li><a href="#abstract" data-section="abstract">About</a></li>
       <li><a href="#projects" data-section="projects">Projects</a></li>
+      <li><a href="#resources" data-section="resources">Resources</a></li>
       <li><a href="#study-groups" data-section="study-groups">Groups</a></li>
       <li><a href="#events" data-section="events">Events</a></li>
       <li><a href="#join" data-section="join">Join</a></li>
@@ -283,10 +284,26 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 5 — STUDY GROUPS (from js/data.js)
+         RESOURCES — curated learning material, from the database.
+         Distinct from Projects, which is the live GitHub list.
+         ======================================================== -->
+    <section class="doc-section" id="resources">
+      <h2><span class="sec-num">5</span> Resources</h2>
+      <p class="sec-intro">
+        Notes, videos, papers, courses, and tools kept by the group. Curated by
+        hand — everything here is meant to be read, not just skimmed.
+      </p>
+
+      <div id="resource-grid" class="resource-grid"></div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 6 — STUDY GROUPS
          ======================================================== -->
     <section class="doc-section" id="study-groups">
-      <h2><span class="sec-num">5</span> Study Groups</h2>
+      <h2><span class="sec-num">6</span> Study Groups</h2>
       <p class="sec-intro">
         Study groups move slowly through one subject. They begin with first
         principles and end with public notes, code, or questions.
@@ -301,14 +318,27 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 6 — EVENTS (from js/data.js)
+         SECTION 7 — EVENTS
          ======================================================== -->
     <section class="doc-section" id="events">
-      <h2><span class="sec-num">6</span> Events</h2>
+      <h2><span class="sec-num">7</span> Events</h2>
       <p class="sec-intro">
-        A small calendar for study sessions, reading rooms, and group work.
-        Update the list from <code>js/data.js</code> when a new event is set.
+        Study sessions, reading rooms, and group work. Status is worked out from
+        each event's own time, so this list is never out of date.
       </p>
+
+      <div class="next-band" id="next-session" data-mode="loading">
+        <span class="mini-label">next session</span>
+        <h3 data-next-title>Loading&hellip;</h3>
+        <p class="next-group" data-next-group></p>
+        <p data-next-when>&nbsp;</p>
+        <p class="next-countdown" data-next-countdown aria-live="off">&nbsp;</p>
+      </div>
+
+      <div class="event-toolbar">
+        <div class="event-filters" id="event-filters" role="group" aria-label="Filter events by group"></div>
+        <button type="button" class="btn-subscribe" id="subscribe-ics">Subscribe (.ics)</button>
+      </div>
 
       <div id="event-list" class="event-list"></div>
     </section>
@@ -316,10 +346,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 7 — CONTRIBUTION LANES
+         SECTION 8 — CONTRIBUTION LANES
          ======================================================== -->
     <section class="doc-section" id="contribute">
-      <h2><span class="sec-num">7</span> Contribution Lanes</h2>
+      <h2><span class="sec-num">8</span> Contribution Lanes</h2>
       <p class="sec-intro">
         Permission is not the first step. Useful work is the first step. Pick
         a small task, finish it, and leave a clear path for the next person.
@@ -344,10 +374,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 8 — MAINTAINERS
+         SECTION 9 — MAINTAINERS
          ======================================================== -->
     <section class="doc-section" id="maintainers">
-      <h2><span class="sec-num">8</span> Maintainers</h2>
+      <h2><span class="sec-num">9</span> Maintainers</h2>
       <p class="sec-intro">
         Maintainers keep the public record usable. They review, repair,
         answer, and decide when silence would harm the work.
@@ -363,10 +393,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 9 — HOW TO JOIN
+         SECTION 10 — HOW TO JOIN
          ======================================================== -->
     <section class="doc-section" id="join">
-      <h2><span class="sec-num">9</span> Entry</h2>
+      <h2><span class="sec-num">10</span> Entry</h2>
       <p class="sec-intro">
         There is no form and no gate. Choose a room. State your purpose.
       </p>
@@ -394,33 +424,11 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 10 — REFERENCES
+         SECTION 11 — REFERENCES
          ======================================================== -->
     <section class="doc-section" id="references">
-      <h2><span class="sec-num">10</span> References</h2>
-      <ul class="ref-list">
-        <li>
-          <span class="ref-tag">[GITHUB]</span>
-          <a href="https://github.com/TheFreeCodeSyndicate" target="_blank" rel="noopener"
-            >The Free Code Syndicate &mdash; GitHub Organization</a
-          >
-        </li>
-        <li>
-          <span class="ref-tag">[DISCORD]</span>
-          <a href="https://discord.gg/nH2PRmbB5" target="_blank" rel="noopener"
-            >The Free Code Syndicate &mdash; Discord Server</a
-          >
-        </li>
-        <li>
-          <span class="ref-tag">[WHATSAPP]</span>
-          <a
-            href="https://chat.whatsapp.com/Dks4VUe0E5n7xmilaKTqXS"
-            target="_blank"
-            rel="noopener"
-            >The Free Code Syndicate &mdash; WhatsApp Community</a
-          >
-        </li>
-      </ul>
+      <h2><span class="sec-num">11</span> References</h2>
+      <ul class="ref-list" id="ref-list"></ul>
     </section>
   </main>
 
@@ -431,7 +439,9 @@
   </footer>
 
   <script src="js/theme.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.min.js"></script>
   <script src="js/data.js"></script>
-  <script src="js/main.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
