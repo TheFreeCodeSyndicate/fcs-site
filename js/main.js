@@ -45,6 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupScrollSpy();
   setupReveal();
   setupCopyButtons();
+  setupGlassNav();
 
   // The three fetches are deliberately independent: a Supabase outage
   // or a GitHub rate limit degrades one section without touching the
@@ -62,6 +63,19 @@ document.addEventListener("DOMContentLoaded", () => {
  * cannot break out of an attribute. `safeURL` refuses anything that is
  * not http(s), so a stored `javascript:` URL cannot execute on click.
  * ------------------------------------------------------------------ */
+
+/* A pixel icon from the sprite in assets/icons.svg. Decorative: the
+ * text beside it (or the control's aria-label) carries the meaning. */
+function icon(name, className = "") {
+  return `<svg class="icon ${className}" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-${name}"></use></svg>`;
+}
+
+/* Social platforms map onto the sprite; anything unknown gets a link. */
+const PLATFORM_ICONS = new Set(["discord", "instagram", "whatsapp", "github"]);
+function platformIcon(platform, className = "") {
+  const key = String(platform || "").toLowerCase();
+  return icon(PLATFORM_ICONS.has(key) ? key : "link", className);
+}
 
 function escapeHTML(value) {
   const div = document.createElement("div");
@@ -405,7 +419,7 @@ function resourceCardHTML(resource) {
       <span class="resource-card-top">
         <span class="resource-kind">${escapeHTML(RESOURCE_KIND_LABELS[resource.kind] || resource.kind || "Resource")}</span>
         ${resource.via_github ? `<span class="resource-origin">via GitHub</span>` : ""}
-        <span class="resource-ext" aria-hidden="true">&#8599;</span>
+        ${icon("external-link", "resource-ext")}
       </span>
       <h3>${escapeHTML(resource.title)}</h3>
       ${resource.summary ? `<p>${escapeHTML(resource.summary)}</p>` : ""}
@@ -712,11 +726,12 @@ function renderJoinLinks(links) {
       <div class="join-card">
         <p class="join-command"><span class="join-prompt" aria-hidden="true">$</span> join --${flag}</p>
         <a class="join-url" href="${url}" target="_blank" rel="noopener">
+          ${platformIcon(item.platform, "join-icon")}
           <span class="join-label">${escapeHTML(item.label)}</span>
           <span class="join-address">${shown}</span>
         </a>
         <p class="join-hint">${escapeHTML(item.hint)}</p>
-        <button type="button" class="join-copy" data-copy="${url}" aria-label="Copy the ${escapeAttr(item.label)} link">Copy</button>
+        <button type="button" class="join-copy" data-copy="${url}" aria-label="Copy the ${escapeAttr(item.label)} link">${icon("copy", "icon-copy")}${icon("check", "icon-check")}<span class="join-copy-text">Copy</span></button>
       </div>
     `;
   }).join("");
@@ -726,6 +741,7 @@ function renderJoinLinks(links) {
  * Section 11 — References
  * ---------------------------------------------------------------- */
 function renderReferences(links) {
+  renderFooterSocials(links);
   const list = document.getElementById("ref-list");
   if (!list) return;
 
@@ -889,16 +905,17 @@ function setupCopyButtons() {
   document.addEventListener("click", async (event) => {
     const button = event.target.closest(".join-copy");
     if (!button) return;
+    const label = button.querySelector(".join-copy-text");
     try {
       await navigator.clipboard.writeText(button.dataset.copy);
-      button.textContent = "Copied";
+      label.textContent = "Copied";
     } catch {
-      button.textContent = "Press Ctrl+C";
+      label.textContent = "Press Ctrl+C";
     }
     button.classList.add("is-done");
     clearTimeout(button.resetTimer);
     button.resetTimer = setTimeout(() => {
-      button.textContent = "Copy";
+      label.textContent = "Copy";
       button.classList.remove("is-done");
     }, 1600);
   });
@@ -934,5 +951,35 @@ function setupReveal() {
     { rootMargin: "0px 0px -12% 0px" }
   );
   sections.forEach((section) => observer.observe(section));
+}
+
+/* ------------------------------------------------------------------
+ * Footer: the same rooms as icon links, for the reader who reached
+ * the end of the page.
+ * ---------------------------------------------------------------- */
+function renderFooterSocials(links) {
+  const list = document.getElementById("footer-socials");
+  if (!list) return;
+  const items = (Array.isArray(links) ? links : []).filter((item) => item && safeURL(item.url));
+  list.innerHTML = items.map((item) => `
+    <li>
+      <a href="${safeURL(item.url)}" target="_blank" rel="noopener" aria-label="${escapeAttr(item.label || item.platform)}">
+        ${platformIcon(item.platform)}
+      </a>
+    </li>`).join("");
+}
+
+/* ------------------------------------------------------------------
+ * Nav: glass once the memo header has scrolled out of view. Watched
+ * with an observer on the header, so no scroll handler is involved.
+ * ---------------------------------------------------------------- */
+function setupGlassNav() {
+  const nav = document.getElementById("doc-nav");
+  const header = document.querySelector(".doc-header");
+  if (!nav || !header || !("IntersectionObserver" in window)) return;
+
+  new IntersectionObserver(([entry]) => {
+    nav.classList.toggle("is-glass", !entry.isIntersecting);
+  }).observe(header);
 }
 

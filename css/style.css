@@ -220,17 +220,15 @@ mark {
 }
 
 .status-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  align-self: flex-end;
   color: var(--ink);
-  position: relative;
-  padding-left: 0.9rem;
 }
 
 .status-active::before {
   content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  translate: 0 -50%;
   width: 0.5rem;
   height: 0.5rem;
   background: var(--accent);
@@ -311,21 +309,20 @@ mark {
 
 .nav-toggle {
   display: none;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  width: 2rem;
-  height: 2rem;
+  position: relative;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
   background: none;
   border: none;
+  color: var(--slab-ink);
   cursor: pointer;
   padding: 0;
 }
 
-.nav-toggle span {
-  display: block;
-  height: 2px;
-  background: var(--slab-ink);
+.nav-toggle:focus-visible {
+  outline: 2px solid var(--slab-accent);
+  outline-offset: 2px;
 }
 
 /* ---------- Hero ---------- */
@@ -1474,7 +1471,7 @@ mark {
 
 @media (max-width: 1100px) {
   .nav-toggle {
-    display: flex;
+    display: grid;
   }
 
   .nav-links {
@@ -1671,8 +1668,8 @@ mark {
 .theme-toggle {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: var(--border-w) solid var(--rule);
   border-radius: var(--radius);
@@ -1683,8 +1680,12 @@ mark {
 }
 .theme-toggle:hover { border-color: var(--rule-strong); }
 .theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.theme-toggle-icon::before { content: "\25CF"; font-size: 12px; }
-[data-theme="dark"] .theme-toggle-icon::before { content: "\25D1"; }
+.theme-toggle-icons {
+  position: relative;
+  display: grid;
+  width: 24px;
+  height: 24px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .theme-toggle { transition: none; }
@@ -2018,6 +2019,162 @@ mark {
 
   .next-band[data-mode="countdown"] .next-countdown::after {
     animation: none;
+  }
+}
+
+/* ================================================================
+   PIXEL ICONS
+   pixelarticons, drawn on a 24px grid. They render at exactly 24px
+   so every drawn pixel lands on a device pixel; scaled to 18 or 20
+   they blur. One family, filled with currentColor, decorative only.
+   ================================================================ */
+.icon {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+  shape-rendering: crispEdges;
+}
+
+/* Two icons share one slot and cross-fade: the leaving one shrinks and
+   blurs out, the arriving one settles in. Motion is a hint; the icon
+   itself is the state. */
+.theme-toggle-icons .icon,
+.nav-toggle .icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity 0.3s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.3s cubic-bezier(0.2, 0, 0, 1),
+    filter 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Light theme shows the moon (what you switch to), dark shows the sun. */
+.theme-toggle .icon-sun,
+[data-theme="dark"] .theme-toggle .icon-moon,
+.nav-toggle .icon-close,
+.nav-toggle[aria-expanded="true"] .icon-menu {
+  opacity: 0;
+  transform: scale(0.25);
+  filter: blur(4px);
+}
+
+[data-theme="dark"] .theme-toggle .icon-sun,
+.nav-toggle[aria-expanded="true"] .icon-close {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+.theme-toggle:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-subscribe {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-block: 0.3rem;
+}
+
+.join-url .join-icon {
+  align-self: center;
+}
+
+.join-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.join-copy .icon-check,
+.join-copy.is-done .icon-copy {
+  display: none;
+}
+
+.join-copy.is-done .icon-check {
+  display: block;
+}
+
+.resource-card .resource-ext {
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+
+.footer-socials {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 1rem 0 1.1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.footer-socials a {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--rule-strong);
+  color: var(--ink);
+  background: var(--paper-raised);
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
+}
+
+.footer-socials a:hover,
+.footer-socials a:focus-visible {
+  background: var(--accent);
+  color: var(--accent-ink);
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0 var(--ink);
+  outline: none;
+}
+
+.footer-socials a:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+/* ================================================================
+   GLASS NAV
+   Once the memo header has scrolled away, the sticky nav turns to
+   tinted glass so the page reads through it. Blur lives only on this
+   one sticky element. Solid when the reader asks for less
+   transparency or the browser cannot blur.
+   ================================================================ */
+.doc-nav {
+  transition: background-color 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .doc-nav.is-glass {
+    background: color-mix(in srgb, var(--slab) 84%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(160%);
+    backdrop-filter: blur(14px) saturate(160%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  /* The mobile menu drops out of the nav; it must stay opaque to be read. */
+  .doc-nav.is-glass .nav-links.is-open {
+    background: var(--slab);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .doc-nav.is-glass {
+    background: var(--slab);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-icons .icon,
+  .nav-toggle .icon,
+  .doc-nav {
+    transition: none;
   }
 }
 

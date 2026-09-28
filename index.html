@@ -72,7 +72,7 @@
       aria-controls="nav-links"
       aria-label="Toggle navigation"
     >
-      <span></span><span></span><span></span>
+      <svg class="icon icon-menu" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-menu"></use></svg><svg class="icon icon-close" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-close"></use></svg>
     </button>
 
     <ul class="nav-links" id="nav-links">
@@ -91,7 +91,7 @@
       aria-pressed="false"
       aria-label="Switch to dark mode"
     >
-      <span class="theme-toggle-icon" aria-hidden="true"></span>
+      <span class="theme-toggle-icons" aria-hidden="true"><svg class="icon icon-moon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-moon"></use></svg><svg class="icon icon-sun" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-sun"></use></svg></span>
     </button>
   </nav>
 
@@ -340,7 +340,7 @@
 
       <div class="event-toolbar">
         <div class="event-filters" id="event-filters" role="group" aria-label="Filter events by group"></div>
-        <button type="button" class="btn-subscribe" id="subscribe-ics">Subscribe (.ics)</button>
+        <button type="button" class="btn-subscribe" id="subscribe-ics"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-calendar"></use></svg><span>Subscribe (.ics)</span></button>
       </div>
 
       <div id="event-list" class="event-list"></div>
@@ -440,6 +440,7 @@
     <p>This document has no end date. Distribution of this memo is unlimited.</p>
     <p class="colophon">Set in Archivo and Fira Code. Written in plain HTML, CSS and JavaScript.
       <a href="https://github.com/TheFreeCodeSyndicate/fcs-site" target="_blank" rel="noopener">Read the source</a>.</p>
+    <ul class="footer-socials" id="footer-socials" aria-label="The Free Code Syndicate elsewhere"></ul>
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
 
