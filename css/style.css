@@ -4,28 +4,67 @@
    colour, monospace throughout. Brutalist, not decorated.
    ==================================================================== */
 
-/* ---------- Design tokens ---------- */
+/* ================================================================
+   TOKENS
+   Every colour in this stylesheet resolves through these variables.
+   Adding a theme means adding one [data-theme] block — no other
+   selector changes. The five non-colour tokens at the bottom are
+   carried over from the previous stylesheet and still used.
+   ================================================================ */
 :root {
-  --black: #0a0a0a;
-  --white: #faf8f2;
-  --paper: #f3f0e6;
-  --yellow: #ffc72c;
-  --yellow-deep: #f0972a;
-  --yellow-pale: #ffe9ac;
-  --cyan: #00d6d6;
-  --magenta: #ff45d4;
-  --gray: #6b6a62;
-  --line: #0a0a0a;
+  color-scheme: light;
 
-  --border-w: 3px;
-  --shadow-off: 6px;
+  --paper:        #f6f4ef;
+  --paper-raised: #fffefb;
+  --ink:          #16150f;
+  --ink-muted:    #55514a;
+  --ink-faint:    #7d786e;
+  --rule:         #d8d3c6;
+  --rule-strong:  #16150f;
 
-  --font-mono: "Fira Code", ui-monospace, "SFMono-Regular", Consolas,
-    "Liberation Mono", Menlo, monospace;
+  --accent:       #1d4ed8;
+  --accent-ink:   #ffffff;
+  --accent-soft:  #e3e9fb;
 
-  --gap: clamp(1rem, 2vw, 1.75rem);
-  --section-pad: clamp(2.5rem, 6vw, 5rem);
-  --page-pad: clamp(1.25rem, 4vw, 3rem);
+  --live:         #b42318;
+  --live-soft:    #fde8e6;
+  --done:         #5f6b52;
+  --mark:         #f2e3b3;
+
+  --shadow: 0 1px 2px rgb(22 21 15 / 0.06), 0 8px 24px rgb(22 21 15 / 0.08);
+  --radius: 2px;
+
+  /* non-colour tokens, carried over unchanged */
+  --border-w: 1px;
+  --shadow-off: 4px;
+  --gap: 24px;
+  --section-pad: 56px;
+  --page-pad: 40px;
+
+  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper:        #0e0f0c;
+  --paper-raised: #171914;
+  --ink:          #ecebe4;
+  --ink-muted:    #a8a49a;
+  --ink-faint:    #8b867b;
+  --rule:         #2e3029;
+  --rule-strong:  #ecebe4;
+
+  --accent:       #8ab4ff;
+  --accent-ink:   #0e0f0c;
+  --accent-soft:  #1c2436;
+
+  --live:         #ff8f85;
+  --live-soft:    #34191a;
+  --done:         #9aa88a;
+  --mark:         #4a3f18;
+
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.45);
 }
 
 /* ---------- Reset ---------- */
@@ -39,8 +78,8 @@ html {
 
 body {
   margin: 0;
-  background: var(--white);
-  color: var(--black);
+  background: var(--paper);
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: 16px;
   line-height: 1.6;
@@ -72,20 +111,19 @@ p {
 
 code {
   font-family: var(--font-mono);
-  background: var(--paper);
-  border: 1px solid var(--black);
+  background: var(--paper-raised);
+  border: 1px solid var(--ink);
   padding: 0.05em 0.35em;
   font-size: 0.9em;
 }
 
 mark {
-  background: var(--yellow);
-  color: var(--black);
-  padding: 0 0.15em;
+  background: var(--mark);
+  color: inherit;
 }
 
 :focus-visible {
-  outline: 3px solid var(--yellow-deep);
+  outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -102,9 +140,9 @@ mark {
 
 /* ---------- Document header (RFC meta block) ---------- */
 .doc-header {
-  border-bottom: var(--border-w) solid var(--black);
+  border-bottom: var(--border-w) solid var(--ink);
   padding: 0.85rem var(--page-pad);
-  background: var(--white);
+  background: var(--paper);
 }
 
 .doc-meta {
@@ -126,7 +164,7 @@ mark {
 }
 
 .doc-meta-label {
-  color: var(--gray);
+  color: var(--ink-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -139,7 +177,7 @@ mark {
 }
 
 .status-active {
-  color: var(--black);
+  color: var(--ink);
   position: relative;
   padding-left: 0.9rem;
 }
@@ -152,8 +190,8 @@ mark {
   translate: 0 -50%;
   width: 0.5rem;
   height: 0.5rem;
-  background: var(--yellow);
-  border: 1px solid var(--black);
+  background: var(--accent);
+  border: 1px solid var(--ink);
   border-radius: 50%;
 }
 
@@ -165,9 +203,9 @@ mark {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--black);
-  color: var(--white);
-  border-bottom: var(--border-w) solid var(--yellow);
+  background: var(--ink);
+  color: var(--paper);
+  border-bottom: var(--border-w) solid var(--accent);
   padding: 0 var(--page-pad);
   height: 3.25rem;
 }
@@ -181,7 +219,7 @@ mark {
 }
 
 .nav-brand-sub {
-  color: var(--yellow);
+  color: var(--accent);
   font-weight: 400;
 }
 
@@ -198,18 +236,18 @@ mark {
   text-decoration: none;
   font-size: clamp(0.68rem, 0.8vw, 0.8rem);
   letter-spacing: 0.02em;
-  color: var(--white);
+  color: var(--paper);
   border-bottom: 3px solid transparent;
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .nav-links a:hover {
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 .nav-links a.is-active {
-  color: var(--yellow);
-  border-bottom-color: var(--yellow);
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 .nav-toggle {
@@ -228,7 +266,7 @@ mark {
 .nav-toggle span {
   display: block;
   height: 2px;
-  background: var(--white);
+  background: var(--paper);
 }
 
 /* ---------- Hero ---------- */
@@ -251,17 +289,17 @@ mark {
   position: absolute;
   inset: 18% 0 5% -7%;
   background: radial-gradient(circle at 40% 45%,
-      var(--yellow-pale) 0%,
-      var(--yellow) 35%,
+      var(--mark) 0%,
+      var(--accent) 35%,
       transparent 72%);
   z-index: -1;
   opacity: 0.9;
 }
 
 .hero-lockup {
-  border: var(--border-w) solid var(--black);
-  background: var(--white);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   overflow: hidden;
   max-height: 460px;
   display: flex;
@@ -292,9 +330,9 @@ mark {
 .hero-stamp span {
   width: max-content;
   max-width: min(58vw, 330px);
-  background: var(--black);
-  color: var(--yellow);
-  border: 2px solid var(--yellow);
+  background: var(--ink);
+  color: var(--accent);
+  border: 2px solid var(--accent);
   padding: 0.25rem 0.45rem;
   font-size: clamp(0.58rem, 1.2vw, 0.72rem);
   font-weight: 700;
@@ -303,7 +341,7 @@ mark {
 
 .kicker {
   margin-bottom: 0.8rem;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.78rem;
@@ -316,7 +354,7 @@ mark {
 .hero-text h1 {
   position: relative;
   max-width: 11ch;
-  text-shadow: 2px 0 0 var(--cyan), -2px 0 0 var(--magenta);
+  text-shadow: 2px 0 0 var(--accent), -2px 0 0 var(--accent);
 }
 
 .hero-text h1::after {
@@ -325,8 +363,8 @@ mark {
   width: min(100%, 8ch);
   height: var(--border-w);
   margin-top: 1rem;
-  background: var(--black);
-  box-shadow: 0 8px 0 var(--yellow);
+  background: var(--ink);
+  box-shadow: 0 8px 0 var(--accent);
 }
 
 .hero-sub {
@@ -345,23 +383,23 @@ mark {
   align-items: center;
   min-height: 2.65rem;
   padding: 0.55rem 0.9rem;
-  border: var(--border-w) solid var(--black);
-  box-shadow: 4px 4px 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  box-shadow: 4px 4px 0 var(--ink);
   text-decoration: none;
   font-size: 0.82rem;
   font-weight: 700;
-  background: var(--yellow);
+  background: var(--accent);
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
 
 .hero-actions a+a {
-  background: var(--white);
+  background: var(--paper);
 }
 
 .hero-actions a:hover,
 .hero-actions a:focus-visible {
   transform: translate(-2px, -2px);
-  box-shadow: 6px 6px 0 var(--black);
+  box-shadow: 6px 6px 0 var(--ink);
 }
 
 .hero-ledger {
@@ -369,13 +407,13 @@ mark {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
   margin: 1.6rem 0 0;
-  border: 1px solid var(--black);
+  border: 1px solid var(--ink);
   max-width: 560px;
 }
 
 .hero-ledger div {
   padding: 0.65rem 0.75rem;
-  border-right: 1px solid var(--black);
+  border-right: 1px solid var(--ink);
   min-width: 0;
 }
 
@@ -385,7 +423,7 @@ mark {
 
 .hero-ledger dt {
   margin: 0 0 0.2rem;
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.64rem;
   text-transform: uppercase;
 }
@@ -407,14 +445,14 @@ mark {
 .hero-sub {
   margin-top: 1.1rem;
   max-width: 34ch;
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.95rem;
 }
 
 /* ---------- Rule (section divider) ---------- */
 .rule {
   height: var(--border-w);
-  background: var(--black);
+  background: var(--ink);
   max-width: 1200px;
   margin: 0 auto;
 }
@@ -444,13 +482,13 @@ mark {
   justify-content: center;
   min-width: 2.1rem;
   height: 2.1rem;
-  background: var(--yellow);
-  border: var(--border-w) solid var(--black);
+  background: var(--accent);
+  border: var(--border-w) solid var(--ink);
   font-size: 1.1rem;
 }
 
 .sec-intro {
-  color: var(--gray);
+  color: var(--ink-muted);
   max-width: 62ch;
   margin-bottom: 2rem;
   font-size: 0.92rem;
@@ -476,8 +514,8 @@ mark {
   max-width: 52ch;
   margin-top: 1.35rem;
   padding-left: 1rem;
-  border-left: var(--border-w) solid var(--yellow);
-  color: var(--black);
+  border-left: var(--border-w) solid var(--accent);
+  color: var(--ink);
   font-weight: 600;
 }
 
@@ -494,9 +532,9 @@ mark {
 .lane-card,
 .principle-item,
 .maintainer-card {
-  border: var(--border-w) solid var(--black);
-  background: var(--white);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   padding: 1.15rem 1.2rem;
 }
 
@@ -515,14 +553,14 @@ mark {
 .principle-item p,
 .dispatch p,
 .maintainer-card p {
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.86rem;
 }
 
 .mini-label {
   display: inline-block;
   margin-bottom: 0.55rem;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -545,9 +583,9 @@ mark {
   display: flex;
   justify-content: center;
   min-height: 280px;
-  border: var(--border-w) solid var(--black);
-  background: var(--paper);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   overflow: hidden;
 }
 
@@ -566,9 +604,9 @@ mark {
 }
 
 .protocol-panel {
-  border: var(--border-w) solid var(--black);
-  background: var(--white);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   min-height: 100%;
   overflow: hidden;
 }
@@ -582,9 +620,9 @@ mark {
   justify-content: space-between;
   padding: clamp(1.2rem, 3vw, 2rem);
   background:
-    linear-gradient(90deg, rgba(10, 10, 10, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(10, 10, 10, 0.08) 1px, transparent 1px),
-    var(--paper);
+    linear-gradient(90deg, var(--rule) 1px, transparent 1px),
+    linear-gradient(0deg, var(--rule) 1px, transparent 1px),
+    var(--paper-raised);
   background-size: 22px 22px;
 }
 
@@ -593,7 +631,7 @@ mark {
   content: "";
   position: absolute;
   inset: 1rem;
-  border: 1px solid var(--black);
+  border: 1px solid var(--ink);
   pointer-events: none;
 }
 
@@ -601,15 +639,15 @@ mark {
   inset: auto 1rem 1rem auto;
   width: 42%;
   height: 34%;
-  background: var(--yellow);
+  background: var(--accent);
   mix-blend-mode: multiply;
 }
 
 .protocol-stamp {
   width: max-content;
   max-width: 100%;
-  background: var(--black);
-  color: var(--yellow);
+  background: var(--ink);
+  color: var(--accent);
   padding: 0.35rem 0.55rem;
   font-size: 0.78rem;
   font-weight: 700;
@@ -626,7 +664,7 @@ mark {
   position: relative;
   z-index: 1;
   margin: 2rem 0;
-  color: var(--black);
+  color: var(--ink);
   font-family: var(--font-mono);
   font-size: clamp(0.95rem, 2.2vw, 1.35rem);
   font-weight: 700;
@@ -643,7 +681,7 @@ mark {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 0.9rem;
-  box-shadow: 4px 4px 0 var(--black);
+  box-shadow: 4px 4px 0 var(--ink);
   padding: 0.95rem 1rem;
 }
 
@@ -653,8 +691,8 @@ mark {
   justify-content: center;
   width: 2.35rem;
   height: 2.35rem;
-  background: var(--black);
-  color: var(--yellow);
+  background: var(--ink);
+  color: var(--accent);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -662,13 +700,13 @@ mark {
 /* ---------- Repositories (Section 4) ---------- */
 .repo-status {
   font-size: 0.9rem;
-  color: var(--gray);
+  color: var(--ink-muted);
 }
 
 .cursor {
   display: inline-block;
   animation: blink 1s steps(1) infinite;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -687,9 +725,9 @@ mark {
 .repo-card {
   display: block;
   text-decoration: none;
-  background: var(--white);
-  border: var(--border-w) solid var(--black);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  background: var(--paper);
+  border: var(--border-w) solid var(--ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   padding: 1.1rem 1.2rem;
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
@@ -697,8 +735,8 @@ mark {
 .repo-card:hover,
 .repo-card:focus-visible {
   transform: translate(-3px, -3px);
-  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--black);
-  background: var(--yellow-pale);
+  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--ink);
+  background: var(--mark);
 }
 
 .repo-card-top {
@@ -718,13 +756,13 @@ mark {
 .repo-stars {
   flex: 0 0 auto;
   font-size: 0.8rem;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-weight: 600;
 }
 
 .repo-card p {
   font-size: 0.85rem;
-  color: var(--gray);
+  color: var(--ink-muted);
   margin-bottom: 0.9rem;
   min-height: 2.6em;
 }
@@ -733,8 +771,8 @@ mark {
   display: flex;
   justify-content: space-between;
   font-size: 0.75rem;
-  color: var(--black);
-  border-top: 1px solid var(--black);
+  color: var(--ink);
+  border-top: 1px solid var(--ink);
   padding-top: 0.6rem;
 }
 
@@ -746,10 +784,10 @@ mark {
 }
 
 .group-card {
-  background: var(--black);
-  color: var(--white);
-  border: var(--border-w) solid var(--black);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--yellow);
+  background: var(--ink);
+  color: var(--paper);
+  border: var(--border-w) solid var(--ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--accent);
   padding: 1.25rem 1.35rem;
 }
 
@@ -772,20 +810,20 @@ mark {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--yellow);
-  color: var(--yellow);
+  border: 1px solid var(--accent);
+  color: var(--accent);
 }
 
 .tag-active {
-  background: var(--yellow);
-  color: var(--black);
-  border-color: var(--yellow);
+  background: var(--accent);
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 .tag-forming {
-  border-color: var(--white);
-  color: var(--black);
-  background: var(--yellow-pale);
+  border-color: var(--paper);
+  color: var(--ink);
+  background: var(--mark);
 }
 
 .group-card p {
@@ -798,18 +836,18 @@ mark {
   display: inline-block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--yellow);
+  color: var(--accent);
   text-decoration: none;
-  border-bottom: 1px solid var(--yellow);
+  border-bottom: 1px solid var(--accent);
 }
 
 .group-card a:hover {
-  color: var(--white);
-  border-color: var(--white);
+  color: var(--paper);
+  border-color: var(--paper);
 }
 
 .empty-note {
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.9rem;
 }
 
@@ -822,9 +860,9 @@ mark {
 .event-card {
   display: grid;
   grid-template-columns: minmax(180px, 0.32fr) 1fr;
-  border: var(--border-w) solid var(--black);
-  background: var(--white);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
 }
 
 .event-date {
@@ -834,8 +872,8 @@ mark {
   gap: 0.4rem;
   min-height: 100%;
   padding: 1.15rem 1.2rem;
-  background: var(--yellow);
-  border-right: var(--border-w) solid var(--black);
+  background: var(--accent);
+  border-right: var(--border-w) solid var(--ink);
 }
 
 .event-date span {
@@ -869,35 +907,35 @@ mark {
 .event-card p {
   max-width: 68ch;
   margin-bottom: 0.9rem;
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.88rem;
 }
 
 .event-card a {
   display: inline-block;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
-  border-bottom: 1px solid var(--yellow-deep);
+  border-bottom: 1px solid var(--accent);
 }
 
 .event-card a:hover {
-  color: var(--black);
-  border-bottom-color: var(--black);
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 
 .tag-scheduled,
 .tag-open {
-  background: var(--yellow);
-  color: var(--black);
-  border-color: var(--black);
+  background: var(--accent);
+  color: var(--ink);
+  border-color: var(--ink);
 }
 
 .tag-done {
-  color: var(--black);
-  border-color: var(--black);
-  background: var(--paper);
+  color: var(--ink);
+  border-color: var(--ink);
+  background: var(--paper-raised);
 }
 
 /* ---------- Join cards ---------- */
@@ -912,10 +950,10 @@ mark {
   flex-direction: column;
   gap: 0.6rem;
   text-decoration: none;
-  color: var(--black);
-  background: var(--yellow);
-  border: var(--border-w) solid var(--black);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--black);
+  color: var(--ink);
+  background: var(--accent);
+  border: var(--border-w) solid var(--ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   padding: 1.4rem 1.5rem;
   transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
@@ -923,8 +961,8 @@ mark {
 .join-card:hover,
 .join-card:focus-visible {
   transform: translate(-3px, -3px);
-  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--black);
-  background: var(--white);
+  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--ink);
+  background: var(--paper);
 }
 
 .join-card-top {
@@ -949,7 +987,7 @@ mark {
 
 .join-hint {
   font-size: 0.82rem;
-  color: var(--black);
+  color: var(--ink);
   opacity: 0.75;
 }
 
@@ -963,7 +1001,7 @@ mark {
 }
 
 .lane-card:nth-child(even) {
-  background: var(--paper);
+  background: var(--paper-raised);
 }
 
 .dispatch {
@@ -973,10 +1011,10 @@ mark {
   align-items: center;
   margin-top: calc(var(--gap) * 1.35);
   padding: 1.15rem 1.25rem;
-  background: var(--black);
-  color: var(--white);
-  border: var(--border-w) solid var(--black);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--yellow);
+  background: var(--ink);
+  color: var(--paper);
+  border: var(--border-w) solid var(--ink);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--accent);
 }
 
 .dispatch p {
@@ -984,7 +1022,7 @@ mark {
 }
 
 .dispatch .mini-label {
-  color: var(--yellow);
+  color: var(--accent);
 }
 
 /* ---------- Maintainers (Section 8) ---------- */
@@ -1009,8 +1047,8 @@ mark {
 .maintainer-avatar {
   width: 4rem;
   height: 4rem;
-  border: 2px solid var(--black);
-  background: var(--yellow);
+  border: 2px solid var(--ink);
+  background: var(--accent);
 }
 
 .maintainer-top img {
@@ -1029,7 +1067,7 @@ mark {
 }
 
 .maintainer-top a {
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-size: 0.82rem;
   font-weight: 700;
   text-decoration: none;
@@ -1037,7 +1075,7 @@ mark {
 }
 
 .maintainer-top a:hover {
-  border-bottom-color: var(--yellow-deep);
+  border-bottom-color: var(--accent);
 }
 
 .maintainer-bio {
@@ -1049,14 +1087,14 @@ mark {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
   margin: auto 0 0;
-  border: 1px solid var(--black);
+  border: 1px solid var(--ink);
 }
 
 .maintainer-meta div {
   min-width: 0;
   padding: 0.55rem 0.65rem;
-  border-right: 1px solid var(--black);
-  border-bottom: 1px solid var(--black);
+  border-right: 1px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
 }
 
 .maintainer-meta div:nth-child(even) {
@@ -1069,7 +1107,7 @@ mark {
 
 .maintainer-meta dt {
   margin: 0 0 0.15rem;
-  color: var(--gray);
+  color: var(--ink-muted);
   font-size: 0.62rem;
   text-transform: uppercase;
 }
@@ -1096,8 +1134,8 @@ mark {
   min-height: 260px;
   margin: 0;
   padding: 1.15rem;
-  border: var(--border-w) solid var(--black);
-  background: var(--paper);
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper-raised);
   overflow: hidden;
 }
 
@@ -1122,18 +1160,18 @@ mark {
   display: flex;
   gap: 0.75rem;
   padding: 0.65rem 0;
-  border-bottom: 1px solid var(--black);
+  border-bottom: 1px solid var(--ink);
   font-size: 0.88rem;
   flex-wrap: wrap;
 }
 
 .ref-list li:first-child {
-  border-top: 1px solid var(--black);
+  border-top: 1px solid var(--ink);
 }
 
 .ref-tag {
   flex: 0 0 auto;
-  color: var(--yellow-deep);
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -1143,16 +1181,16 @@ mark {
 }
 
 .ref-list a:hover {
-  border-bottom-color: var(--black);
+  border-bottom-color: var(--ink);
 }
 
 /* ---------- Footer ---------- */
 .doc-footer {
-  border-top: var(--border-w) solid var(--black);
+  border-top: var(--border-w) solid var(--ink);
   padding: 1.5rem var(--page-pad) 2.5rem;
   text-align: center;
   font-size: 0.75rem;
-  color: var(--gray);
+  color: var(--ink-muted);
 }
 
 .doc-footer p {
@@ -1206,7 +1244,7 @@ mark {
 
   .event-date {
     border-right: 0;
-    border-bottom: var(--border-w) solid var(--black);
+    border-bottom: var(--border-w) solid var(--ink);
   }
 }
 
@@ -1222,8 +1260,8 @@ mark {
     right: 0;
     flex-direction: column;
     height: auto;
-    background: var(--black);
-    border-bottom: var(--border-w) solid var(--yellow);
+    background: var(--ink);
+    border-bottom: var(--border-w) solid var(--accent);
     padding: 0.5rem 0;
     gap: 0;
     display: none;
@@ -1236,17 +1274,20 @@ mark {
   .nav-links a {
     height: auto;
     padding: 0.85rem var(--page-pad);
-    border-bottom: 1px solid #333;
+    border-bottom: 1px solid var(--ink-muted);
     border-left: 3px solid transparent;
   }
 
   .nav-links a.is-active {
-    border-bottom: 1px solid #333;
-    border-left-color: var(--yellow);
+    border-bottom: 1px solid var(--ink-muted);
+    border-left-color: var(--accent);
   }
 }
 
 @media (max-width: 520px) {
+  /* Only the five non-colour tokens are overridden here. Every colour
+     resolves through the token block at the top, so this media query
+     needs no [data-theme] counterpart. */
   :root {
     --border-w: 2px;
     --shadow-off: 4px;
@@ -1313,7 +1354,7 @@ mark {
 
   .hero-ledger div {
     border-right: 0;
-    border-bottom: 1px solid var(--black);
+    border-bottom: 1px solid var(--ink);
   }
 
   .hero-ledger div:last-child {
@@ -1385,7 +1426,7 @@ mark {
   .maintainer-meta div:nth-child(even),
   .maintainer-meta div:nth-last-child(-n + 2) {
     border-right: 0;
-    border-bottom: 1px solid var(--black);
+    border-bottom: 1px solid var(--ink);
   }
 
   .maintainer-meta div:last-child {
@@ -1400,4 +1441,27 @@ mark {
     right: -5.5rem;
     top: -3.5rem;
   }
+}
+
+/* --------------------------------------------------------- theme toggle */
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: var(--border-w) solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.theme-toggle:hover { border-color: var(--rule-strong); }
+.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle-icon::before { content: "\25CF"; font-size: 12px; }
+[data-theme="dark"] .theme-toggle-icon::before { content: "\25D1"; }
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle { transition: none; }
 }

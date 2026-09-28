@@ -1,6 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script>
+    /* Runs before first paint so the page never flashes the wrong theme. */
+    (function () {
+      try {
+        var stored = localStorage.getItem("fcs-theme");
+        document.documentElement.setAttribute(
+          "data-theme",
+          stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        );
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Free Code Syndicate — RFC 0001</title>
@@ -72,6 +87,16 @@
       <li><a href="#join" data-section="join">&sect;9 Entry</a></li>
       <li><a href="#references" data-section="references">&sect;10 Refs</a></li>
     </ul>
+
+    <button
+      class="theme-toggle"
+      id="theme-toggle"
+      type="button"
+      aria-pressed="false"
+      aria-label="Switch to dark mode"
+    >
+      <span class="theme-toggle-icon" aria-hidden="true"></span>
+    </button>
   </nav>
 
   <main id="top">
@@ -410,6 +435,7 @@
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
 
+  <script src="js/theme.js"></script>
   <script src="js/data.js"></script>
   <script src="js/main.js"></script>
 </body>
