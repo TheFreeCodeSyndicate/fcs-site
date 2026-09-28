@@ -13,19 +13,31 @@ export const LIVE_LEAD_MINUTES = 15;
 const MINUTE_MS = 60 * 1000;
 
 /**
- * @param {string|Date} now
+ * The single definition of "how long is this event". Shared so the
+ * public page and the generated calendar can never disagree.
+ * @param {*} value
+ * @returns {number} a positive number of minutes, defaulting to 60
+ */
+export function resolveDurationMinutes(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : 60;
+}
+
+/**
  * @param {string} startsAt        ISO timestamp
  * @param {number} durationMinutes
- * @param {string} stage           "draft" | "scheduled" | "live" | "done"
+ * @param {string} stage           "draft" | "scheduled" | "live" | "done";
+ *   only "done" overrides the clock, every other value is judged by it
+ * @param {string|Date} now
  * @returns {"upcoming"|"live"|"finished"}
  */
-export function deriveEventState(now, startsAt, durationMinutes = 60, stage = "scheduled") {
+export function deriveEventState(startsAt, durationMinutes = 60, stage = "scheduled", now = new Date()) {
   if (stage === "done") return "finished";
 
   const start = new Date(startsAt).getTime();
   if (Number.isNaN(start)) return "upcoming";
 
-  const end = start + (durationMinutes || 60) * MINUTE_MS;
+  const end = start + resolveDurationMinutes(durationMinutes) * MINUTE_MS;
   const liveFrom = start - LIVE_LEAD_MINUTES * MINUTE_MS;
   const t = new Date(now).getTime();
   if (Number.isNaN(t)) return "upcoming";

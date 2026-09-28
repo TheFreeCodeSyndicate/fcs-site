@@ -81,5 +81,20 @@ test("resolveNextSession returns null when there is nothing ahead", () => {
 });
 
 test("resolveNextSession tolerates being called with no arguments", () => {
-  assert.equal(typeof resolveNextSession(), "object");
+  assert.equal(resolveNextSession(), null);
+});
+
+test("resolveNextSession returns null rather than a past event for an unusable now", () => {
+  const result = resolveNextSession(
+    {
+      events: [
+        { id: "e-past", title: "Past Event", starts_at: "2026-10-01T18:30:00.000Z", stage: "scheduled" },
+      ],
+      classSessions: [
+        { title: "Weekly Class", weekday: 4, start_time: "21:00", is_active: true },
+      ],
+    },
+    new Date("bogus")
+  );
+  assert.equal(result, null);
 });

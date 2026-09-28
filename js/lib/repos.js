@@ -26,10 +26,12 @@ export function splitRepos(repos = [], kinds = []) {
   for (const repo of repos || []) {
     if (!repo || !repo.name) continue;
     const entry = curated.get(repo.name);
+    // Both branches copy: the caller gets rows it may sort or annotate
+    // without mutating the GitHub response it passed in.
     if (entry && entry.kind === "resource") {
       resources.push({ ...repo, curated_note: entry.note || "" });
     } else {
-      projects.push(repo);
+      projects.push({ ...repo });
     }
   }
 

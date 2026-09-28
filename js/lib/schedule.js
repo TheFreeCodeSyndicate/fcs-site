@@ -19,6 +19,8 @@
 
 /**
  * The next wall-clock time a recurring session runs, strictly after `now`.
+ * @param {{weekday:number, start_time:string, is_active?:boolean}} session
+ * @param {string|Date} now
  * @returns {Date|null} null when the session is inactive or malformed
  */
 export function nextOccurrence(session, now = new Date()) {
@@ -50,11 +52,16 @@ export function nextOccurrence(session, now = new Date()) {
 /**
  * The soonest thing happening next, across one-off events and the
  * recurring class schedule.
- * @returns {{kind:"event"|"class",title:string,group:?string,at:Date}|null}
+ * @param {{events?:object[], classSessions?:object[]}} data
+ * @param {string|Date} now
+ * @returns {{kind:"event"|"class", title:string, group:string|null, at:Date}|null}
  */
 export function resolveNextSession({ events = [], classSessions = [] } = {}, now = new Date()) {
   const candidates = [];
   const nowMs = new Date(now).getTime();
+  // Without this guard every `at <= nowMs` is false, so a past event
+  // would be handed back as the next session.
+  if (Number.isNaN(nowMs)) return null;
 
   for (const event of events || []) {
     if (!event || event.stage === "done") continue;

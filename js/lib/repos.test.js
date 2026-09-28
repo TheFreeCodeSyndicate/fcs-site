@@ -60,3 +60,19 @@ test("an unnamed repo row is skipped rather than rendered blank", () => {
   assert.equal(projects.length, 0);
   assert.equal(resources.length, 0);
 });
+
+test("neither output array shares objects with the input", () => {
+  const input = [repo("alpha"), repo("notes")];
+  const snapshot = structuredClone(input);
+  const { projects, resources } = splitRepos(input, [
+    { repo_name: "notes", kind: "resource" },
+  ]);
+
+  projects[0].description = "mutated";
+  resources[0].description = "mutated too";
+  resources[0].curated_note = "edited";
+
+  assert.deepEqual(input, snapshot);
+  assert.equal(input[0].description, "");
+  assert.equal(input[1].description, "");
+});
