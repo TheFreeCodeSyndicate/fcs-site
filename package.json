@@ -1,0 +1,11 @@
+{
+  "name": "fcs-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The Free Code Syndicate — static site with a Supabase-backed admin panel.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test js/lib/*.test.js",
+    "serve": "python -m http.server 8000"
+  }
+}
