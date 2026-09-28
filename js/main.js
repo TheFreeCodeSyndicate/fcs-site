@@ -43,6 +43,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   setupMobileNav();
   setupScrollSpy();
+  setupReveal();
+  setupCopyButtons();
 
   // The three fetches are deliberately independent: a Supabase outage
   // or a GitHub rate limit degrades one section without touching the
@@ -145,6 +147,7 @@ async function loadContent() {
   dbResources = Array.isArray(resources) ? resources : [];
 
   renderEvents();
+  renderWeekStrip();
   renderResources();
   renderStudyGroups(studyGroups);
   renderJoinLinks(socialLinks);
@@ -187,9 +190,13 @@ async function loadRepositories() {
       via_github: true,
     }));
 
-    gridEl.innerHTML = projects.map(repoCardHTML).join("");
+    gridEl.innerHTML =
+      `<div class="repo-head" aria-hidden="true">
+         <span>Repository</span><span>Description</span><span>Language</span><span>Updated</span><span>Stars</span>
+       </div>` + projects.map(repoCardHTML).join("");
     statusEl.hidden = true;
     gridEl.hidden = false;
+    renderActivityTicker(repos);
 
     // Re-render so the Resources section picks up the GitHub-sourced
     // rows alongside the database ones.
@@ -205,27 +212,58 @@ async function loadRepositories() {
   }
 }
 
+/* One row of the project index. Keeps the .repo-card class so the
+ * headless page check still counts projects. */
 function repoCardHTML(repo) {
   const description = repo.description
     ? escapeHTML(repo.description)
-    : "No description is present.";
-  const language = repo.language || "\u2014"; // em dash fallback
-  const updated = formatDate(repo.updated_at);
-  const href = safeURL(repo.html_url);
+    : "No description yet.";
+  const stars = Number.isFinite(repo.stargazers_count) ? repo.stargazers_count : 0;
 
   return `
-    <a class="repo-card" href="${href}" target="_blank" rel="noopener">
-      <div class="repo-card-top">
-        <h3>${escapeHTML(repo.name)}</h3>
-        <span class="repo-stars">&#9733; ${Number.isFinite(repo.stargazers_count) ? repo.stargazers_count : 0}</span>
-      </div>
-      <p>${description}</p>
-      <div class="repo-meta">
-        <span>${escapeHTML(language)}</span>
-        <span>Updated ${escapeHTML(updated)}</span>
-      </div>
+    <a class="repo-card" href="${safeURL(repo.html_url)}" target="_blank" rel="noopener">
+      <span class="repo-name">${escapeHTML(repo.name)}</span>
+      <span class="repo-desc">${description}</span>
+      <span class="repo-lang">${escapeHTML(repo.language || "n/a")}</span>
+      <span class="repo-updated">${escapeHTML(formatDate(repo.updated_at))}</span>
+      <span class="repo-stars" aria-label="${stars} stars">&#9733; ${stars}</span>
     </a>
   `;
+}
+
+const relativeTime = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+/* "3 days ago" from an ISO timestamp, in the largest sensible unit. */
+function timeAgo(isoString, now = Date.now()) {
+  const seconds = (new Date(isoString).getTime() - now) / 1000;
+  if (!Number.isFinite(seconds)) return "";
+  const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relativeTime.format(Math.round(seconds / size), unit);
+  }
+  return "just now";
+}
+
+/* A single marquee of real recent pushes, so a visitor can see the
+ * group is working. The track is rendered twice for a seamless loop;
+ * the copy is hidden from screen readers. */
+function renderActivityTicker(repos) {
+  const ticker = document.getElementById("activity-ticker");
+  if (!ticker) return;
+
+  const recent = repos
+    .filter((repo) => repo.pushed_at)
+    .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at))
+    .slice(0, 8);
+  if (recent.length < 3) return;
+
+  const items = recent
+    .map((repo) => `<li><strong>${escapeHTML(repo.name)}</strong> pushed ${escapeHTML(timeAgo(repo.pushed_at))}</li>`)
+    .join("");
+  ticker.innerHTML = `
+    <ul class="ticker-track">${items}</ul>
+    <ul class="ticker-track" aria-hidden="true">${items}</ul>`;
+  ticker.hidden = false;
 }
 
 function formatDate(isoString) {
@@ -666,17 +704,22 @@ function renderJoinLinks(links) {
     return;
   }
 
-  grid.innerHTML = list.map(
-    (item) => `
-      <a class="join-card" href="${safeURL(item.url)}" target="_blank" rel="noopener">
-        <span class="join-card-top">
+  grid.innerHTML = list.map((item) => {
+    const url = safeURL(item.url);
+    const shown = escapeHTML(String(item.url).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""));
+    const flag = escapeHTML(String(item.platform || item.label || "link").toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    return `
+      <div class="join-card">
+        <p class="join-command"><span class="join-prompt" aria-hidden="true">$</span> join --${flag}</p>
+        <a class="join-url" href="${url}" target="_blank" rel="noopener">
           <span class="join-label">${escapeHTML(item.label)}</span>
-          <span class="join-arrow" aria-hidden="true">&rarr;</span>
-        </span>
-        <span class="join-hint">${escapeHTML(item.hint)}</span>
-      </a>
-    `
-  ).join("");
+          <span class="join-address">${shown}</span>
+        </a>
+        <p class="join-hint">${escapeHTML(item.hint)}</p>
+        <button type="button" class="join-copy" data-copy="${url}" aria-label="Copy the ${escapeAttr(item.label)} link">Copy</button>
+      </div>
+    `;
+  }).join("");
 }
 
 /* ------------------------------------------------------------------
@@ -799,3 +842,97 @@ function setupScrollSpy() {
   // Establish the initial state immediately, not on the first scroll.
   pick();
 }
+
+/* ------------------------------------------------------------------
+ * Events: the week at a glance
+ *
+ * Seven cells, Monday first, each listing that weekday's recurring
+ * sessions, with today marked. Hidden when there is no weekly schedule.
+ * ---------------------------------------------------------------- */
+function renderWeekStrip() {
+  const strip = document.getElementById("week-strip");
+  if (!strip) return;
+
+  const active = allClassSessions.filter((s) => s && s.is_active !== false);
+  if (!active.length) {
+    strip.hidden = true;
+    return;
+  }
+
+  const today = new Date().getDay();
+  const names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const order = [1, 2, 3, 4, 5, 6, 0];
+
+  strip.innerHTML = order.map((day) => {
+    const sessions = active
+      .filter((s) => Number(s.weekday) === day)
+      .sort((a, b) => String(a.start_time).localeCompare(String(b.start_time)));
+    return `
+      <li class="week-day${day === today ? " is-today" : ""}${sessions.length ? "" : " is-empty"}"
+          ${day === today ? 'aria-current="date"' : ""}>
+        <span class="week-name">${names[day]}${day === today ? " <em>today</em>" : ""}</span>
+        ${sessions.map((s) => `
+          <span class="week-session">
+            <span class="week-time">${escapeHTML(String(s.start_time || "").slice(0, 5))}</span>
+            ${escapeHTML(s.title)}
+          </span>`).join("")}
+      </li>`;
+  }).join("");
+  strip.hidden = false;
+}
+
+/* ------------------------------------------------------------------
+ * Copy-to-clipboard for the join commands. One delegated listener, so
+ * re-rendered rows need no rebinding.
+ * ---------------------------------------------------------------- */
+function setupCopyButtons() {
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest(".join-copy");
+    if (!button) return;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = "Copied";
+    } catch {
+      button.textContent = "Press Ctrl+C";
+    }
+    button.classList.add("is-done");
+    clearTimeout(button.resetTimer);
+    button.resetTimer = setTimeout(() => {
+      button.textContent = "Copy";
+      button.classList.remove("is-done");
+    }, 1600);
+  });
+}
+
+/* ------------------------------------------------------------------
+ * Reveal on scroll
+ *
+ * Section contents rise in once, in order, as each section arrives.
+ * The class that hides them is added here, so with JavaScript off or
+ * reduced motion on, nothing is ever hidden.
+ * ---------------------------------------------------------------- */
+function setupReveal() {
+  if (!("IntersectionObserver" in window)) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const sections = document.querySelectorAll(".doc-section");
+  sections.forEach((section) => {
+    section.classList.add("will-reveal");
+    Array.from(section.children).forEach((child, index) => {
+      child.style.setProperty("--reveal-i", Math.min(index, 6));
+    });
+  });
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-revealed");
+        observer.unobserve(entry.target);
+      });
+    },
+    { rootMargin: "0px 0px -12% 0px" }
+  );
+  sections.forEach((section) => observer.observe(section));
+}
+

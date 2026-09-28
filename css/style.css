@@ -104,6 +104,12 @@
 }
 
 /* ---------- Reset ---------- */
+/* Components set their own display, which would otherwise beat the
+   hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -795,64 +801,142 @@ mark {
   }
 }
 
+/* Projects read as an index: one row per repository, columns that
+   line up, and a row that inverts to the slab on hover. */
 .repo-grid {
+  border: var(--border-w) solid var(--rule-strong);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
+  background: var(--paper-raised);
+}
+
+.repo-head,
+.repo-card {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
-  gap: var(--gap);
+  grid-template-columns: minmax(10rem, 1.1fr) minmax(0, 2.4fr) 6.5rem 7.5rem 3.5rem;
+  gap: 1rem;
+  align-items: baseline;
+  padding: 0.8rem 1.1rem;
+}
+
+.repo-head {
+  border-bottom: var(--border-w) solid var(--rule-strong);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
 }
 
 .repo-card {
-  display: block;
+  color: var(--ink);
   text-decoration: none;
-  background: var(--paper);
-  border: var(--border-w) solid var(--ink);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
-  padding: 1.1rem 1.2rem;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  font-size: 0.85rem;
+  transition: background-color 0.14s ease, color 0.14s ease;
 }
 
-.repo-card:hover,
-.repo-card:focus-visible {
-  transform: translate(-3px, -3px);
-  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--ink);
-  background: var(--mark);
+.repo-card + .repo-card {
+  border-top: 1px solid var(--rule);
 }
 
-.repo-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.repo-card-top h3 {
-  font-size: 1rem;
+.repo-name {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
 
-.repo-stars {
-  flex: 0 0 auto;
-  font-size: 0.8rem;
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
-.repo-card p {
-  font-size: 0.85rem;
+.repo-desc {
   color: var(--ink-muted);
-  margin-bottom: 0.9rem;
-  min-height: 2.6em;
 }
 
-.repo-meta {
+.repo-lang,
+.repo-updated,
+.repo-stars {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.repo-stars {
+  text-align: right;
+}
+
+.repo-card:hover,
+.repo-card:focus-visible {
+  background: var(--slab);
+  color: var(--slab-ink);
+  outline: none;
+}
+
+.repo-card:hover .repo-name,
+.repo-card:focus-visible .repo-name {
+  color: var(--slab-accent);
+}
+
+.repo-card:hover :is(.repo-desc, .repo-lang, .repo-updated, .repo-stars),
+.repo-card:focus-visible :is(.repo-desc, .repo-lang, .repo-updated, .repo-stars) {
+  color: var(--slab-ink);
+}
+
+@media (max-width: 760px) {
+  .repo-head {
+    display: none;
+  }
+
+  .repo-card {
+    grid-template-columns: 1fr auto;
+    gap: 0.3rem 1rem;
+  }
+
+  .repo-desc {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .repo-updated {
+    display: none;
+  }
+}
+
+/* One marquee on the page: real recent pushes (Hack Club). */
+.activity-ticker {
   display: flex;
-  justify-content: space-between;
-  font-size: 0.75rem;
-  color: var(--ink);
-  border-top: 1px solid var(--ink);
-  padding-top: 0.6rem;
+  overflow: hidden;
+  margin-bottom: var(--gap);
+  border-block: var(--border-w) solid var(--rule-strong);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.8rem;
+}
+
+.ticker-track {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2.5rem;
+  margin: 0;
+  padding: 0.55rem 1.25rem;
+  list-style: none;
+  white-space: nowrap;
+  animation: fcs-ticker 38s linear infinite;
+}
+
+.ticker-track li::after {
+  content: "/";
+  margin-left: 2.5rem;
+  opacity: 0.5;
+}
+
+.activity-ticker:hover .ticker-track,
+.activity-ticker:focus-within .ticker-track {
+  animation-play-state: paused;
+}
+
+@keyframes fcs-ticker {
+  to { transform: translateX(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .activity-ticker { overflow-x: auto; }
+  .ticker-track { animation: none; }
+  .ticker-track[aria-hidden="true"] { display: none; }
 }
 
 /* ---------- Study groups (Section 5) ---------- */
@@ -1007,57 +1091,127 @@ mark {
 }
 
 /* ---------- Join cards ---------- */
+/* Each room is a command you could type: prompt, destination, and a
+   copy button. The whole row presses like a key. */
 .join-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: var(--gap);
+  gap: 0.9rem;
 }
 
 .join-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  text-decoration: none;
-  color: var(--accent-ink);
-  background: var(--accent);
-  border: var(--border-w) solid var(--ink);
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr) auto;
+  grid-template-areas:
+    "cmd url  copy"
+    "cmd hint copy";
+  gap: 0.2rem 1.25rem;
+  align-items: center;
+  padding: 0.9rem 1.1rem;
+  background: var(--paper-raised);
+  border: var(--border-w) solid var(--rule-strong);
   box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
-  padding: 1.4rem 1.5rem;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.12s ease;
 }
 
 .join-card:hover,
-.join-card:focus-visible {
-  transform: translate(-3px, -3px);
-  box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--ink);
-  background: var(--paper);
-  color: var(--ink);
+.join-card:focus-within {
+  background: var(--accent);
+  color: var(--accent-ink);
+  transform: translate(-2px, -2px);
+  box-shadow: calc(var(--shadow-off) + 2px) calc(var(--shadow-off) + 2px) 0 var(--ink);
 }
 
-.join-card-top {
+.join-command {
+  grid-area: cmd;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.join-prompt {
+  color: var(--accent-text);
+}
+
+.join-card:hover .join-prompt,
+.join-card:focus-within .join-prompt {
+  color: inherit;
+}
+
+.join-url {
+  grid-area: url;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.join-url:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
 }
 
 .join-label {
-  font-weight: 700;
-  font-size: 1.02rem;
+  font-family: var(--font-display);
+  font-stretch: 112%;
+  font-weight: 800;
+  font-size: 1.05rem;
 }
 
-.join-arrow {
-  font-size: 1.2rem;
-  transition: transform 0.12s ease;
-}
-
-.join-card:hover .join-arrow {
-  transform: translateX(4px);
+.join-address {
+  font-size: 0.8rem;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
 }
 
 .join-hint {
-  font-size: 0.82rem;
+  grid-area: hint;
+  margin: 0;
+  font-size: 0.8rem;
   color: inherit;
+  opacity: 0.8;
+}
+
+.join-copy {
+  grid-area: copy;
+  min-width: 5.5rem;
+  padding: 0.5rem 0.8rem;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.join-copy:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.join-copy.is-done {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.join-copy:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 620px) {
+  .join-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "cmd  copy"
+      "url  url"
+      "hint hint";
+  }
 }
 
 /* ---------- Contribution lanes (Section 7) ---------- */
@@ -1680,3 +1834,190 @@ mark {
 }
 .resource-origin { color: var(--accent-text); }
 .join-label { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ================================================================
+   INTERACTION LAYER
+   Each piece answers one question for the reader. Everything here
+   stands still under prefers-reduced-motion.
+   ================================================================ */
+
+/* Where am I on the page? A reading bar along the nav's bottom rule,
+   driven by scroll position with no JavaScript. Browsers without
+   scroll-driven animations keep the plain yellow rule. */
+@supports (animation-timeline: scroll()) {
+  .doc-nav {
+    border-bottom-color: color-mix(in srgb, var(--slab-accent) 25%, var(--slab));
+  }
+
+  .doc-nav::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--border-w) * -1);
+    height: var(--border-w);
+    background: var(--slab-accent);
+    transform-origin: 0 50%;
+    animation: fcs-read-progress linear both;
+    animation-timeline: scroll(root);
+  }
+
+  @keyframes fcs-read-progress {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+}
+
+/* Did the page just arrive? Section contents rise in once, in order. */
+.will-reveal > * {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: calc(var(--reveal-i, 0) * 70ms);
+}
+
+.will-reveal.is-revealed > * {
+  opacity: 1;
+  transform: none;
+}
+
+/* Did my click land? Pressable things sink into their own shadow. */
+.hero-actions a:active,
+.resource-card:active,
+.join-card:active {
+  transform: translate(var(--shadow-off), var(--shadow-off));
+  box-shadow: 0 0 0 var(--ink);
+  transition-duration: 0.05s;
+}
+
+/* When is the next session? The countdown reads as a live prompt. */
+.next-countdown::before {
+  content: "$ starts_in ";
+  font-size: 0.45em;
+  font-weight: 600;
+  vertical-align: middle;
+  color: var(--accent-text);
+}
+
+.next-band[data-mode="countdown"] .next-countdown::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 0.9em;
+  margin-left: 0.15em;
+  vertical-align: -0.08em;
+  background: var(--accent);
+  animation: fcs-caret 1.1s steps(1) infinite;
+}
+
+.next-band:not([data-mode="countdown"]) .next-countdown {
+  display: none;
+}
+
+@keyframes fcs-caret {
+  50% { opacity: 0; }
+}
+
+/* What happens each week? Mon to Sun, today in yellow (Launch Week). */
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  margin: 0 0 calc(var(--gap) * 1.25);
+  padding: 0;
+  list-style: none;
+  border: var(--border-w) solid var(--rule-strong);
+  background: var(--paper-raised);
+}
+
+.week-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 6.5rem;
+  padding: 0.7rem 0.75rem;
+  font-size: 0.78rem;
+}
+
+.week-day + .week-day {
+  border-left: 1px solid var(--rule);
+}
+
+.week-day.is-empty {
+  color: var(--ink-faint);
+}
+
+.week-day.is-today {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.week-name {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.week-name em {
+  font-style: normal;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.week-session {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+}
+
+.week-time {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 760px) {
+  .week-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .week-day {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-height: 0;
+  }
+
+  .week-day + .week-day {
+    border-left: 0;
+    border-top: 1px solid var(--rule);
+  }
+
+  .week-day.is-empty {
+    display: none;
+  }
+
+  .week-name {
+    min-width: 5rem;
+  }
+}
+
+/* Who made this, and how? A printer's colophon (Stripe Press). */
+.colophon a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .will-reveal > * {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .next-band[data-mode="countdown"] .next-countdown::after {
+    animation: none;
+  }
+}
+

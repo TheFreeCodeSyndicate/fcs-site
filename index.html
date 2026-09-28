@@ -18,7 +18,7 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Free Code Syndicate — RFC 0001</title>
+  <title>The Free Code Syndicate | RFC 0001</title>
   <meta name="description" content="The Free Code Syndicate is a public group for free code, study, and careful work." />
 
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
@@ -165,7 +165,7 @@
           data, so the record can stay close to the work.
         </p>
         <p class="quote-line">
-          "Sapere aude." &mdash; Immanuel Kant
+          "Sapere aude." - Immanuel Kant
         </p>
       </div>
       <div class="abstract-grid">
@@ -210,7 +210,7 @@
           <p class="quote-line">
             "Never regret thy fall, O Icarus of the fearless flight. For the
             greatest tragedy of them all is never to feel the burning light."
-            &mdash; attributed to Oscar Wilde
+            - attributed to Oscar Wilde
           </p>
         </div>
         <div class="icarus-mark">
@@ -278,6 +278,7 @@
         Reading repository list<span class="cursor" aria-hidden="true">_</span>
       </p>
 
+      <div id="activity-ticker" class="activity-ticker" hidden></div>
       <div id="repo-grid" class="repo-grid" hidden></div>
     </section>
 
@@ -291,7 +292,7 @@
       <h2><span class="sec-num">05</span> Resources</h2>
       <p class="sec-intro">
         Notes, videos, papers, courses, and tools kept by the group. Curated by
-        hand — everything here is meant to be read, not just skimmed.
+        hand. Everything here is meant to be read, not just skimmed.
       </p>
 
       <div id="resource-grid" class="resource-grid"></div>
@@ -309,7 +310,7 @@
         principles and end with public notes, code, or questions.
       </p>
       <p class="quote-line">
-        "There is no royal road to geometry." &mdash; Euclid
+        "There is no royal road to geometry." - Euclid
       </p>
 
       <div id="study-group-grid" class="study-group-grid"></div>
@@ -334,6 +335,8 @@
         <p data-next-when>&nbsp;</p>
         <p class="next-countdown" data-next-countdown aria-live="off">&nbsp;</p>
       </div>
+
+      <ol class="week-strip" id="week-strip" aria-label="Weekly class schedule" hidden></ol>
 
       <div class="event-toolbar">
         <div class="event-filters" id="event-filters" role="group" aria-label="Filter events by group"></div>
@@ -433,8 +436,10 @@
   </main>
 
   <footer class="doc-footer">
-    <p>"No great thing is created suddenly." &mdash; Epictetus</p>
+    <p>"No great thing is created suddenly." - Epictetus</p>
     <p>This document has no end date. Distribution of this memo is unlimited.</p>
+    <p class="colophon">Set in Archivo and Fira Code. Written in plain HTML, CSS and JavaScript.
+      <a href="https://github.com/TheFreeCodeSyndicate/fcs-site" target="_blank" rel="noopener">Read the source</a>.</p>
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
 

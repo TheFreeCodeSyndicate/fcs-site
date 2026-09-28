@@ -18,8 +18,8 @@ for (const [name, viewport, colorScheme] of [
   await page.goto(base, { waitUntil: "networkidle" });
   // Scroll through once so reveal-on-scroll content is in its final state.
   await page.evaluate(async () => {
-    for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo(0, y); await new Promise((r) => setTimeout(r, 60)); }
-    window.scrollTo(0, 0);
+    for (let y = 0; y < document.body.scrollHeight; y += 600) { window.scrollTo({ top: y, behavior: "instant" }); await new Promise((r) => setTimeout(r, 80)); }
+    window.scrollTo({ top: 0, behavior: "instant" });
   });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `.shots/${name}.png`, fullPage: true });
