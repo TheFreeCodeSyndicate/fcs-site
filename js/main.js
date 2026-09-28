@@ -362,24 +362,51 @@ function setupMobileNav() {
 
 /* ------------------------------------------------------------------
  * Nav — highlight the current section while scrolling
+ *
+ * Resolved from the nav links themselves rather than from every
+ * .doc-section, so a section with no link is simply never highlighted.
+ * The observer callback can fire for several sections at once, and
+ * gaps between sections produce no intersecting entry at all, so the
+ * highlighted link is always recomputed from the full picture: any
+ * section currently in the middle band wins, otherwise the last one
+ * already scrolled past, otherwise the first. The result is that
+ * exactly one link is always active.
  * ---------------------------------------------------------------- */
 function setupScrollSpy() {
-  const sections = document.querySelectorAll(".doc-section");
-  const navLinks = document.querySelectorAll(".nav-links a");
-  if (!sections.length || !navLinks.length) return;
+  const navLinks = Array.from(document.querySelectorAll(".nav-links a"));
+  if (!navLinks.length) return;
 
+  const sections = navLinks
+    .map((link) => document.getElementById(link.dataset.section))
+    .filter(Boolean);
+  if (!sections.length) return;
+
+  const setActive = (id) => {
+    navLinks.forEach((link) => {
+      const active = link.dataset.section === id;
+      link.classList.toggle("is-active", active);
+      if (active) link.setAttribute("aria-current", "true");
+      else link.removeAttribute("aria-current");
+    });
+  };
+
+  const visible = new Set();
   const observer = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const id = entry.target.id;
-          navLinks.forEach((link) => {
-            link.classList.toggle("is-active", link.dataset.section === id);
-          });
-        }
+        if (entry.isIntersecting) visible.add(entry.target.id);
+        else visible.delete(entry.target.id);
       });
+
+      const shown = sections.filter((s) => visible.has(s.id));
+      if (shown.length) {
+        setActive(shown[0].id);
+        return;
+      }
+      const passed = sections.filter((s) => s.getBoundingClientRect().top < 0);
+      setActive(passed.length ? passed[passed.length - 1].id : sections[0].id);
     },
-    { rootMargin: "-40% 0px -50% 0px" }
+    { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
   );
 
   sections.forEach((section) => observer.observe(section));
