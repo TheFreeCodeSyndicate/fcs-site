@@ -2178,3 +2178,49 @@ mark {
   }
 }
 
+/* ================================================================
+   LIVE MEMO HEADER
+   ================================================================ */
+.doc-meta-value a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.doc-meta-value a:hover {
+  text-decoration-color: currentColor;
+}
+
+a.status-active {
+  text-decoration: none;
+}
+
+a.status-active:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+a.status-active:focus-visible,
+.doc-meta-value a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Live: the dot turns magenta and pulses; the text says so too. */
+.status-active[data-state="live"] {
+  color: var(--live);
+}
+
+.status-active[data-state="live"]::before {
+  background: var(--magenta);
+  animation: fcs-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-active[data-state="live"]::before {
+    animation: none;
+  }
+}
+

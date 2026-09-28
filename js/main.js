@@ -164,6 +164,7 @@ async function loadContent() {
   renderWeekStrip();
   renderResources();
   renderStudyGroups(studyGroups);
+  setMetaGroups(studyGroups);
   renderJoinLinks(socialLinks);
   renderReferences(socialLinks);
   bindIcs();
@@ -211,6 +212,7 @@ async function loadRepositories() {
     statusEl.hidden = true;
     gridEl.hidden = false;
     renderActivityTicker(repos);
+    setMetaCommit(repos);
 
     // Re-render so the Resources section picks up the GitHub-sourced
     // rows alongside the database ones.
@@ -610,6 +612,7 @@ function startCountdown() {
       (e) => deriveEventState(e.starts_at, e.duration_minutes, e.stage, now) === "live"
     );
     if (live) {
+      setMetaStatus("live", live.title);
       band.dataset.mode = "live";
       titleEl.textContent = live.title;
       if (groupEl) groupEl.textContent = live.group_name || "";
@@ -620,6 +623,7 @@ function startCountdown() {
 
     const next = resolveNextSession({ events: allEvents, classSessions: allClassSessions }, now);
     if (!next) {
+      setMetaStatus("idle");
       band.dataset.mode = "none";
       titleEl.textContent = "Next session to be announced";
       if (groupEl) groupEl.textContent = "";
@@ -629,6 +633,7 @@ function startCountdown() {
     }
 
     band.dataset.mode = "countdown";
+    setMetaStatus("next", next.at);
     titleEl.textContent = next.title;
     if (groupEl) groupEl.textContent = next.group || "";
     whenEl.textContent =
@@ -981,5 +986,48 @@ function setupGlassNav() {
   new IntersectionObserver(([entry]) => {
     nav.classList.toggle("is-glass", !entry.isIntersecting);
   }).observe(header);
+}
+
+/* ------------------------------------------------------------------
+ * Memo header: the four RFC-style columns carry live facts instead of
+ * fixed costume. Each slot keeps its HTML fallback until data arrives,
+ * so a failed fetch leaves sensible text behind.
+ * ---------------------------------------------------------------- */
+function metaSlot(name) {
+  return document.querySelector(`[data-meta="${name}"]`);
+}
+
+function setMetaCommit(repos) {
+  const slot = metaSlot("commit");
+  const latest = repos
+    .filter((repo) => repo.pushed_at)
+    .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at))[0];
+  if (!slot || !latest) return;
+  slot.innerHTML = `<a href="${safeURL(latest.html_url)}" target="_blank" rel="noopener">${escapeHTML(latest.name)}</a>, ${escapeHTML(timeAgo(latest.pushed_at))}`;
+}
+
+function setMetaGroups(groups) {
+  const slot = metaSlot("groups");
+  if (!slot || !Array.isArray(groups) || !groups.length) return;
+  const count = (status) => groups.filter((g) => String(g.status).toLowerCase() === status).length;
+  const parts = [["active", count("active")], ["forming", count("forming")]]
+    .filter(([, n]) => n > 0)
+    .map(([label, n]) => `${n} ${label}`);
+  slot.textContent = parts.length ? parts.join(", ") : `${groups.length} listed`;
+}
+
+/* Called every countdown tick, so it only touches the DOM on change. */
+function setMetaStatus(mode, detail) {
+  const slot = metaSlot("status");
+  if (!slot) return;
+  let text = "Active";
+  if (mode === "live") text = "Live now";
+  else if (mode === "next" && detail instanceof Date) {
+    text = "Next " + detail.toLocaleDateString("en-GB", { weekday: "short" }) + " " +
+      detail.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  }
+  if (slot.textContent !== text) slot.textContent = text;
+  slot.dataset.state = mode;
+  slot.title = mode === "live" && detail ? `${detail} is live` : "";
 }
 
