@@ -735,6 +735,16 @@ function setupMobileNav() {
  * already scrolled past, otherwise the first. The result is that
  * exactly one link is always active.
  * ---------------------------------------------------------------- */
+/*
+ * Nav — highlight the section currently under the reader.
+ *
+ * Driven by scroll position rather than IntersectionObserver. An
+ * observer with a narrow root band leaves the page with NO link
+ * active whenever nothing happens to be crossing that band — which is
+ * the normal state at the top of the page, above the first section.
+ * This version always resolves to exactly one section, including
+ * before any scrolling has happened.
+ */
 function setupScrollSpy() {
   const navLinks = Array.from(document.querySelectorAll(".nav-links a"));
   if (!navLinks.length) return;
@@ -744,7 +754,11 @@ function setupScrollSpy() {
     .filter(Boolean);
   if (!sections.length) return;
 
+  let currentId = null;
+
   const setActive = (id) => {
+    if (id === currentId) return;
+    currentId = id;
     navLinks.forEach((link) => {
       const active = link.dataset.section === id;
       link.classList.toggle("is-active", active);
@@ -753,24 +767,35 @@ function setupScrollSpy() {
     });
   };
 
-  const visible = new Set();
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) visible.add(entry.target.id);
-        else visible.delete(entry.target.id);
-      });
+  /* The last section whose top has passed a line 40% down the
+     viewport. Falls back to the first section when none has, which is
+     what happens at the top of the page. */
+  const pick = () => {
+    const line = window.innerHeight * 0.4;
+    let id = sections[0].id;
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= line) id = section.id;
+      else break;
+    }
+    setActive(id);
+  };
 
-      const shown = sections.filter((s) => visible.has(s.id));
-      if (shown.length) {
-        setActive(shown[0].id);
-        return;
-      }
-      const passed = sections.filter((s) => s.getBoundingClientRect().top < 0);
-      setActive(passed.length ? passed[passed.length - 1].id : sections[0].id);
+  let ticking = false;
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        pick();
+      });
     },
-    { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+    { passive: true }
   );
 
-  sections.forEach((section) => observer.observe(section));
+  window.addEventListener("resize", pick, { passive: true });
+
+  // Establish the initial state immediately, not on the first scroll.
+  pick();
 }

@@ -1,0 +1,11 @@
+# Playwright is installed only to run tools/verify-page.mjs, a local
+# one-off browser check. It is deliberately NOT a project dependency —
+# the site itself has zero npm dependencies and no build step, and that
+# must stay true. Installed with:
+#   npm install --no-save --no-package-lock playwright
+node_modules/
+
+# Local scratch
+*.log
+.DS_Store
+Thumbs.db
