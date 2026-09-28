@@ -4588,6 +4588,44 @@ git commit -m "fix: verification pass findings"
 
 ---
 
+## Launch-day checklist — DO THESE WHEN THE SITE GOES LIVE
+
+Everything here is a Supabase dashboard setting that is only *correct* once the
+site has a real public URL. Until then, `http://localhost:8000` is right and
+`http://localhost:3000` is wrong. Re-check this list at deploy time.
+
+**Supabase → Authentication → URL Configuration**
+
+1. **Site URL** — change `http://localhost:8000` to
+   `https://thefreecodesyndicate.github.io/fcs-site`
+   (or your custom domain if you add one).
+   *Why:* Site URL is the fallback destination for every auth email —
+   password reset, email confirmation, magic links. Left pointing at a
+   developer's machine, your friend clicks "reset my password" and lands on
+   a dead localhost page. This is the single most likely thing to be
+   forgotten, because nothing errors until someone actually needs a reset.
+
+2. **Redirect URLs** — already correct. Keep both entries:
+   - `https://thefreecodesyndicate.github.io/fcs-site/**`
+   - `http://localhost:8000/**`
+   Leave the localhost one in even after launch; it costs nothing and lets
+   you keep developing against the real database.
+
+3. **Confirm** the deployed `/admin` page loads and the sign-in form
+   authenticates. If sign-in fails only on the deployed URL and not locally,
+   it is a missing Redirect URL entry.
+
+**Where the deployed URL comes from**
+
+The site is a GitHub Pages project with no `CNAME` in the repo, so it is
+served from the repo subpath. If the Pages source is set to the `main`
+branch root, the URL is `https://thefreecodesyndicate.github.io/fcs-site/`.
+If it is set to `/docs` or a `gh-pages` branch, the URL is the same but the
+subpath must match. Check **Settings → Pages** in the GitHub repo for the
+published URL and confirm it matches the value used in steps 1–2.
+
+---
+
 ## Human-in-the-loop checklist
 
 Everything below requires you. Nothing else in the plan does.
