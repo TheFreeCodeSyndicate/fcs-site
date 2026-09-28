@@ -389,7 +389,7 @@ function renderResources(fromDatabase) {
 
   grid.innerHTML = all.length
     ? all.map(resourceCardHTML).join("")
-    : `<p class="empty-note">No resources listed yet.</p>`;
+    : `<p class="empty-note">Nothing on the reading list yet. Ask in the rooms below for what the groups are reading now.</p>`;
 }
 
 /* ------------------------------------------------------------------
@@ -469,7 +469,7 @@ function renderEvents() {
   // A site that only uses the weekly class schedule has no one-off
   // events at all, and must not be told "nothing scheduled".
   if (!shownUpcoming.length && !shownPast.length && !allClassSessions.length) {
-    list.innerHTML = `<p class="empty-note">Nothing scheduled right now. Add the next one from the admin panel.</p>`;
+    list.innerHTML = `<p class="empty-note">Nothing scheduled right now. New sessions are announced in the rooms below.</p>`;
     stopCountdown();
     return;
   }
@@ -569,9 +569,9 @@ function startCountdown() {
     const next = resolveNextSession({ events: allEvents, classSessions: allClassSessions }, now);
     if (!next) {
       band.dataset.mode = "none";
-      titleEl.textContent = "No session scheduled";
+      titleEl.textContent = "Next session to be announced";
       if (groupEl) groupEl.textContent = "";
-      whenEl.textContent = "Add one from the admin panel";
+      whenEl.textContent = "Watch the rooms below for the next date.";
       countEl.textContent = "";
       return;
     }

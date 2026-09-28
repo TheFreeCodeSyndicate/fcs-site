@@ -9,11 +9,11 @@
 }
 
 .admin-header-right { display: flex; align-items: center; gap: 12px; }
-.admin-identity { color: var(--paper); opacity: 0.75; font-size: 0.8rem; }
+.admin-identity { color: var(--slab-ink); opacity: 0.75; font-size: 0.8rem; }
 .admin-signout {
-  border: 2px solid var(--paper);
+  border: 2px solid var(--slab-ink);
   background: transparent;
-  color: var(--paper);
+  color: var(--slab-ink);
   padding: 4px 10px;
   cursor: pointer;
   font: inherit;
