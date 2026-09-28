@@ -76,14 +76,30 @@ fcs-site/
 │   └── admin.css           NEW — admin panel styles
 ├── js/
 │   ├── config.js           NEW — Supabase project URL + anon key
-│   ├── supabase.js         NEW — client init, auth, typed data access
-│   ├── data.js             slimmed to fixed page copy only
+│   ├── supabase.js         NEW — client init, auth, data access
+│   ├── data.js             fixed copy + seed fallback arrays
 │   ├── main.js             public page rendering
 │   ├── admin.js            NEW — Kanban board + CRUD
-│   └── vendor/
-│       └── sortable.min.js NEW — vendored drag-and-drop
+│   ├── theme.js            NEW — theme toggle, classic script
+│   ├── lib/                NEW — pure, unit-tested logic, no DOM access
+│   │   ├── derive.js           event state from timestamps
+│   │   ├── schedule.js         weekly recurrence, next session
+│   │   ├── countdown.js        ms -> "2d 04h 13m"
+│   │   ├── events-view.js      upcoming/past split, group filters
+│   │   ├── ics.js              RFC 5545 calendar text
+│   │   ├── repos.js            project/resource split
+│   │   ├── forms.js            datetime-local <-> UTC
+│   │   └── *.test.js           colocated node --test suites
+│   └── vendor/             NEW — no CDN at runtime
+│       ├── supabase.min.js
+│       └── sortable.min.js
 └── assets/                 unchanged
 ```
+
+Every module under `js/lib/` is imported unchanged by both the browser and
+`node --test`, which is what makes the site's real logic testable without a
+browser. `js/lib/` must not reference `window`, `document`, or `Buffer`; use
+`TextEncoder` for byte lengths, not Node's `Buffer`.
 
 `js/data.js` keeps the fixed page copy — `PRINCIPLES`, `CONTRIBUTION_LANES`,
 `MAINTAINERS` — and additionally retains the current events, study groups, and
@@ -158,10 +174,15 @@ weekday dropdown must use this same order so the value is written correctly the
 first time.
 
 Next occurrence of a `class_sessions` row is computed in the browser as
-"the next date whose `getDay()` equals `weekday`, at `start_time` in
-`timezone`". This computation is duplicated in exactly two places —
-`admin.js` for the maintainer's preview and `main.js` for the public band — and
-both call a single shared helper in `supabase.js` so they cannot drift.
+"the next date whose `getDay()` equals `weekday`, at `start_time`". This
+computation is duplicated in exactly two places — `admin.js` for the maintainer's
+preview and `main.js` for the public band — and both import the single shared
+helper `nextOccurrence` from `js/lib/schedule.js` so they cannot drift.
+
+The candidate is built in the **viewer's** local zone, so a 21:00 session reads
+as 21:00 to whoever is looking at it. The `timezone` column therefore records
+intent rather than driving a conversion. This is deliberate: a visitor in Berlin
+should not see a 21:00 IST session silently become 18:00.
 
 ### 3.3 `resources`
 
@@ -294,17 +315,24 @@ Draft → Scheduled → Live → Done.
 
 ### 4.3 Other editors
 
-Tabs below the board, each a sortable list with add / edit / delete:
+Tabs below the board, each a list with add / edit / delete:
 
 - **Class schedule** — rows of weekday + start time + duration, with a live
   "next occurrence" preview computed in the browser so the maintainer can
   confirm the schedule is right.
 - **Resources** — title, kind (select), URL, summary, group, published toggle.
 - **Study groups** — name, topic, status (select), link, link text.
-- **Social links** — platform (select with inline SVG icon set), label, URL,
+- **Social links** — platform (select with an inline SVG icon set), label, URL,
   hint, published toggle.
+- **Repo curation** — the `repo_kinds` table. Without this tab the
+  Resources/Projects split in §3.6 has no user interface and G3 cannot be
+  operated by a maintainer.
 
 Delete is admin-only; editors see the button disabled with a tooltip.
+
+**Edit is not optional.** G1 requires a maintainer to *update* content, not only
+to create it, so every row has an Edit button that repopulates the same field
+set and switches the submit handler from create to update.
 
 ### 4.4 Error and empty states
 
@@ -343,7 +371,7 @@ liveWindow  = [start - 15 min, end]
 |-----------|---------------|
 | now < `liveWindow.start` | `UPCOMING` |
 | now within `liveWindow` | `LIVE NOW` (pulsing) |
-| now > `end` | `FINISHED` |
+| now ≥ `end` | `FINISHED` |
 
 Consequences:
 
@@ -447,10 +475,14 @@ just a dev convenience.
 
 ### 6.3 Writes (admin only)
 
-All writes go through `supabase.js`, which exposes one function per operation and
-never leaks a raw query builder to the UI. Every write updates
-`updated_at` via trigger and returns the updated row, which the admin re-renders
-from so the displayed state always matches the database.
+All writes go through `js/supabase.js`, which exposes one **named function per
+operation** — `createEvent`, `updateEvent`, `deleteEvent`, `saveRepoKind`, and
+so on. There is no generic `insertRow(table, row)` helper: the UI must not be
+able to name the table it writes to, or the claim that there is one auditable
+seam does not hold. `repo_kinds` is keyed by `repo_name` rather than `id`, so it
+gets its own operations. Every write updates `updated_at` via trigger and
+returns the updated row, which the admin re-renders from so the displayed state
+always matches the database.
 
 ---
 
