@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script>
+    /* Runs before first paint so the page never flashes the wrong theme. */
+    (function () {
+      try {
+        var stored = localStorage.getItem("fcs-theme");
+        document.documentElement.setAttribute(
+          "data-theme",
+          stored || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+        );
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Admin — The Free Code Syndicate</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body class="admin-body">
+  <header class="doc-nav admin-header">
+    <a class="nav-brand" href="./">TFCS<span class="nav-brand-sub">/admin</span></a>
+    <div class="admin-header-right">
+      <span id="admin-identity" class="admin-identity"></span>
+      <button type="button" id="admin-signout" class="admin-signout" hidden>Sign out</button>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" aria-label="Switch theme">
+        <span class="theme-toggle-icon" aria-hidden="true"></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="admin-root" class="admin-root">
+    <p class="empty-note">Checking your access&hellip;</p>
+  </main>
+
+  <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="js/theme.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.min.js"></script>
+  <script src="js/vendor/sortable.min.js"></script>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>
