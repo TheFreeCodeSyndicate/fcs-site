@@ -171,6 +171,44 @@ async function loadContent() {
 }
 
 /* ------------------------------------------------------------------
+ * GitHub reads
+ *
+ * Anonymous GitHub API calls are limited to 60 an hour per IP, and a
+ * page load makes several. On shared college Wi-Fi that runs out fast.
+ * So every read is cached in localStorage for ten minutes, and when
+ * GitHub refuses (403) the last good copy is shown instead of nothing.
+ * ---------------------------------------------------------------- */
+const GITHUB_CACHE_MS = 10 * 60 * 1000;
+
+async function githubJSON(path) {
+  const key = `fcs-gh:${path}`;
+  let cached = null;
+  try {
+    cached = JSON.parse(localStorage.getItem(key));
+  } catch {
+    /* storage unavailable or corrupt: behave as uncached */
+  }
+  if (cached && Date.now() - cached.at < GITHUB_CACHE_MS) return cached.data;
+
+  try {
+    const res = await fetch(`https://api.github.com${path}`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) throw new Error(`GitHub API responded with ${res.status}`);
+    const data = await res.json();
+    try {
+      localStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
+    } catch {
+      /* quota or private mode: the page still works uncached */
+    }
+    return data;
+  } catch (err) {
+    if (cached) return cached.data; // stale beats empty
+    throw err;
+  }
+}
+
+/* ------------------------------------------------------------------
  * Section 4 — GitHub repositories
  * ---------------------------------------------------------------- */
 async function loadRepositories() {
@@ -179,13 +217,9 @@ async function loadRepositories() {
   if (!statusEl || !gridEl) return;
 
   try {
-    const res = await fetch(
-      `https://api.github.com/orgs/${window.GITHUB_ORG}/repos?per_page=100&sort=updated`,
-      { headers: { Accept: "application/vnd.github+json" } }
+    const repos = await githubJSON(
+      `/orgs/${encodeURIComponent(window.GITHUB_ORG)}/repos?per_page=100&sort=updated`
     );
-    if (!res.ok) throw new Error(`GitHub API responded with ${res.status}`);
-
-    const repos = await res.json();
     if (!Array.isArray(repos) || repos.length === 0) {
       statusEl.textContent = "No public repositories were found.";
       return;
@@ -310,15 +344,7 @@ async function fetchMaintainers() {
   try {
     const profiles = await Promise.all(
       maintainers.map(async (maintainer) => {
-        const res = await fetch(`https://api.github.com/users/${encodeURIComponent(maintainer.username)}`, {
-          headers: { Accept: "application/vnd.github+json" },
-        });
-
-        if (!res.ok) {
-          throw new Error(`GitHub API responded with ${res.status}`);
-        }
-
-        const profile = await res.json();
+        const profile = await githubJSON(`/users/${encodeURIComponent(maintainer.username)}`);
         return { ...maintainer, profile };
       })
     );
@@ -997,13 +1023,35 @@ function metaSlot(name) {
   return document.querySelector(`[data-meta="${name}"]`);
 }
 
-function setMetaCommit(repos) {
+/* The newest commit on the most recently pushed repository: its name,
+ * the first line of the message (the column truncates it), and how
+ * long ago, in the column label. Falls back to the repo and push time
+ * if the commit itself cannot be read. */
+async function setMetaCommit(repos) {
   const slot = metaSlot("commit");
   const latest = repos
     .filter((repo) => repo.pushed_at)
     .sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at))[0];
   if (!slot || !latest) return;
-  slot.innerHTML = `<a href="${safeURL(latest.html_url)}" target="_blank" rel="noopener">${escapeHTML(latest.name)}</a>, ${escapeHTML(timeAgo(latest.pushed_at))}`;
+
+  const label = slot.parentElement.querySelector(".doc-meta-label");
+  const repoLink = `<a href="${safeURL(latest.html_url)}" target="_blank" rel="noopener">${escapeHTML(latest.name)}</a>`;
+  slot.innerHTML = repoLink;
+  if (label) label.textContent = `Last commit, ${timeAgo(latest.pushed_at)}`;
+
+  try {
+    const [commit] = await githubJSON(
+      `/repos/${encodeURIComponent(window.GITHUB_ORG)}/${encodeURIComponent(latest.name)}/commits?per_page=1`
+    );
+    if (!commit) return;
+    const message = String(commit.commit.message || "").split("\n")[0].trim();
+    const when = commit.commit.committer && commit.commit.committer.date;
+    slot.innerHTML = `${repoLink}: <a href="${safeURL(commit.html_url)}" target="_blank" rel="noopener">${escapeHTML(message)}</a>`;
+    slot.title = `${latest.name}: ${message}`;
+    if (label && when) label.textContent = `Last commit, ${timeAgo(when)}`;
+  } catch (err) {
+    console.warn("[FCS] Latest commit could not be read:", err);
+  }
 }
 
 function setMetaGroups(groups) {
