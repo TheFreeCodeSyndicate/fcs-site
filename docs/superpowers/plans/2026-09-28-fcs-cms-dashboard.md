@@ -43,7 +43,7 @@ Phases 0–4 can be built and verified with no database at all.
 | `supabase/schema.sql` | Tables, indexes, RLS policies, triggers, seed rows |
 | `js/config.js` | Supabase URL + anon key + site constants |
 | `js/supabase.js` | Client init, session, one function per operation |
-| `js/lib/derive.js` | `deriveEventState` — event display state from timestamps |
+| `js/lib/derive.js` | `deriveEventState`, `resolveDurationMinutes` — event state from timestamps |
 | `js/lib/schedule.js` | `nextOccurrence`, `resolveNextSession` — weekly recurrence |
 | `js/lib/countdown.js` | `formatCountdown` — ms to `2d 04h 13m` |
 | `js/lib/events-view.js` | `partitionEvents`, `groupNames`, `filterByGroup` |
@@ -110,6 +110,21 @@ Nothing in this phase is wired to the page. It exists so Phases 4 and 5 can be b
 **Files:**
 - Create: `js/lib/derive.js`
 - Test: `js/lib/derive.test.js`
+
+> **SUPERSEDED — already implemented.** This task and Tasks 1.2–1.6 were built
+> and then hardened by a code-quality pass, which changed two signatures. Build
+> from the files on disk, not from the code blocks below:
+>
+> - `deriveEventState(startsAt, durationMinutes, stage, now)` — `now` is LAST.
+> - `resolveDurationMinutes(value)` is the single definition of event length,
+>   shared by `derive.js` and `ics.js` so the page and the calendar cannot
+>   disagree.
+> - `partitionEvents` skips `stage: "draft"`, because the schema defines draft
+>   as hidden from the public site.
+> - `buildICS` sanitises `link`, widens its escape regex, and never throws on a
+> bad `now` or an overflowing duration.
+>
+> 87 tests, all passing. The blocks below are kept for provenance only.
 
 This is the most important function in the project. It is why an event can never be displayed as upcoming once its time has passed, regardless of what a human typed.
 
@@ -2706,7 +2721,7 @@ function startCountdown() {
     const now = new Date();
 
     const live = allEvents.find(
-      (e) => deriveEventState(now, e.starts_at, e.duration_minutes, e.stage) === "live"
+      (e) => deriveEventState(e.starts_at, e.duration_minutes, e.stage, now) === "live"
     );
     if (live) {
       band.dataset.mode = "live";
