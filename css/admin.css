@@ -19,7 +19,7 @@
   font: inherit;
   font-size: 0.8rem;
 }
-.admin-signout:hover { border-color: var(--accent); color: var(--accent); }
+.admin-signout:hover { border-color: var(--accent); color: var(--accent-text); }
 
 .admin-root { padding: 32px var(--page-pad) 96px; max-width: 1400px; margin: 0 auto; }
 .admin-root h2, .admin-root h3 { text-wrap: balance; }
@@ -53,7 +53,7 @@
 }
 .admin-login input:focus-visible,
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -72,7 +72,7 @@
 }
 .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
 .btn:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
-.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .btn-primary { background: var(--accent); color: var(--accent-ink); }
 .btn-danger { color: var(--live); border-color: var(--live); box-shadow: 3px 3px 0 var(--live); }
 .btn-danger:hover { box-shadow: 4px 4px 0 var(--live); }
@@ -105,7 +105,7 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
-.board-count { font-variant-numeric: tabular-nums; color: var(--accent); }
+.board-count { font-variant-numeric: tabular-nums; color: var(--accent-text); }
 .board-dropzone { min-height: 96px; display: flex; flex-direction: column; gap: 10px; }
 
 .card {
@@ -116,7 +116,7 @@
 }
 .card:hover { border-color: var(--accent); }
 .card:active { cursor: grabbing; }
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .card h4 { margin: 0 0 6px; font-size: 0.9rem; }
 .card-meta { margin: 0; font-size: 0.75rem; color: var(--ink-muted); }
 .sortable-ghost { opacity: 0.35; }
@@ -159,8 +159,8 @@
   font-weight: 600;
 }
 .admin-tab:hover { color: var(--ink); }
-.admin-tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
-.admin-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.admin-tab[aria-selected="true"] { color: var(--accent-text); border-bottom-color: var(--accent); }
+.admin-tab:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 .form-grid {
   display: grid;

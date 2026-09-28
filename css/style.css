@@ -14,36 +14,46 @@
 :root {
   color-scheme: light;
 
-  --paper:        #f6f4ef;
-  --paper-raised: #fffefb;
-  --ink:          #16150f;
-  --ink-muted:    #55514a;
-  --ink-faint:    #6f6a61;
-  --rule:         #d8d3c6;
-  --rule-strong:  #16150f;
+  /* The FCS brand: black, white and signal yellow, with cyan and
+     magenta as secondaries. Restored from the pre-token stylesheet
+     (commit 17a0504). Yellow is a FILL colour: black text sits on it
+     at 12.7:1. Yellow as text on cream fails AA, so text that wants
+     the accent uses --accent-text, a deep amber, instead. */
+  --paper:        #f3f0e6;
+  --paper-raised: #faf8f2;
+  --ink:          #0a0a0a;
+  --ink-muted:    #57544b;
+  --ink-faint:    #6b6a62;
+  --rule:         #d5cfbf;
+  --rule-strong:  #0a0a0a;
 
-  --accent:       #1d4ed8;
-  --accent-ink:   #ffffff;
-  --accent-soft:  #e3e9fb;
+  --accent:       #ffc72c;   /* brand yellow, fills only */
+  --accent-deep:  #f0972a;   /* the sun's orange edge */
+  --accent-soft:  #ffe9ac;   /* pale yellow, highlighter */
+  --accent-ink:   #0a0a0a;   /* text on --accent */
+  --accent-text:  #8a5a00;   /* accent as text on paper, 5.2:1 */
+  --focus:        #0a0a0a;
 
-  --live:         #b42318;
-  --live-soft:    #fde8e6;
+  /* Secondaries, used only for event and group state. */
+  --cyan:         #00d6d6;
+  --cyan-text:    #006b6b;
+  --magenta:      #ff45d4;
+  --live:         #b0127f;   /* magenta as text, 5.7:1 */
+  --live-soft:    #ffe0f6;
   --done:         #5f6b52;
-  --mark:         #f2e3b3;
+  --mark:         #ffe9ac;
 
   /* Slabs: the inverted panels (nav, stamps, group cards, dispatch).
-     They stay dark in BOTH themes, so they cannot use --ink/--paper,
-     which swap. The page accent is too dark to read on a slab, so
-     slabs get their own. */
-  --slab:         #16150f;
-  --slab-ink:     #f6f4ef;
-  --slab-accent:  #8ab4ff;
+     They stay black in BOTH themes, so they cannot use --ink/--paper,
+     which swap. On black, yellow is readable as text. */
+  --slab:         #0a0a0a;
+  --slab-ink:     #faf8f2;
+  --slab-accent:  #ffc72c;
   /* Plate: the mount behind the logo artwork, whose linework is black
      on transparent and would vanish on dark paper. */
-  --plate:        #fffefb;
+  --plate:        #faf8f2;
 
-  --shadow: 0 1px 2px rgb(22 21 15 / 0.06), 0 8px 24px rgb(22 21 15 / 0.08);
-  --radius: 2px;
+  --radius: 0;
 
   /* Non-colour tokens, carried over from the previous stylesheet
      UNCHANGED — the clamp() fluid spacing and the deliberately thick
@@ -56,34 +66,41 @@
   --page-pad: clamp(1.25rem, 4vw, 3rem);
 
   --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Display face for the title and section heads only. A wide Swiss
+     grotesk carries the memo's authority; Fira Code keeps the voice. */
+  --font-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --paper:        #0e0f0c;
-  --paper-raised: #171914;
-  --ink:          #ecebe4;
-  --ink-muted:    #a8a49a;
-  --ink-faint:    #8b867b;
-  --rule:         #2e3029;
-  --rule-strong:  #ecebe4;
+  --paper:        #0f0e0b;
+  --paper-raised: #1a1914;
+  --ink:          #f3f0e6;
+  --ink-muted:    #b3ad9f;
+  --ink-faint:    #948f82;
+  --rule:         #34312a;
+  --rule-strong:  #f3f0e6;
 
-  --accent:       #8ab4ff;
-  --accent-ink:   #0e0f0c;
-  --accent-soft:  #1c2436;
+  --accent:       #ffc72c;
+  --accent-deep:  #f0972a;
+  --accent-soft:  #3a2f0d;
+  --accent-ink:   #0a0a0a;
+  --accent-text:  #ffc72c;
+  --focus:        #ffc72c;
 
-  --live:         #ff8f85;
-  --live-soft:    #34191a;
+  --cyan:         #00d6d6;
+  --cyan-text:    #3ee6e6;
+  --magenta:      #ff45d4;
+  --live:         #ff6fd8;
+  --live-soft:    #3a1030;
   --done:         #9aa88a;
-  --mark:         #4a3f18;
+  --mark:         #4a3c10;
 
-  --slab:         #1f211b;
-  --slab-ink:     #ecebe4;
-  --slab-accent:  #8ab4ff;
-  --plate:        #e9e6dc;
-
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.5), 0 8px 24px rgb(0 0 0 / 0.45);
+  --slab:         #1f1d17;
+  --slab-ink:     #f3f0e6;
+  --slab-accent:  #ffc72c;
+  --plate:        #ebe7da;
 }
 
 /* ---------- Reset ---------- */
@@ -143,7 +160,7 @@ mark {
 }
 
 :focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -224,7 +241,9 @@ mark {
 .principle-index,
 .group-card > *,
 .dispatch > * {
-  --accent: var(--slab-accent);
+  --accent-text: var(--slab-accent);
+  --focus: var(--slab-accent);
+  --cyan-text: #3ee6e6;
   --done: #9aa88a;
   --ink-faint: #a8a49a;
 }
@@ -253,7 +272,7 @@ mark {
 }
 
 .nav-brand-sub {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 400;
 }
 
@@ -276,11 +295,11 @@ mark {
 }
 
 .nav-links a:hover {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .nav-links a.is-active {
-  color: var(--accent);
+  color: var(--accent-text);
   border-bottom-color: var(--accent);
 }
 
@@ -365,7 +384,7 @@ mark {
   width: max-content;
   max-width: min(58vw, 330px);
   background: var(--slab);
-  color: var(--accent);
+  color: var(--accent-text);
   border: 2px solid var(--accent);
   padding: 0.25rem 0.45rem;
   font-size: clamp(0.58rem, 1.2vw, 0.72rem);
@@ -375,7 +394,7 @@ mark {
 
 .kicker {
   margin-bottom: 0.8rem;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.78rem;
@@ -388,7 +407,16 @@ mark {
 .hero-text h1 {
   position: relative;
   max-width: 11ch;
-  text-shadow: 2px 0 0 var(--accent), -2px 0 0 var(--accent);
+}
+
+/* One word set on a yellow block: the brand colour carrying the one
+   idea the name is about. Black on yellow reads in both themes. */
+.hero-text h1 .hl {
+  background: var(--accent);
+  color: var(--accent-ink);
+  padding: 0 0.06em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .hero-text h1::after {
@@ -472,10 +500,13 @@ mark {
 }
 
 .hero-text h1 {
-  font-size: clamp(2.2rem, 6vw, 4.2rem);
-  line-height: 0.98;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 7vw, 5.4rem);
+  font-stretch: 118%;
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
 
 .hero-sub {
@@ -503,11 +534,15 @@ mark {
 
 .doc-section h2 {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.85rem;
-  font-size: clamp(1.4rem, 3vw, 1.9rem);
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 3.8vw, 2.6rem);
+  font-stretch: 112%;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.02;
   margin-bottom: 1.25rem;
   overflow-wrap: anywhere;
 }
@@ -516,12 +551,18 @@ mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.1rem;
-  height: 2.1rem;
+  flex: 0 0 auto;
+  min-width: 3rem;
+  height: 2.6rem;
+  padding: 0 0.4rem;
   background: var(--accent);
   color: var(--accent-ink);
   border: var(--border-w) solid var(--ink);
-  font-size: 1.1rem;
+  box-shadow: 3px 3px 0 var(--ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .sec-intro {
@@ -598,7 +639,7 @@ mark {
 .mini-label {
   display: inline-block;
   margin-bottom: 0.55rem;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -685,7 +726,7 @@ mark {
   width: max-content;
   max-width: 100%;
   background: var(--slab);
-  color: var(--accent);
+  color: var(--accent-text);
   padding: 0.35rem 0.55rem;
   font-size: 0.78rem;
   font-weight: 700;
@@ -730,7 +771,7 @@ mark {
   width: 2.35rem;
   height: 2.35rem;
   background: var(--slab);
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -744,7 +785,7 @@ mark {
 .cursor {
   display: inline-block;
   animation: blink 1s steps(1) infinite;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -794,7 +835,7 @@ mark {
 .repo-stars {
   flex: 0 0 auto;
   font-size: 0.8rem;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
 }
 
@@ -848,8 +889,8 @@ mark {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 0.2rem 0.5rem;
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  border: 1px solid currentColor;
+  color: var(--accent-text);
 }
 
 .group-card p {
@@ -862,9 +903,9 @@ mark {
   display: inline-block;
   font-size: 0.85rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   text-decoration: none;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid currentColor;
 }
 
 .group-card a:hover {
@@ -940,11 +981,11 @@ mark {
 
 .event-card a {
   display: inline-block;
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
-  border-bottom: 1px solid var(--accent);
+  border-bottom: 1px solid currentColor;
 }
 
 .event-card a:hover {
@@ -1050,7 +1091,7 @@ mark {
 }
 
 .dispatch .mini-label {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* ---------- Maintainers (Section 8) ---------- */
@@ -1096,7 +1137,7 @@ mark {
 }
 
 .maintainer-top a {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 0.82rem;
   font-weight: 700;
   text-decoration: none;
@@ -1200,7 +1241,7 @@ mark {
 
 .ref-tag {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -1487,7 +1528,7 @@ mark {
   transition: border-color 140ms ease, background 140ms ease;
 }
 .theme-toggle:hover { border-color: var(--rule-strong); }
-.theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.theme-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .theme-toggle-icon::before { content: "\25CF"; font-size: 12px; }
 [data-theme="dark"] .theme-toggle-icon::before { content: "\25D1"; }
 
@@ -1569,9 +1610,8 @@ mark {
 .btn-subscribe:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
 .chip.is-active { background: var(--accent); color: var(--accent-ink); }
 .chip:focus-visible,
-.btn-subscribe:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.btn-subscribe { border-color: var(--accent); color: var(--accent); box-shadow: 3px 3px 0 var(--accent); }
-.btn-subscribe:hover { box-shadow: 4px 4px 0 var(--accent); }
+.btn-subscribe:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.btn-subscribe { background: var(--accent); color: var(--accent-ink); }
 .btn-subscribe[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .event-card.is-live { border-color: var(--live); box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--live); }
@@ -1579,10 +1619,10 @@ mark {
 /* Status tags are rubber stamps: bold, 2px, coloured by currentColor. */
 .tag { border: 2px solid currentColor; font-weight: 700; }
 .tag-live { color: var(--live); }
-.tag-upcoming { color: var(--accent); }
+.tag-upcoming { color: var(--cyan-text); }
 .tag-finished { color: var(--ink-faint); }
 .tag-active { color: var(--done); }
-.tag-forming { color: var(--accent); }
+.tag-forming { color: var(--cyan-text); }
 .tag-paused { color: var(--ink-faint); }
 .tag-completed { color: var(--ink-faint); }
 
@@ -1597,7 +1637,7 @@ mark {
   cursor: pointer;
 }
 .link-button:hover { color: var(--ink); }
-.link-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.link-button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .past-events { margin-top: var(--gap); }
 .past-events > summary { cursor: pointer; color: var(--ink-muted); font-size: 0.82rem; font-weight: 600; padding: 8px 0; }
@@ -1624,7 +1664,7 @@ mark {
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .resource-card:hover { transform: translate(-3px, -3px); box-shadow: calc(var(--shadow-off) + 3px) calc(var(--shadow-off) + 3px) 0 var(--accent); }
-.resource-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.resource-card:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
 .resource-card h3 { margin: 0.7rem 0 0.35rem; font-size: 0.95rem; text-wrap: balance; }
 .resource-card p { margin: 0; color: var(--ink-muted); font-size: 0.82rem; }
 .resource-card-top { display: flex; gap: 8px; align-items: center; }
@@ -1638,5 +1678,5 @@ mark {
   border: 2px solid currentColor;
   color: var(--ink-muted);
 }
-.resource-origin { color: var(--accent); }
+.resource-origin { color: var(--accent-text); }
 .join-label { display: inline-flex; align-items: center; gap: 8px; }
