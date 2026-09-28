@@ -1,30 +1,80 @@
 /*
  * js/main.js
  * ------------------------------------------------------------------
- * Site behaviour. Reads content from js/data.js and renders it into
- * the page, then wires up the sticky nav (mobile menu + active
- * section highlighting). No build step, no framework — this file
- * runs as-is in the browser.
+ * Site behaviour. A MODULE, so everything it needs is either an
+ * import or an explicit `window.X` read — data.js is a classic
+ * script, and its top-level `const`s live in the global lexical
+ * environment, which a module cannot see.
  *
- * You should not need to edit this file to update site content —
- * see js/data.js instead.
+ * Content comes from the database via js/supabase.js, falling back to
+ * the SEED_* arrays when Supabase is unconfigured or unreachable. The
+ * repository list comes from the public GitHub API. No build step, no
+ * framework — this file runs as-is in the browser.
+ *
+ * Edit site content in the admin panel at /admin, not in this file.
  * ------------------------------------------------------------------
  */
+
+import { deriveEventState } from "./lib/derive.js";
+import { resolveNextSession } from "./lib/schedule.js";
+import { formatCountdown } from "./lib/countdown.js";
+import { partitionEvents, groupNames, filterByGroup } from "./lib/events-view.js";
+import { buildICS } from "./lib/ics.js";
+import { splitRepos } from "./lib/repos.js";
+import {
+  getEvents, getClassSessions, getResources,
+  getStudyGroups, getSocialLinks, getRepoKinds,
+} from "./supabase.js";
+
+let allEvents = [];
+let allClassSessions = [];
+let dbResources = [];
+let githubResources = [];
+let activeGroup = "All";
+let countdownTimer = null;
+let icsBound = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   renderPrinciples();
   renderContributionLanes();
-  renderJoinLinks();
-  renderStudyGroups();
-  renderEvents();
-  fetchMaintainers();
-  fetchRepositories();
-  setupMobileNav();
-  setupScrollSpy();
 
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = new Date().getFullYear();
+
+  setupMobileNav();
+  setupScrollSpy();
+
+  // The three fetches are deliberately independent: a Supabase outage
+  // or a GitHub rate limit degrades one section without touching the
+  // others.
+  loadContent();
+  loadRepositories();
+  fetchMaintainers();
 });
+
+/* ------------------------------------------------------------------
+ * Output safety
+ *
+ * These render database- and API-supplied strings. `escapeHTML` covers
+ * text nodes. `escapeAttr` additionally escapes quotes so a value
+ * cannot break out of an attribute. `safeURL` refuses anything that is
+ * not http(s), so a stored `javascript:` URL cannot execute on click.
+ * ------------------------------------------------------------------ */
+
+function escapeHTML(value) {
+  const div = document.createElement("div");
+  div.textContent = value == null ? "" : String(value);
+  return div.innerHTML;
+}
+
+function escapeAttr(value) {
+  return escapeHTML(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+function safeURL(value) {
+  const raw = String(value == null ? "" : value).trim();
+  return /^https?:\/\//i.test(raw) ? escapeAttr(raw) : "";
+}
 
 /* ------------------------------------------------------------------
  * Section 3 — Operating protocol
@@ -33,7 +83,13 @@ function renderPrinciples() {
   const list = document.getElementById("principle-list");
   if (!list) return;
 
-  list.innerHTML = PRINCIPLES.map(
+  const principles = window.PRINCIPLES || [];
+  if (!principles.length) {
+    list.innerHTML = `<p class="empty-note">No principles are listed yet.</p>`;
+    return;
+  }
+
+  list.innerHTML = principles.map(
     (item, index) => `
       <article class="principle-item">
         <span class="principle-index">${String(index + 1).padStart(2, "0")}</span>
@@ -47,13 +103,19 @@ function renderPrinciples() {
 }
 
 /* ------------------------------------------------------------------
- * Section 7 — Contribution lanes
+ * Section 8 — Contribution lanes
  * ---------------------------------------------------------------- */
 function renderContributionLanes() {
   const grid = document.getElementById("lane-grid");
   if (!grid) return;
 
-  grid.innerHTML = CONTRIBUTION_LANES.map(
+  const lanes = window.CONTRIBUTION_LANES || [];
+  if (!lanes.length) {
+    grid.innerHTML = `<p class="empty-note">No lanes are listed yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = lanes.map(
     (lane) => `
       <article class="lane-card">
         <span class="mini-label">${escapeHTML(lane.label)}</span>
@@ -65,110 +127,136 @@ function renderContributionLanes() {
 }
 
 /* ------------------------------------------------------------------
- * Section 9 — Join links
+ * Content — one Supabase read per public table, each with a seed
+ * fallback. A failure anywhere resolves to the seed array rather than
+ * rejecting, so Promise.all cannot blank the page.
  * ---------------------------------------------------------------- */
-function renderJoinLinks() {
-  const grid = document.getElementById("join-grid");
-  if (!grid) return;
+async function loadContent() {
+  const [events, classSessions, resources, studyGroups, socialLinks] = await Promise.all([
+    getEvents(window.SEED_EVENTS || []),
+    getClassSessions([]),
+    getResources(window.SEED_RESOURCES || []),
+    getStudyGroups(window.SEED_STUDY_GROUPS || []),
+    getSocialLinks(window.SEED_JOIN_LINKS || []),
+  ]);
 
-  grid.innerHTML = JOIN_LINKS.map(
-    (item) => `
-      <a class="join-card" href="${item.url}" target="_blank" rel="noopener">
-        <span class="join-card-top">
-          <span class="join-label">${escapeHTML(item.label)}</span>
-          <span class="join-arrow" aria-hidden="true">&rarr;</span>
-        </span>
-        <span class="join-hint">${escapeHTML(item.hint)}</span>
+  allEvents = Array.isArray(events) ? events : [];
+  allClassSessions = Array.isArray(classSessions) ? classSessions : [];
+  dbResources = Array.isArray(resources) ? resources : [];
+
+  renderEvents();
+  renderResources();
+  renderStudyGroups(studyGroups);
+  renderJoinLinks(socialLinks);
+  renderReferences(socialLinks);
+  bindIcs();
+}
+
+/* ------------------------------------------------------------------
+ * Section 4 — GitHub repositories
+ * ---------------------------------------------------------------- */
+async function loadRepositories() {
+  const statusEl = document.getElementById("repo-status");
+  const gridEl = document.getElementById("repo-grid");
+  if (!statusEl || !gridEl) return;
+
+  try {
+    const res = await fetch(
+      `https://api.github.com/orgs/${window.GITHUB_ORG}/repos?per_page=100&sort=updated`,
+      { headers: { Accept: "application/vnd.github+json" } }
+    );
+    if (!res.ok) throw new Error(`GitHub API responded with ${res.status}`);
+
+    const repos = await res.json();
+    if (!Array.isArray(repos) || repos.length === 0) {
+      statusEl.textContent = "No public repositories were found.";
+      return;
+    }
+    repos.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+
+    const kinds = await getRepoKinds();
+    const curated = kinds.length ? kinds : window.SEED_REPO_KINDS || [];
+    const { projects, resources } = splitRepos(repos, curated);
+
+    githubResources = resources.map((repo) => ({
+      title: repo.name,
+      kind: "tool",
+      url: repo.html_url,
+      summary: repo.description || repo.curated_note || "Curated as a resource.",
+      group_name: null,
+      via_github: true,
+    }));
+
+    gridEl.innerHTML = projects.map(repoCardHTML).join("");
+    statusEl.hidden = true;
+    gridEl.hidden = false;
+
+    // Re-render so the Resources section picks up the GitHub-sourced
+    // rows alongside the database ones.
+    renderResources();
+  } catch (err) {
+    statusEl.innerHTML = `
+      The GitHub API cannot be reached now.
+      <a href="https://github.com/${escapeAttr(window.GITHUB_ORG)}" target="_blank" rel="noopener">
+        Open the organization on GitHub &rarr;
       </a>
-    `
-  ).join("");
-}
-
-/* ------------------------------------------------------------------
- * Section 5 — Study groups
- * ---------------------------------------------------------------- */
-function renderStudyGroups() {
-  const grid = document.getElementById("study-group-grid");
-  if (!grid) return;
-
-  if (!STUDY_GROUPS || STUDY_GROUPS.length === 0) {
-    grid.innerHTML = `<p class="empty-note">No study groups are listed yet. Propose one in Discord.</p>`;
-    return;
+    `;
+    console.error("[FCS] Repository fetch failed:", err);
   }
-
-  grid.innerHTML = STUDY_GROUPS.map(studyGroupCardHTML).join("");
 }
 
-function studyGroupCardHTML(group) {
-  const statusClass = `tag-${(group.status || "").toLowerCase()}`;
+function repoCardHTML(repo) {
+  const description = repo.description
+    ? escapeHTML(repo.description)
+    : "No description is present.";
+  const language = repo.language || "\u2014"; // em dash fallback
+  const updated = formatDate(repo.updated_at);
+  const href = safeURL(repo.html_url);
+
   return `
-    <article class="group-card">
-      <div class="group-card-top">
-        <h3>${escapeHTML(group.name)}</h3>
-        <span class="tag ${statusClass}">${escapeHTML(group.status)}</span>
+    <a class="repo-card" href="${href}" target="_blank" rel="noopener">
+      <div class="repo-card-top">
+        <h3>${escapeHTML(repo.name)}</h3>
+        <span class="repo-stars">&#9733; ${Number.isFinite(repo.stargazers_count) ? repo.stargazers_count : 0}</span>
       </div>
-      <p>${escapeHTML(group.topic)}</p>
-      <a href="${group.link}" target="_blank" rel="noopener"
-        >${escapeHTML(group.linkText)} &rarr;</a
-      >
-    </article>
+      <p>${description}</p>
+      <div class="repo-meta">
+        <span>${escapeHTML(language)}</span>
+        <span>Updated ${escapeHTML(updated)}</span>
+      </div>
+    </a>
   `;
 }
 
-/* ------------------------------------------------------------------
- * Section 6 — Events
- * ---------------------------------------------------------------- */
-function renderEvents() {
-  const list = document.getElementById("event-list");
-  if (!list) return;
-
-  if (!EVENTS || EVENTS.length === 0) {
-    list.innerHTML = `<p class="empty-note">No events are listed yet. Add the next one in js/data.js.</p>`;
-    return;
-  }
-
-  list.innerHTML = EVENTS.map(eventCardHTML).join("");
-}
-
-function eventCardHTML(event) {
-  const statusClass = `tag-${(event.status || "").toLowerCase()}`;
-  const linkHTML = event.link
-    ? `<a href="${event.link}" target="_blank" rel="noopener">${escapeHTML(event.linkText || "Open event")} &rarr;</a>`
-    : "";
-
-  return `
-    <article class="event-card">
-      <div class="event-date">
-        <span>${escapeHTML(event.date)}</span>
-        <strong>${escapeHTML(event.time)}</strong>
-      </div>
-      <div class="event-main">
-        <div class="event-card-top">
-          <div>
-            <span class="mini-label">${escapeHTML(event.group)}</span>
-            <h3>${escapeHTML(event.title)}</h3>
-          </div>
-          <span class="tag ${statusClass}">${escapeHTML(event.status)}</span>
-        </div>
-        <p>${escapeHTML(event.details)}</p>
-        ${linkHTML}
-      </div>
-    </article>
-  `;
+function formatDate(isoString) {
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) return "an unknown date";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 /* ------------------------------------------------------------------
- * Section 8 — Maintainers
+ * Section 9 — Maintainers
  * ---------------------------------------------------------------- */
 async function fetchMaintainers() {
   const statusEl = document.getElementById("maintainer-status");
   const gridEl = document.getElementById("maintainer-grid");
   if (!statusEl || !gridEl) return;
 
+  const maintainers = window.MAINTAINERS || [];
+  if (!maintainers.length) {
+    statusEl.textContent = "No maintainers are listed yet.";
+    gridEl.hidden = true;
+    return;
+  }
+
   try {
     const profiles = await Promise.all(
-      MAINTAINERS.map(async (maintainer) => {
-        const res = await fetch(`https://api.github.com/users/${maintainer.username}`, {
+      maintainers.map(async (maintainer) => {
+        const res = await fetch(`https://api.github.com/users/${encodeURIComponent(maintainer.username)}`, {
           headers: { Accept: "application/vnd.github+json" },
         });
 
@@ -185,10 +273,9 @@ async function fetchMaintainers() {
     statusEl.hidden = true;
     gridEl.hidden = false;
   } catch (err) {
-    gridEl.innerHTML = MAINTAINERS.map(maintainerFallbackCardHTML).join("");
+    gridEl.innerHTML = maintainers.map(maintainerFallbackCardHTML).join("");
     statusEl.textContent = "GitHub profiles cannot be read now. Maintainer links remain available.";
     gridEl.hidden = false;
-    // eslint-disable-next-line no-console
     console.error("[FCS] Maintainer profile fetch failed:", err);
   }
 }
@@ -200,21 +287,28 @@ function maintainerCardHTML(maintainer) {
   const location = profile.location || "Location not listed";
   const repoCount = Number.isFinite(profile.public_repos) ? profile.public_repos : 0;
   const followers = Number.isFinite(profile.followers) ? profile.followers : 0;
+  // A GitHub API that returned something other than an image URL would
+  // otherwise produce a broken <img> on every card.
+  const avatar = safeURL(profile.avatar_url);
 
   return `
     <article class="maintainer-card">
       <div class="maintainer-top">
-        <img
-          src="${profile.avatar_url}"
+        ${
+          avatar
+            ? `<img
+          src="${avatar}"
           alt=""
           aria-hidden="true"
           width="96"
           height="96"
           loading="lazy"
-        />
+        />`
+            : `<span class="maintainer-avatar" aria-hidden="true">${escapeHTML(String(maintainer.name).charAt(0))}</span>`
+        }
         <div>
           <h3>${escapeHTML(maintainer.name)}</h3>
-          <a href="${maintainer.url}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
+          <a href="${safeURL(maintainer.url)}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
         </div>
       </div>
       <p class="maintainer-bio">${escapeHTML(bio)}</p>
@@ -244,10 +338,10 @@ function maintainerFallbackCardHTML(maintainer) {
   return `
     <article class="maintainer-card">
       <div class="maintainer-top">
-        <span class="maintainer-avatar" aria-hidden="true">${escapeHTML(maintainer.name.charAt(0))}</span>
+        <span class="maintainer-avatar" aria-hidden="true">${escapeHTML(String(maintainer.name).charAt(0))}</span>
         <div>
           <h3>${escapeHTML(maintainer.name)}</h3>
-          <a href="${maintainer.url}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
+          <a href="${safeURL(maintainer.url)}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
         </div>
       </div>
       <p class="maintainer-bio">Open the GitHub profile for the current public overview.</p>
@@ -256,87 +350,356 @@ function maintainerFallbackCardHTML(maintainer) {
 }
 
 /* ------------------------------------------------------------------
- * Section 4 — GitHub repositories
+ * Section 5 — Resources
  * ---------------------------------------------------------------- */
-async function fetchRepositories() {
-  const statusEl = document.getElementById("repo-status");
-  const gridEl = document.getElementById("repo-grid");
-  if (!statusEl || !gridEl) return;
 
-  try {
-    const res = await fetch(
-      `https://api.github.com/orgs/${GITHUB_ORG}/repos?per_page=100&sort=updated`,
-      { headers: { Accept: "application/vnd.github+json" } }
-    );
+const RESOURCE_KIND_LABELS = {
+  notes: "Notes", video: "Video", paper: "Paper",
+  course: "Course", tool: "Tool", book: "Book",
+};
 
-    if (!res.ok) {
-      throw new Error(`GitHub API responded with ${res.status}`);
-    }
-
-    const repos = await res.json();
-
-    if (!Array.isArray(repos) || repos.length === 0) {
-      statusEl.textContent = "No public repositories were found.";
-      return;
-    }
-
-    // Newest-updated first (the API call above already asks for this,
-    // but we sort again client-side in case that ever changes).
-    repos.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-
-    gridEl.innerHTML = repos.map(repoCardHTML).join("");
-    statusEl.hidden = true;
-    gridEl.hidden = false;
-  } catch (err) {
-    statusEl.innerHTML = `
-      The GitHub API cannot be reached now.
-      <a href="https://github.com/${GITHUB_ORG}" target="_blank" rel="noopener">
-        Open the organization on GitHub &rarr;
-      </a>
-    `;
-    // eslint-disable-next-line no-console
-    console.error("[FCS] Repository fetch failed:", err);
-  }
-}
-
-function repoCardHTML(repo) {
-  const description = repo.description
-    ? escapeHTML(repo.description)
-    : "No description is present.";
-  const language = repo.language || "\u2014"; // em dash fallback
-  const updated = formatDate(repo.updated_at);
+function resourceCardHTML(resource) {
+  const href = safeURL(resource.url);
+  if (!href) return "";
 
   return `
-    <a class="repo-card" href="${repo.html_url}" target="_blank" rel="noopener">
-      <div class="repo-card-top">
-        <h3>${escapeHTML(repo.name)}</h3>
-        <span class="repo-stars">&#9733; ${repo.stargazers_count}</span>
-      </div>
-      <p>${description}</p>
-      <div class="repo-meta">
-        <span>${escapeHTML(language)}</span>
-        <span>Updated ${updated}</span>
-      </div>
+    <a class="resource-card" href="${href}" target="_blank" rel="noopener">
+      <span class="resource-card-top">
+        <span class="resource-kind">${escapeHTML(RESOURCE_KIND_LABELS[resource.kind] || resource.kind || "Resource")}</span>
+        ${resource.via_github ? `<span class="resource-origin">via GitHub</span>` : ""}
+        <span class="resource-ext" aria-hidden="true">&#8599;</span>
+      </span>
+      <h3>${escapeHTML(resource.title)}</h3>
+      ${resource.summary ? `<p>${escapeHTML(resource.summary)}</p>` : ""}
+      ${resource.curated_note ? `<span class="mini-label">${escapeHTML(resource.curated_note)}</span>` : ""}
+      ${resource.group_name ? `<span class="mini-label">${escapeHTML(resource.group_name)}</span>` : ""}
     </a>
   `;
 }
 
-function formatDate(isoString) {
-  const date = new Date(isoString);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+function renderResources(fromDatabase) {
+  const grid = document.getElementById("resource-grid");
+  if (!grid) return;
+
+  // Called with no argument by loadRepositories once the GitHub rows
+  // arrive, so the default has to be the rows already loaded rather
+  // than an empty list — otherwise the database resources vanish.
+  const base = Array.isArray(fromDatabase) ? fromDatabase : dbResources;
+  const all = [...base, ...githubResources];
+
+  grid.innerHTML = all.length
+    ? all.map(resourceCardHTML).join("")
+    : `<p class="empty-note">No resources listed yet.</p>`;
 }
 
 /* ------------------------------------------------------------------
- * Small utility: escape user/API-sourced text before inserting as HTML
+ * Section 6 — Study groups
  * ---------------------------------------------------------------- */
-function escapeHTML(str) {
-  const div = document.createElement("div");
-  div.textContent = str == null ? "" : String(str);
-  return div.innerHTML;
+function renderStudyGroups(groups) {
+  const grid = document.getElementById("study-group-grid");
+  if (!grid) return;
+
+  const list = Array.isArray(groups) ? groups : [];
+  if (!list.length) {
+    grid.innerHTML = `<p class="empty-note">No study groups are listed yet. Propose one in Discord.</p>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(studyGroupCardHTML).join("");
+}
+
+function studyGroupCardHTML(group) {
+  // Status is a free-text column, so the class is derived defensively:
+  // an unknown status falls back to a neutral tag rather than producing
+  // a bare class that styles nothing.
+  const status = String(group.status || "").trim();
+  const slug = status.toLowerCase().replace(/[^a-z]+/g, "-");
+  const known = ["active", "forming", "paused", "completed"];
+  const statusClass = known.includes(slug) ? `tag-${slug}` : "tag-upcoming";
+  const href = safeURL(group.link);
+
+  const link = href
+    ? `<a href="${href}" target="_blank" rel="noopener">${escapeHTML(group.link_text || "Open the group")} &rarr;</a>`
+    : "";
+
+  return `
+    <article class="group-card">
+      <div class="group-card-top">
+        <h3>${escapeHTML(group.name)}</h3>
+        ${status ? `<span class="tag ${statusClass}">${escapeHTML(status)}</span>` : ""}
+      </div>
+      <p>${escapeHTML(group.topic)}</p>
+      ${link}
+    </article>
+  `;
+}
+
+/* ------------------------------------------------------------------
+ * Section 7 — Events
+ * ---------------------------------------------------------------- */
+function renderEvents() {
+  const list = document.getElementById("event-list");
+  if (!list) return;
+
+  const { upcoming, past } = partitionEvents(allEvents);
+  const chipNames = ["All", ...groupNames(allEvents)];
+  if (!chipNames.includes(activeGroup)) activeGroup = "All";
+
+  const chipsEl = document.getElementById("event-filters");
+  if (chipsEl) {
+    chipsEl.innerHTML = chipNames
+      .map((name) => `<button type="button" class="chip${name === activeGroup ? " is-active" : ""}">${escapeHTML(name)}</button>`)
+      .join("");
+
+    // The visible label is escaped, but `data-group` must hold the RAW
+    // value: `dataset` returns the attribute as parsed, so an escaped
+    // "R&amp;D" would be compared against "R&D" and match nothing.
+    Array.from(chipsEl.querySelectorAll(".chip")).forEach((chip, index) => {
+      chip.dataset.group = chipNames[index];
+      chip.addEventListener("click", () => {
+        activeGroup = chip.dataset.group;
+        renderEvents();
+      });
+    });
+  }
+
+  const shownUpcoming = filterByGroup(upcoming, activeGroup);
+  const shownPast = filterByGroup(past, activeGroup);
+
+  // A site that only uses the weekly class schedule has no one-off
+  // events at all, and must not be told "nothing scheduled".
+  if (!shownUpcoming.length && !shownPast.length && !allClassSessions.length) {
+    list.innerHTML = `<p class="empty-note">Nothing scheduled right now. Add the next one from the admin panel.</p>`;
+    stopCountdown();
+    return;
+  }
+
+  const pastBlock = shownPast.length
+    ? `<details class="past-events">
+         <summary>Show ${shownPast.length} past event${shownPast.length === 1 ? "" : "s"}</summary>
+         <div class="event-list">${shownPast.map(eventCardHTML).join("")}</div>
+       </details>`
+    : "";
+
+  list.innerHTML = `
+    ${shownUpcoming.length ? `<div class="event-list">${shownUpcoming.map(eventCardHTML).join("")}</div>` : ""}
+    ${pastBlock}
+  `;
+
+  startCountdown();
+}
+
+function eventCardHTML(event) {
+  const start = new Date(event.starts_at);
+  // display_state, never event.stage: stage is what a maintainer typed,
+  // and only the derived value accounts for the clock.
+  const state = event.display_state;
+  const isLive = state === "live";
+
+  const label = isLive ? "LIVE NOW" : state === "upcoming" ? "UPCOMING" : "FINISHED";
+  const href = safeURL(event.link);
+
+  const links = [];
+  if (href) {
+    links.push(`<a href="${href}" target="_blank" rel="noopener">${escapeHTML(event.link_text || "Open event")} &rarr;</a>`);
+  }
+  if (state !== "finished") {
+    links.push(`<button type="button" class="link-button" data-ics-single="${escapeAttr(event.id)}">Add to calendar</button>`);
+  }
+
+  const tag = isLive
+    ? '<span class="tag tag-live"><span class="live-dot" aria-hidden="true"></span>LIVE NOW</span>'
+    : `<span class="tag tag-${state}">${label}</span>`;
+
+  return `
+    <article class="event-card${isLive ? " is-live" : ""}">
+      <div class="event-date">
+        <span>${escapeHTML(start.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }))}</span>
+        <strong>${escapeHTML(start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }))}</strong>
+      </div>
+      <div class="event-main">
+        <div class="event-card-top">
+          <div>
+            ${event.group_name ? `<span class="mini-label">${escapeHTML(event.group_name)}</span>` : ""}
+            <h3>${escapeHTML(event.title)}</h3>
+          </div>
+          ${tag}
+        </div>
+        ${event.details ? `<p>${escapeHTML(event.details)}</p>` : ""}
+        ${links.length ? `<div class="event-links">${links.join("")}</div>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+/* ------------------------------------------------------------------
+ * Next-session countdown
+ *
+ * Writes one text node per tick, and only when the text actually
+ * changes, so the DOM and the screen reader are not churned once a
+ * second. The element carries aria-live="off" for the same reason.
+ * ---------------------------------------------------------------- */
+function startCountdown() {
+  stopCountdown();
+
+  const tick = () => {
+    const band = document.getElementById("next-session");
+    if (!band) return;
+
+    const titleEl = band.querySelector("[data-next-title]");
+    const groupEl = band.querySelector("[data-next-group]");
+    const whenEl = band.querySelector("[data-next-when]");
+    const countEl = band.querySelector("[data-next-countdown]");
+    if (!titleEl || !whenEl || !countEl) return;
+
+    const now = new Date();
+
+    const live = allEvents.find(
+      (e) => deriveEventState(e.starts_at, e.duration_minutes, e.stage, now) === "live"
+    );
+    if (live) {
+      band.dataset.mode = "live";
+      titleEl.textContent = live.title;
+      if (groupEl) groupEl.textContent = live.group_name || "";
+      whenEl.innerHTML = '<span class="live-dot" aria-hidden="true"></span>Happening now';
+      countEl.textContent = "";
+      return;
+    }
+
+    const next = resolveNextSession({ events: allEvents, classSessions: allClassSessions }, now);
+    if (!next) {
+      band.dataset.mode = "none";
+      titleEl.textContent = "No session scheduled";
+      if (groupEl) groupEl.textContent = "";
+      whenEl.textContent = "Add one from the admin panel";
+      countEl.textContent = "";
+      return;
+    }
+
+    band.dataset.mode = "countdown";
+    titleEl.textContent = next.title;
+    if (groupEl) groupEl.textContent = next.group || "";
+    whenEl.textContent =
+      next.at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) +
+      " · " + next.at.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+    const text = formatCountdown(next.at.getTime() - now.getTime());
+    if (countEl.textContent !== text) countEl.textContent = text;
+  };
+
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
+
+function stopCountdown() {
+  if (countdownTimer) {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Calendar download — the whole schedule, or a single event.
+ * ---------------------------------------------------------------- */
+function downloadICS(events, filename) {
+  const ics = buildICS(events, { calendarName: "FCS Events" });
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function bindIcs() {
+  if (icsBound) return;
+
+  const whole = document.getElementById("subscribe-ics");
+  if (whole) {
+    whole.addEventListener("click", () => {
+      const { upcoming } = partitionEvents(allEvents);
+      if (!upcoming.length) {
+        whole.disabled = true;
+        whole.textContent = "Nothing to subscribe to";
+        return;
+      }
+      downloadICS(upcoming, "fcs-events.ics");
+    });
+  }
+
+  const list = document.getElementById("event-list");
+  if (list) {
+    // DELEGATED, not per-card: the list is re-rendered on every filter
+    // change, which would drop a listener bound to a card.
+    list.addEventListener("click", (evt) => {
+      const button = evt.target.closest("[data-ics-single]");
+      if (!button) return;
+      const event = allEvents.find((e) => String(e.id) === button.dataset.icsSingle);
+      if (!event) return;
+      const slug = String(event.title || "event")
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 40);
+      downloadICS([event], `fcs-${slug || "event"}.ics`);
+    });
+  }
+
+  icsBound = true;
+}
+
+/* ------------------------------------------------------------------
+ * Section 10 — Entry links
+ * ---------------------------------------------------------------- */
+function renderJoinLinks(links) {
+  const grid = document.getElementById("join-grid");
+  if (!grid) return;
+
+  const list = (Array.isArray(links) ? links : []).filter((item) => item && safeURL(item.url));
+  if (!list.length) {
+    grid.innerHTML = `<p class="empty-note">No rooms are listed yet.</p>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(
+    (item) => `
+      <a class="join-card" href="${safeURL(item.url)}" target="_blank" rel="noopener">
+        <span class="join-card-top">
+          <span class="join-label">${escapeHTML(item.label)}</span>
+          <span class="join-arrow" aria-hidden="true">&rarr;</span>
+        </span>
+        <span class="join-hint">${escapeHTML(item.hint)}</span>
+      </a>
+    `
+  ).join("");
+}
+
+/* ------------------------------------------------------------------
+ * Section 11 — References
+ * ---------------------------------------------------------------- */
+function renderReferences(links) {
+  const list = document.getElementById("ref-list");
+  if (!list) return;
+
+  const items = (Array.isArray(links) ? links : []).filter((item) => item && safeURL(item.url));
+  if (!items.length) {
+    list.innerHTML = `<li class="empty-note">No references are listed yet.</li>`;
+    return;
+  }
+
+  list.innerHTML = items.map(
+    (item) => `
+      <li>
+        <span class="ref-tag">[${escapeHTML(String(item.platform || "link").toUpperCase())}]</span>
+        <a href="${safeURL(item.url)}" target="_blank" rel="noopener">${escapeHTML(item.label || item.platform || "Link")}</a>
+      </li>
+    `
+  ).join("");
 }
 
 /* ------------------------------------------------------------------
