@@ -34,12 +34,15 @@
   --shadow: 0 1px 2px rgb(22 21 15 / 0.06), 0 8px 24px rgb(22 21 15 / 0.08);
   --radius: 2px;
 
-  /* non-colour tokens, carried over unchanged */
-  --border-w: 1px;
-  --shadow-off: 4px;
-  --gap: 24px;
-  --section-pad: 56px;
-  --page-pad: 40px;
+  /* Non-colour tokens, carried over from the previous stylesheet
+     UNCHANGED — the clamp() fluid spacing and the deliberately thick
+     3px rules / 6px offset shadows are the brutalist character of
+     this page. Do not flatten these to fixed px. */
+  --border-w: 3px;
+  --shadow-off: 6px;
+  --gap: clamp(1rem, 2vw, 1.75rem);
+  --section-pad: clamp(2.5rem, 6vw, 5rem);
+  --page-pad: clamp(1.25rem, 4vw, 3rem);
 
   --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -120,6 +123,7 @@ code {
 mark {
   background: var(--mark);
   color: inherit;
+  padding: 0 0.15em;
 }
 
 :focus-visible {
