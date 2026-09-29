@@ -803,12 +803,14 @@ function renderJoinLinks(links) {
   grid.innerHTML = list.map((item) => {
     const url = safeURL(item.url);
     const shown = escapeHTML(String(item.url).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""));
-    const flag = escapeHTML(String(item.platform || item.label || "link").toLowerCase().replace(/[^a-z0-9]+/g, "-"));
+    // "other" says nothing, so those links use their own name: join --notion-wiki
+    const name = item.platform && item.platform !== "other" ? item.platform : item.label || "link";
+    const flag = escapeHTML(String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
     return `
       <div class="join-card">
         <p class="join-command"><span class="join-prompt" aria-hidden="true">$</span> join --${flag}</p>
         <a class="join-url" href="${url}" target="_blank" rel="noopener">
-          ${platformIcon(item.platform, "join-icon")}
+          ${platformIcon(item.platform, "join-icon", item.url)}
           <span class="join-label">${escapeHTML(item.label)}</span>
           <span class="join-address">${shown}</span>
         </a>
@@ -1048,7 +1050,7 @@ function renderFooterSocials(links) {
   list.innerHTML = items.map((item) => `
     <li>
       <a href="${safeURL(item.url)}" target="_blank" rel="noopener" aria-label="${escapeAttr(item.label || item.platform)}">
-        ${platformIcon(item.platform)}
+        ${platformIcon(item.platform, "", item.url)}
       </a>
     </li>`).join("");
 }

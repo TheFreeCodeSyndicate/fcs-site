@@ -57,8 +57,8 @@ check("principles rendered", counts.principles > 0, `${counts.principles}`);
 check("lanes rendered", counts.lanes > 0, `${counts.lanes}`);
 check("groups rendered", counts.groups > 0, `${counts.groups}`);
 check("core members rendered", counts.coreMembers > 0, `${counts.coreMembers}`);
-check("join links rendered", counts.join === 4, `${counts.join}`);
-check("references rendered", counts.refs === 4, `${counts.refs}`);
+check("join links rendered", counts.join >= 4, `${counts.join}`);
+check("references list every join link", counts.refs === counts.join, `${counts.refs} vs ${counts.join}`);
 check("nav has links", counts.nav === 6, `${counts.nav}`);
 check("projects loaded from GitHub", counts.repos > 0, `${counts.repos}`);
 

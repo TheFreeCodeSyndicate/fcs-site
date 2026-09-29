@@ -105,7 +105,7 @@ create table if not exists public.study_groups (
 -- Discord, Instagram, WhatsApp, GitHub.
 create table if not exists public.social_links (
   id           uuid primary key default gen_random_uuid(),
-  platform     text not null default 'web' check (platform in ('discord','instagram','whatsapp','github','x','web')),
+  platform     text not null default 'web' check (platform in ('discord','instagram','whatsapp','github','x','web','other')),
   label        text not null,
   url          text not null,
   hint         text,

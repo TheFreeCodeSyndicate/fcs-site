@@ -2666,3 +2666,6 @@ a.status-active:focus-visible,
 .sub-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .sub-actions a { text-decoration: none; }
 .sub-foot { font-size: 0.8rem; color: var(--ink-muted); }
+
+/* "Other" links show the site's own favicon in the icon slot. */
+.icon-favicon { object-fit: contain; border-radius: 4px; }

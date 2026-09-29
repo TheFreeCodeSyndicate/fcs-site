@@ -35,7 +35,7 @@ import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./lib/forms.js";
 import {
-  escapeHTML, escapeAttr, safeURL, icon,
+  escapeHTML, escapeAttr, safeURL, icon, platformIcon,
   personFileHTML, mentorBadgeHTML, portraitHTML, roleStamp,
   resourceCardHTML, studyGroupCardHTML, eventCardHTML,
 } from "./render.js";
@@ -879,10 +879,10 @@ const EDITORS = {
     noun: "link",
     title: (r) => r.label,
     subtitle: (r) => r.url,
-    thumb: (r) => icon(["discord", "instagram", "whatsapp", "github", "x"].includes(r.platform) ? r.platform : "link"),
+    thumb: (r) => platformIcon(r.platform, "", r.url),
     badges: (r) => [r.is_published === false ? '<span class="badge">Hidden</span>' : ""],
     fields: [
-      { name: "platform", label: "Platform", type: "select", options: ["discord", "instagram", "whatsapp", "github", "x", "web"].map((p) => [p, p]) },
+      { name: "platform", label: "Platform", type: "select", options: ["discord", "instagram", "whatsapp", "github", "x", "web", "other"].map((p) => [p, p]), help: "Any other site: pick other, and it shows that site's own icon." },
       { name: "label", label: "Label", type: "text", required: true },
       { name: "url", label: "URL", type: "url", required: true, wide: true, help: "For Discord, the header's member count reads this invite." },
       { name: "hint", label: "Hint", type: "text", wide: true },

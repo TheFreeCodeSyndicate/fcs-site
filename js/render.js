@@ -17,11 +17,30 @@ export function icon(name, className = "") {
 }
 
 /* Social platforms map onto the sprite; anything unknown gets a link. */
-export const PLATFORM_ICONS = new Set(["discord", "instagram", "whatsapp", "github"]);
+export const PLATFORM_ICONS = new Set(["discord", "instagram", "whatsapp", "github", "x"]);
 
-export function platformIcon(platform, className = "") {
+export function platformIcon(platform, className = "", url = "") {
   const key = String(platform || "").toLowerCase();
+  if (key === "other") {
+    const favicon = faviconURL(url);
+    if (favicon) {
+      return `<img class="icon icon-favicon ${className}" src="${favicon}" alt="" width="24" height="24" loading="lazy" referrerpolicy="no-referrer" />`;
+    }
+  }
   return icon(PLATFORM_ICONS.has(key) ? key : "link", className);
+}
+
+/* An "other" link shows that site's own icon, from Google's favicon
+ * service (a generic globe when the site has none). Only the domain is
+ * sent, never the full link. */
+export function faviconURL(url) {
+  try {
+    const { protocol, hostname } = new URL(String(url || "").trim());
+    if (!/^https?:$/.test(protocol) || !hostname) return "";
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
+  } catch {
+    return "";
+  }
 }
 
 /* ------------------------------------------------------------------
