@@ -214,6 +214,7 @@ to anon, authenticated;
 grant select, update on public.profiles to authenticated;
 -- The invite-member Edge Function reads and sets roles as service_role.
 grant select, update on public.profiles to service_role;
+grant select on public.events to service_role; -- event-mail reads event details
 
 -- Signed-in users get write privileges at the TABLE level. Whether a
 -- given editor or admin may actually perform the write is decided by the

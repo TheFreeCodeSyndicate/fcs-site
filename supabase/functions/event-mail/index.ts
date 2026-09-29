@@ -136,7 +136,8 @@ class Reply extends Error {
 async function findEvent(db: SupabaseClient, id: string | null): Promise<Event | null> {
   if (id == null) return null;
   if (!UUID_RE.test(id)) throw new Reply(404, "That event does not exist.");
-  const { data } = await db.from("events").select("id, title, starts_at, link, group_name").eq("id", id).maybeSingle();
+  const { data, error } = await db.from("events").select("id, title, starts_at, link, group_name").eq("id", id).maybeSingle();
+  if (error) throw new Reply(500, error.message);
   if (!data) throw new Reply(404, "That event does not exist.");
   return data;
 }
@@ -151,7 +152,8 @@ async function subscribe(asVisitor: SupabaseClient, body: Record<string, unknown
   const db = service();
   let query = db.from("subscriptions").select("token, confirmed_at, created_at").eq("email", email);
   query = event ? query.eq("event_id", event.id) : query.is("event_id", null);
-  const { data: existing } = await query.maybeSingle();
+  const { data: existing, error: existingError } = await query.maybeSingle();
+  if (existingError) throw new Reply(500, existingError.message);
 
   // Same answer whether or not the address is already on the list.
   if (existing?.confirmed_at) return { ok: true };
@@ -193,9 +195,10 @@ async function subscribe(asVisitor: SupabaseClient, body: Record<string, unknown
 
 async function byToken(token: unknown) {
   if (typeof token !== "string" || !UUID_RE.test(token)) throw new Reply(404, "This link is not valid.");
-  const { data } = await service().from("subscriptions")
+  const { data, error } = await service().from("subscriptions")
     .select("id, email, confirmed_at, event:events(id, title, starts_at, link, group_name)")
     .eq("token", token).maybeSingle();
+  if (error) throw new Reply(500, error.message); // never dress a database error up as "link used"
   if (!data) throw new Reply(404, "This link has already been used, or the subscription was removed.");
   return data as unknown as { id: string; email: string; confirmed_at: string | null; event: Event | null };
 }
