@@ -28,14 +28,8 @@ import {
   escapeHTML,
   escapeAttr,
   safeURL,
-  PERSON_LINKS,
-  avatarURL,
-  portraitHTML,
   roleStamp,
-  personLinksHTML,
-  whoisHTML,
-  personFileHTML,
-  mentorBadgeHTML,
+  coreCardHTML,
   RESOURCE_KIND_LABELS,
   resourceCardHTML,
   studyGroupCardHTML,
@@ -377,9 +371,7 @@ function renderCoreMembers(members) {
 
   const leadsWrap = document.getElementById("core-leads-wrap");
   const leadsEl = document.getElementById("core-leads");
-  leadsEl.innerHTML = leads
-    .map((m) => `<article class="core-card" data-person-card>${personFileHTML(m)}</article>`)
-    .join("");
+  leadsEl.innerHTML = leads.map((m, i) => coreCardHTML(m, i)).join("");
   leadsWrap.hidden = !leads.length;
 
   renderMentors();
@@ -427,7 +419,7 @@ function renderMentors() {
 
   grid.innerHTML = mentors
     .filter((m) => mentorGroup === "All" || m.group_name === mentorGroup)
-    .map((m, i) => mentorBadgeHTML(m, i))
+    .map((m, i) => coreCardHTML(m, i))
     .join("");
   watchBadgesOnTouch(grid);
 }
@@ -463,6 +455,8 @@ function bindCoreMembers() {
   if (coreBound) return;
   coreBound = true;
   const section = document.getElementById("core");
+  const tiltOK = () =>
+    matchMedia("(hover: hover)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   // Hover or focus on a card loads its photo, just before it develops.
   const look = (event) => {
@@ -472,11 +466,50 @@ function bindCoreMembers() {
   section.addEventListener("pointerover", look);
   section.addEventListener("focusin", look);
 
+  // A card tilts toward the cursor, like it's being picked up to read —
+  // only where a mouse gives a position and motion is welcome.
+  section.addEventListener("pointermove", (event) => {
+    if (!tiltOK()) return;
+    const card = event.target.closest(".core-card");
+    if (!card) return;
+    const box = card.getBoundingClientRect();
+    const px = (event.clientX - box.left) / box.width - 0.5;
+    const py = (event.clientY - box.top) / box.height - 0.5;
+    card.style.setProperty("--tx", `${(-py * 9).toFixed(2)}deg`);
+    card.style.setProperty("--ty", `${(px * 9).toFixed(2)}deg`);
+  });
+  section.addEventListener(
+    "pointerleave",
+    (event) => {
+      const card = event.target.closest(".core-card");
+      // A move between two elements inside the same card also fires
+      // this; only reset once the pointer has actually left the card.
+      if (!card || card.contains(event.relatedTarget)) return;
+      card.style.removeProperty("--tx");
+      card.style.removeProperty("--ty");
+    },
+    true
+  );
+
   section.addEventListener("click", (event) => {
     const chip = event.target.closest("#core-filters .chip");
-    if (!chip) return;
-    mentorGroup = chip.dataset.group;
-    renderMentors();
+    if (chip) {
+      mentorGroup = chip.dataset.group;
+      renderMentors();
+      return;
+    }
+    const flip = event.target.closest("[data-flip]");
+    if (flip) flip.closest(".core-card").classList.toggle("is-flipped");
+  });
+
+  // Escape flips a card back and returns focus to what opened it,
+  // rather than closing the whole page's focus trap.
+  section.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const card = event.target.closest(".core-card.is-flipped");
+    if (!card) return;
+    card.classList.remove("is-flipped");
+    card.querySelector("[data-flip]").focus();
   });
 }
 

@@ -204,63 +204,65 @@ export function whoisHTML(member) {
     </div>`;
 }
 
-/* The personnel file. Used for lead cards and inside expanded rows. */
-export function personFileHTML(member, { withPortrait = true } = {}) {
-  const handle = member.github_username
-    ? `<a class="core-handle" href="${safeURL(`https://github.com/${encodeURIComponent(member.github_username)}`)}" target="_blank" rel="noopener">@${escapeHTML(member.github_username)}</a>`
-    : "";
-  return `
-    <div class="core-file">
-      <div class="core-file-head">
-        ${withPortrait ? portraitHTML(member, "portrait-lg") : ""}
-        <div class="core-file-id">
-          ${roleStamp(member)}
-          <h3 class="core-name">${escapeHTML(member.name)}</h3>
-          ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
-          ${handle}
-        </div>
-      </div>
-      ${whoisHTML(member)}
-      ${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}
-      ${personLinksHTML(member)}
-    </div>`;
-}
+/* One card for every core member — lead or mentor — the same shape and
+ * the same size. The old design gave mentors a visibly smaller card
+ * than leads; that size difference read as a hierarchy nobody intended,
+ * and is why the club ended up marking everyone as a lead. Here the
+ * band's colour and label are the only thing that differs.
+ *
+ * The front is an ID badge: portrait, name, title, handle. Clicking
+ * "Full profile" (or pressing Enter/Space on it) flips the card over
+ * to a back face with the dossier: what they run, their focus, their
+ * bio and their links — the same depth of information a lead's card
+ * always had, now available for a mentor's too. bindCoreMembers() in
+ * main.js wires up the flip and a cursor-following tilt; the CSS still
+ * works, minus the flourish, if that never runs.
+ *
+ * The tilt is a small, fixed angle per position, so a wall of cards
+ * looks pinned up rather than printed. */
+const CARD_TILTS = [-1.2, 0.9, -0.5, 1.3, -0.9, 0.4, -1.4, 0.7];
 
-/* A mentor's ID badge: role band on top, then everything at rest, with
- * empty fields left out. The tilt is a small, fixed angle per position,
- * so a wall of badges looks pinned up rather than printed. */
-const BADGE_TILTS = [-1.2, 0.9, -0.5, 1.3, -0.9, 0.4, -1.4, 0.7];
-
-export function mentorBadgeHTML(member, index = 0) {
+export function coreCardHTML(member, index = 0) {
   const since = member.joined_on ? String(member.joined_on).slice(0, 4) : "";
   const handle = member.github_username
     ? `<a class="core-handle" href="${safeURL(`https://github.com/${encodeURIComponent(member.github_username)}`)}" target="_blank" rel="noopener">@${escapeHTML(member.github_username)}</a>`
     : "";
-  const tags = Array.isArray(member.focus) && member.focus.length
-    ? `<ul class="badge-tags">${member.focus.map((t) => `<li>${escapeHTML(t)}</li>`).join("")}</ul>`
-    : "";
   const role = member.role === "lead" ? "Lead" : "Mentor";
+  const name = escapeHTML(member.name);
+  const dossier = `${whoisHTML(member)}${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}${personLinksHTML(member)}`;
 
   return `
-    <article class="core-badge badge-${member.role === "lead" ? "lead" : "mentor"}" data-person-card
-             style="--tilt: ${BADGE_TILTS[index % BADGE_TILTS.length]}deg">
-      <header class="badge-band">
-        <span>${role}</span>
-        ${since ? `<span>Since ${escapeHTML(since)}</span>` : ""}
-      </header>
-      <div class="badge-body">
-        <div class="badge-id">
-          ${portraitHTML(member, "portrait-md")}
-          <div class="badge-who">
-            <h3 class="core-name">${escapeHTML(member.name)}</h3>
-            ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
-            ${handle}
+    <article class="core-card badge-${member.role === "lead" ? "lead" : "mentor"}" data-person-card
+             style="--tilt: ${CARD_TILTS[index % CARD_TILTS.length]}deg">
+      <div class="core-card-inner">
+        <div class="core-card-face core-card-front">
+          <header class="badge-band">
+            <span>${role}</span>
+            ${since ? `<span>Since ${escapeHTML(since)}</span>` : ""}
+          </header>
+          <div class="badge-body">
+            <div class="badge-id">
+              ${portraitHTML(member, "portrait-md")}
+              <div class="badge-who">
+                <h3 class="core-name">${name}</h3>
+                ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
+                ${handle}
+              </div>
+            </div>
+            <button type="button" class="core-flip-cue" data-flip aria-label="Show ${name}'s full profile">
+              Full profile <span aria-hidden="true">&rarr;</span>
+            </button>
           </div>
         </div>
-        ${member.group_name ? `<p class="badge-runs"><span>Runs</span> ${escapeHTML(member.group_name)}</p>` : ""}
-        ${tags}
-        ${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}
-        ${personLinksHTML(member)}
+        <div class="core-card-face core-card-back">
+          <header class="badge-band">
+            <span>${name}</span>
+            <button type="button" class="core-flip-back" data-flip aria-label="Back to ${name}'s card">${icon("close")}</button>
+          </header>
+          <div class="badge-body badge-body-back">
+            ${dossier || `<p class="empty-note">Nothing filed yet.</p>`}
+          </div>
+        </div>
       </div>
     </article>`;
 }

@@ -36,7 +36,7 @@ import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./lib/forms.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
-  personFileHTML, mentorBadgeHTML, portraitHTML, roleStamp,
+  coreCardHTML, portraitHTML, roleStamp,
   resourceCardHTML, studyGroupCardHTML, eventCardHTML,
 } from "./render.js";
 
@@ -762,7 +762,7 @@ const EDITORS = {
   core: {
     table: "core_members",
     noun: "member",
-    intro: "Leads show as full cards, mentors as ID badges. Only the links you fill in appear on the site.",
+    intro: "Leads and mentors get the same card, front and back — only the band's colour tells them apart. Only the links you fill in appear on the site.",
     title: (r) => r.name,
     subtitle: (r) => [r.title, r.group_name, r.github_username && `@${r.github_username}`].filter(Boolean).join(", "),
     thumb: (r) => portraitHTML(r, "portrait-sm"),
@@ -816,10 +816,8 @@ const EDITORS = {
       if (v.status === "alumni" && !v.ended_on) errors.ended_on = "Set when they left, so the alumni list shows their years.";
       return errors;
     },
-    // Leads publish as a personnel card, mentors as an ID badge.
-    preview: (v) => (v.role === "lead"
-      ? `<article class="core-card" data-person-card>${personFileHTML(v)}</article>`
-      : `<div class="core-mentors">${mentorBadgeHTML(v)}</div>`),
+    // Leads and mentors get the same card; click "Full profile" to flip it.
+    preview: (v) => `<div class="core-roster">${coreCardHTML(v)}</div>`,
     actions: (row) => row && [
       row.status === "alumni"
         ? { label: "Restore to active", icon: "undo", patch: { status: "active", ended_on: null },
@@ -1062,8 +1060,17 @@ function bindDrawer() {
   const el = document.getElementById("drawer");
   document.getElementById("drawer-backdrop").addEventListener("click", () => closeDrawer());
   el.querySelector("[data-drawer-close]").addEventListener("click", () => closeDrawer());
+  el.addEventListener("click", (event) => {
+    const flip = event.target.closest("[data-flip]");
+    if (flip) flip.closest(".core-card")?.classList.toggle("is-flipped");
+  });
   el.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      const flipped = el.querySelector(".core-card.is-flipped");
+      if (flipped) {
+        flipped.classList.remove("is-flipped");
+        return;
+      }
       event.preventDefault();
       closeDrawer();
     } else if (event.key === "Tab") {

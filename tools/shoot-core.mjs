@@ -35,16 +35,10 @@ for (const [name, n, scheme, vp] of runs) {
   await p.goto("http://localhost:8000/#core", { waitUntil: "networkidle" });
   await p.evaluate(() => document.getElementById("core").scrollIntoView({ behavior: "instant" }));
   await p.waitForTimeout(1500);
-  if (n && n > 3) {
-    const rows = await p.$$(".core-badge");
-    if (vp.width > 900) await rows[1].hover();
-
-    await p.waitForTimeout(700);
-  } else {
-    await p.hover(".core-card");
-    await p.waitForTimeout(700);
-  }
-  const counts = await p.evaluate(() => ({ leads: document.querySelectorAll(".core-card").length, badges: document.querySelectorAll(".core-badge").length, chips: document.querySelectorAll("#core-filters .chip").length, alumni: document.getElementById("core-alumni").hidden ? 0 : 1, photos: document.querySelectorAll(".portrait-photo[src]").length, count: document.getElementById("core-count").textContent }));
+  const rows = await p.$$(".core-card");
+  if (vp.width > 900 && rows[1]) await rows[1].hover();
+  await p.waitForTimeout(700);
+  const counts = await p.evaluate(() => ({ cards: document.querySelectorAll(".core-card").length, chips: document.querySelectorAll("#core-filters .chip").length, alumni: document.getElementById("core-alumni").hidden ? 0 : 1, photos: document.querySelectorAll(".portrait-photo[src]").length, count: document.getElementById("core-count").textContent }));
   console.log(name, JSON.stringify(counts));
   await (await p.$("#core")).screenshot({ path: `.shots/core-${name}.png` });
 }
