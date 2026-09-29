@@ -885,3 +885,79 @@ body:has(.drawer.is-open) .toasts {
     bottom: calc(var(--drawer-footer, 120px) + 12px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* ================================================================
+   UNDO, ACTIVITY, PHOTOS
+   ================================================================ */
+
+/* Toasts with an action (Undo, Stay signed in) get a fourth column. */
+.toast.has-action { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+
+.toast-action {
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--ink);
+}
+
+.toast-action:active { transform: translate(2px, 2px); box-shadow: none; }
+.toast-action:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+@media (max-width: 620px) {
+  .toast.has-action { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .toast.has-action .toast-action { grid-column: 2 / 4; justify-self: start; }
+}
+
+/* "Last edited by ..." under the drawer title. */
+.drawer-titles { min-width: 0; }
+.drawer-meta {
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+.drawer-meta:empty { display: none; }
+
+/* Activity timeline */
+.activity-icon {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+}
+.activity-create .activity-icon { background: var(--accent); color: var(--accent-ink); }
+.activity-delete .activity-icon { background: var(--magenta); color: #0a0a0a; }
+.activity-restore .activity-icon { background: var(--cyan); color: #0a0a0a; }
+.activity-row .list-open strong { font-weight: 600; }
+
+/* Photo field */
+.field-photo .field-label { font-weight: 600; color: var(--ink); }
+
+.photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.photo-preview {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  border: 2px solid var(--ink);
+  background: var(--plate);
+  color: var(--ink-muted);
+}
+
+.photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+
+.photo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.photo-pick { cursor: pointer; }
+.photo-pick:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }

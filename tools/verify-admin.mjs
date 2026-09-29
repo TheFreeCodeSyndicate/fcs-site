@@ -45,6 +45,15 @@ const data = {
     member("m2", "Jyotirmoy Das", "lead", "JyotirmoyDas05", 1),
     member("m3", "Ved Bhandary", "mentor", "no3465", 2),
   ],
+  activity_log: [
+    { id: 3, at: new Date(Date.now() - 2 * 36e5).toISOString(), actor_email: "ronit@fcs.test", action: "delete",
+      table_name: "core_members", row_id: "m3", row_label: "Ved Bhandary", changed: [],
+      snapshot: { id: "m3", name: "Ved Bhandary", role: "mentor", status: "active", is_published: true } },
+    { id: 2, at: new Date(Date.now() - 5 * 36e5).toISOString(), actor_email: "ronit@fcs.test", action: "update",
+      table_name: "events", row_id: "e1", row_label: "CryptoMeet-1", changed: ["details", "title"], snapshot: null },
+    { id: 1, at: new Date(Date.now() - 864e5).toISOString(), actor_email: null, action: "create",
+      table_name: "resources", row_id: "r1", row_label: "Intro to Git", changed: [], snapshot: null },
+  ],
   profiles: [
     { id: "u1", email: "maintainer@fcs.test", role: "admin", created_at: "2026-09-01" },
     { id: "u2", email: "newcomer@fcs.test", role: "pending", created_at: "2026-09-20" },
@@ -61,6 +70,13 @@ page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 // Avatars come from github.com; answer with a 1px PNG so no real request is made.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
 await page.route("https://github.com/**", (route) => route.fulfill({ contentType: "image/png", body: PNG }));
+
+const uploads = [];
+await page.route("**/storage/v1/object/**", (route) => {
+  uploads.push(new URL(route.request().url()).pathname);
+  return route.fulfill({ json: { Key: "member-photos/x" } });
+});
+await page.route("**/auth/v1/logout**", (route) => route.fulfill({ status: 204, body: "" }));
 
 await page.route("**/rest/v1/**", (route) => {
   const req = route.request();
@@ -84,6 +100,7 @@ await page.route("**/rest/v1/**", (route) => {
 const config = await (await fetch(new URL("js/config.js", base))).text();
 const ref = /https:\/\/([a-z0-9]+)\.supabase\.co/.exec(config)?.[1];
 await page.addInitScript((r) => {
+  if (sessionStorage.getItem("fcs-idle-signout") || sessionStorage.getItem("fcs-test-signed-out")) return;
   localStorage.setItem(`sb-${r}-auth-token`, JSON.stringify({
     access_token: "a.b.c", token_type: "bearer", expires_in: 3600, refresh_token: "r",
     expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -100,7 +117,7 @@ await settle(800);
 
 // --- shell --------------------------------------------------------------
 const links = await page.$$eval(".sidebar-link", (a) => a.map((x) => x.dataset.page));
-check("sidebar lists every page, Team included for an admin", links.length === 8 && links.includes("team"), links.join(","));
+check("sidebar lists every page, Team included for an admin", links.length === 9 && links.includes("team") && links.includes("activity"), links.join(","));
 
 // --- events board -------------------------------------------------------
 const counts = () => page.$$eval(".board-column h3", (h) => h.map((x) => x.textContent.replace(/\s+/g, " ").trim()).join(", "));
@@ -210,13 +227,57 @@ await settle(700);
 const approve = lastWrite();
 check("approving writes the editor role", approve.table === "profiles" && approve.body === '{"role":"editor"}', approve.body);
 
-check("no console or page errors", errors.length === 0, errors.join(" | "));
+// --- activity log, undo, restore ----------------------------------------
+await page.goto(new URL("admin.html#/activity", base).href);
+await settle(900);
+check("Activity page lists the log", (await page.$$(".activity-row")).length === 3);
+
 
 await page.goto(new URL("admin.html#/core", base).href);
 await settle(800);
 await page.click('.list-row[data-key="m1"] .list-open');
-await settle(600);
-await page.screenshot({ path: ".shots/admin-core-drawer.png" }).catch(() => {});
+await settle(700);
+check("the drawer says who last edited", /Last edited by ronit|Created by/.test(await page.$eval("#drawer-meta", (m) => m.textContent)),
+  await page.$eval("#drawer-meta", (m) => m.textContent));
+
+// photo upload: pick, preview, save, upload
+await page.setInputFiles("[data-photo-input]", { name: "me.png", mimeType: "image/png", buffer: PNG });
+await settle(500);
+check("a picked photo previews before upload", (await page.$eval("[data-photo-preview] img", (i) => i.src)).startsWith("data:image/"));
+check("the live preview shows the picked photo", (await page.$eval("#drawer-preview-slot .portrait-pixel", (i) => i.src)).startsWith("data:image/"));
+const beforeUpload = writes.length;
+await page.click('#drawer-actions [type=submit]');
+await settle(900);
+const saved = writes.slice(beforeUpload).find((w) => w.table === "core_members") || {};
+check("saving uploads the photo and its pixel version", uploads.filter((u) => u.includes("member-photos")).length === 2, uploads.join(" | "));
+check("the member row stores the uploaded URLs",
+  /member-photos\/members\/[^"]+\.(webp|png)/.test(saved.body || "") && /-24\.png/.test(saved.body || ""), (saved.body || "").slice(0, 160));
+
+// undo a delete from its toast
+await page.click('.list-row[data-key="m3"] .list-open');
+await settle();
+await page.click("#drawer-delete");
+await settle(150);
+await page.click("#drawer-delete");
+await settle(700);
+const undo = await page.$(".toast-delete .toast-action");
+check("a delete toast offers Undo", Boolean(undo));
+const beforeUndo = writes.length;
+if (undo) await undo.click();
+await settle(900);
+const restored = writes.slice(beforeUndo).find((w) => w.method === "POST" && w.table === "core_members") || {};
+check("Undo re-inserts the deleted row", restored.body.includes('"id":"m3"'), restored.body);
+
+// idle sign-out: pretend the last activity was 31 minutes ago
+await page.evaluate(() => localStorage.setItem("fcs-admin-last-active", String(Date.now() - 31 * 60 * 1000)));
+await page.waitForTimeout(17000);
+await settle(800);
+check("30 minutes idle signs out and says why",
+  (await page.$eval("#admin-root", (r) => r.textContent)).includes("30 minutes without activity"));
+
+check("no console or page errors", errors.length === 0, errors.join(" | "));
+
+
 
 await browser.close();
 console.log(results.join("\n"));

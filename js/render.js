@@ -58,8 +58,19 @@ export const PERSON_LINKS = [
   ["mail", (m) => m.email && `mailto:${m.email}`, "Email"],
 ];
 
+/* An image source: http(s), or a base64 data: image (the admin panel's
+ * preview of a photo that has not been uploaded yet). Nothing else. */
+function safeImageURL(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (/^data:image\/(png|webp|jpeg);base64,[a-z0-9+/=]+$/i.test(raw)) return raw;
+  return safeURL(raw);
+}
+
+/* size 24 is the pixel-art portrait, anything larger the real photo.
+ * An uploaded photo wins; otherwise the GitHub avatar. */
 export function avatarURL(member, size) {
-  if (member.photo_url && size > 24) return safeURL(member.photo_url);
+  if (size <= 24 && member.photo_thumb_url) return safeImageURL(member.photo_thumb_url);
+  if (size > 24 && member.photo_url) return safeImageURL(member.photo_url);
   if (!member.github_username) return "";
   return safeURL(`https://github.com/${encodeURIComponent(member.github_username)}.png?size=${size}`);
 }

@@ -27,6 +27,8 @@ import {
   saveRepoKind, deleteRepoKind,
   listProfiles, setProfileRole,
   requestPasswordReset, updatePassword,
+  listActivity, lastChange, restoreDeleted,
+  uploadMemberPhoto, removeMemberPhotos,
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
@@ -71,29 +73,44 @@ const root = () => document.getElementById("admin-root");
 const TOAST_ICONS = { success: "check", delete: "trash", info: "circle-info", error: "square-alert" };
 const TOAST_MS = { success: 4200, delete: 4200, info: 5200, error: 8000 };
 
-function toast(message, tone = "success") {
+/* opts.action = { label, run } adds a button (Undo, Stay signed in).
+ * opts.sticky keeps the toast until it is dismissed or acted on.
+ * Returns the toast element so a caller can dismiss it later. */
+function toast(message, tone = "success", { action, sticky = false } = {}) {
   const stack = document.getElementById("toasts");
-  if (!stack) return;
+  if (!stack) return null;
   if (!TOAST_ICONS[tone]) tone = "success";
+  const lifetime = action ? Math.max(TOAST_MS[tone], 9000) : TOAST_MS[tone];
 
   const item = document.createElement("div");
-  item.className = `toast toast-${tone}`;
+  item.className = `toast toast-${tone}${action ? " has-action" : ""}${sticky ? " is-sticky" : ""}`;
   item.setAttribute("role", tone === "error" ? "alert" : "status");
-  item.style.setProperty("--toast-ms", `${TOAST_MS[tone]}ms`);
+  item.style.setProperty("--toast-ms", `${lifetime}ms`);
   item.innerHTML = `
     ${icon(TOAST_ICONS[tone], "toast-icon")}
     <p class="toast-text">${escapeHTML(message)}</p>
+    ${action ? `<button type="button" class="toast-action">${escapeHTML(action.label)}</button>` : ""}
     <button type="button" class="toast-close" aria-label="Dismiss">${icon("close")}</button>
-    <span class="toast-timer" aria-hidden="true"></span>`;
+    ${sticky ? "" : '<span class="toast-timer" aria-hidden="true"></span>'}`;
   stack.append(item);
+  if (action) {
+    item.querySelector(".toast-action").addEventListener("click", () => {
+      dismiss(item);
+      action.run();
+    });
+  }
 
   // Keep the stack short: the oldest leaves first.
   const live = stack.querySelectorAll(".toast:not(.is-leaving)");
   if (live.length > 3) dismiss(live[0]);
 
   requestAnimationFrame(() => item.classList.add("is-in"));
+  if (sticky) {
+    item.querySelector(".toast-close").addEventListener("click", () => dismiss(item));
+    return item;
+  }
 
-  let remaining = TOAST_MS[tone];
+  let remaining = lifetime;
   let started = performance.now();
   let timer = setTimeout(() => dismiss(item), remaining);
   const pause = () => {
@@ -114,6 +131,7 @@ function toast(message, tone = "success") {
     clearTimeout(timer);
     dismiss(item);
   });
+  return item;
 }
 
 function dismiss(item) {
@@ -208,7 +226,16 @@ async function boot() {
   }
 
   if (session && RECOVERY) return renderSetPassword(session.user);
-  if (!session) return renderLogin();
+  if (!session) {
+    let idleOut = false;
+    try {
+      idleOut = sessionStorage.getItem("fcs-idle-signout") === "1";
+      sessionStorage.removeItem("fcs-idle-signout");
+    } catch {
+      /* storage unavailable */
+    }
+    return renderLogin(idleOut ? "You were signed out after 30 minutes without activity." : undefined);
+  }
   await onSignedIn(session.user);
 }
 
@@ -476,6 +503,7 @@ async function onSignedIn(user) {
   renderSidebar();
   window.addEventListener("hashchange", onHashChange);
   bindShortcuts();
+  startIdleWatch();
   go(routeFromHash());
   toast(`Signed in as ${user.email}.`, "info");
 }
@@ -515,6 +543,7 @@ const PAGES = [
   { id: "resources", label: "Resources", icon: "bookmark", site: "#resources" },
   { id: "social", label: "Social links", icon: "link", site: "#join" },
   { id: "repos", label: "Repo curation", icon: "github", site: "#projects" },
+  { id: "activity", label: "Activity", icon: "list-box" },
   { id: "team", label: "Team", icon: "shield", adminOnly: true },
 ];
 
@@ -581,6 +610,7 @@ function renderPage() {
   const page = PAGES.find((p) => p.id === state.route);
   if (state.route === "events") renderEventsPage(page);
   else if (state.route === "team") renderTeamPage(page);
+  else if (state.route === "activity") renderActivityPage(page);
   else renderListPage(page);
 }
 
@@ -698,7 +728,7 @@ const EDITORS = {
       { name: "joined_on", label: "Joined", type: "date" },
       { name: "ended_on", label: "Left", type: "date", help: "Set when someone moves to alumni." },
       { name: "github_username", label: "GitHub username", type: "text", placeholder: "octocat", help: "Their GitHub avatar becomes the portrait." },
-      { name: "photo_url", label: "Photo URL", type: "url", help: "Optional. Overrides the GitHub photo on hover." },
+      { name: "photo_url", label: "Photo", type: "photo", help: "Square-cropped and shrunk in your browser, then uploaded when you save. Without one, the GitHub avatar is used." },
       { name: "linkedin_url", label: "LinkedIn", type: "url" },
       { name: "instagram_url", label: "Instagram", type: "url" },
       { name: "x_url", label: "X", type: "url" },
@@ -836,13 +866,15 @@ const EVENT_FIELDS = [
 
 let fieldSeq = 0;
 
-function fieldHTML(field, value, { editing } = {}) {
+function fieldHTML(field, value, { editing, row } = {}) {
   const id = `f-${field.name}-${++fieldSeq}`;
   const help = field.help ? `<span class="field-help" id="${id}-help">${escapeHTML(field.help)}</span>` : "";
   const error = `<span class="field-error" id="${id}-error" data-error-for="${field.name}" hidden></span>`;
   const described = `aria-describedby="${field.help ? `${id}-help ` : ""}${id}-error"`;
   const wide = field.wide || field.type === "textarea" ? " field-wide" : "";
   const req = field.required ? " required" : "";
+
+  if (field.type === "photo") return photoFieldHTML(field, row || {}, id);
 
   if (field.type === "checkbox") {
     const checked = value == null ? field.fallback !== false : value !== false;
@@ -882,7 +914,7 @@ function fieldHTML(field, value, { editing } = {}) {
 
 function formHTML(fields, row, sections, editing) {
   const byName = Object.fromEntries(fields.map((f) => [f.name, f]));
-  const render = (names) => names.map((n) => fieldHTML(byName[n], row ? row[n] : undefined, { editing })).join("");
+  const render = (names) => names.map((n) => fieldHTML(byName[n], row ? row[n] : undefined, { editing, row })).join("");
   if (!sections) return `<div class="form-grid">${render(fields.map((f) => f.name))}</div>`;
   return sections
     .map(([title, names]) => `<fieldset class="form-section"><legend>${escapeHTML(title)}</legend><div class="form-grid">${render(names)}</div></fieldset>`)
@@ -896,6 +928,11 @@ function readForm(form, fields) {
     if (!el) continue;
     if (field.type === "checkbox") {
       out[field.name] = el.checked;
+      continue;
+    }
+    if (field.type === "photo") {
+      out.photo_url = form.elements.photo_url.value || null;
+      out.photo_thumb_url = form.elements.photo_thumb_url.value || null;
       continue;
     }
     const raw = String(el.value || "").trim();
@@ -993,6 +1030,9 @@ function openDrawer(opts) {
   el.querySelector("#drawer-title").textContent = opts.title;
   const form = el.querySelector("#drawer-form");
   form.innerHTML = formHTML(opts.fields, opts.row || opts.defaults, opts.sections, Boolean(opts.row));
+  form._photo = null;
+  bindPhotoFields(form);
+  showLastChange(opts.table, opts.rowKey);
   el.querySelector("#drawer-confirm").hidden = true;
 
   const previewWrap = el.querySelector(".drawer-preview");
@@ -1296,13 +1336,20 @@ function openEditor(id, row) {
     row,
     preview: editor.preview,
     validate: editor.validate,
+    table: editor.table,
+    rowKey: key,
     onSave: async (raw) => {
       const values = editor.normalise ? editor.normalise(raw) : raw;
+      await uploadPendingPhoto(values);
       if (row) await editor.update(key, values);
       else {
         // New rows go to the end of the list.
         if (editor.sortable) values.sort_order = state.data[editor.table].length;
         await editor.create(values);
+      }
+      // A replaced or removed photo leaves its old files behind; tidy them.
+      if (row && row.photo_url && row.photo_url !== values.photo_url) {
+        removeMemberPhotos([row.photo_url, row.photo_thumb_url]).catch(() => {});
       }
       await refresh();
       toast(`${row ? "Saved" : "Created"} ${editor.noun} ${quoted(editor.title(values))}.`);
@@ -1312,7 +1359,9 @@ function openEditor(id, row) {
         await editor.remove(key);
         closeDrawer(true);
         await refresh();
-        toast(`Deleted ${editor.noun} ${quoted(editor.title(row))}.`, "delete");
+        toast(`Deleted ${editor.noun} ${quoted(editor.title(row))}.`, "delete", {
+          action: { label: "Undo", run: () => undoDelete(editor.table, key, `${editor.noun} ${quoted(editor.title(row))}`) },
+        });
       } catch (err) {
         toast(err.message || "Could not delete. Only admins can delete.", "error");
       }
@@ -1431,6 +1480,8 @@ function openEventEditor(id) {
 
   openDrawer({
     title: event ? `Edit event: ${event.title}` : "New event",
+    table: "events",
+    rowKey: event && event.id,
     fields: EVENT_FIELDS,
     row: event,
     defaults: { stage: "draft", duration_minutes: 60 },
@@ -1452,7 +1503,9 @@ function openEventEditor(id) {
         await deleteEvent(event.id);
         closeDrawer(true);
         await refresh();
-        toast(`Deleted event ${quoted(event.title)}.`, "delete");
+        toast(`Deleted event ${quoted(event.title)}.`, "delete", {
+          action: { label: "Undo", run: () => undoDelete("events", event.id, `event ${quoted(event.title)}`) },
+        });
       } catch (err) {
         toast(err.message || "Could not delete. Only admins can delete.", "error");
       }
@@ -1526,4 +1579,313 @@ function renderTeamPage(page) {
     if (approve) approve.addEventListener("click", () => change(approve.dataset.role));
     li.querySelector("[data-role-select]").addEventListener("change", (event) => change(event.target.value));
   });
+}
+
+/* ==================================================================
+ * Activity log, undo and trash
+ * ================================================================== */
+
+const TABLE_NOUNS = {
+  events: "event", class_sessions: "session", resources: "resource",
+  study_groups: "group", social_links: "link", core_members: "member",
+  repo_kinds: "repo curation", profiles: "account",
+};
+const ACTION_VERBS = { create: "created", update: "edited", delete: "deleted", restore: "restored" };
+const ACTION_ICONS = { create: "plus", update: "pencil", delete: "trash", restore: "undo" };
+
+const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+function ago(iso) {
+  const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
+  const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
+  }
+  return "just now";
+}
+
+const who = (email) => (email ? email.split("@")[0] : "Someone in the SQL editor");
+
+/* "Last edited by ronit, 2 hours ago" under the drawer title. */
+async function showLastChange(table, rowId) {
+  const meta = document.getElementById("drawer-meta");
+  if (!meta) return;
+  meta.textContent = "";
+  if (!table || rowId == null) return;
+  try {
+    const change = await lastChange(table, rowId);
+    if (!change || !drawer.open) return;
+    meta.textContent = `${ACTION_VERBS[change.action] === "created" ? "Created" : "Last edited"} by ${who(change.actor_email)}, ${ago(change.at)}`;
+    meta.title = new Date(change.at).toLocaleString("en-GB");
+  } catch {
+    /* the log is a nicety here; the editor works without it */
+  }
+}
+
+/* Re-insert the most recently deleted copy of a row. */
+async function undoDelete(table, rowId, label) {
+  try {
+    await restoreDeleted(table, rowId);
+    await reload(table);
+    renderSidebar();
+    renderPage();
+    toast(`Restored ${label}.`, "success");
+  } catch (err) {
+    toast(err.message || "Could not restore.", "error");
+  }
+}
+
+function rowExists(table, rowId) {
+  const rows = state.data[table] || [];
+  return rows.some((r) => String(r.id != null ? r.id : r.repo_name) === String(rowId));
+}
+
+async function renderActivityPage(page) {
+  root().innerHTML = `
+    ${pageHead(page, { search: false })}
+    <p class="page-intro">
+      Every change made in this panel or the database, newest first. Deleted
+      items keep a full copy, so anything removed can be restored from here.
+    </p>
+    <div class="page-filters" role="group" aria-label="Show">
+      ${[["all", "Everything"], ["delete", "Deleted"], ["restore", "Restored"]].map(([value, label]) => `
+        <button type="button" class="chip${(state.activityFilter || "all") === value ? " is-active" : ""}"
+                aria-pressed="${(state.activityFilter || "all") === value}" data-activity="${value}">${label}</button>`).join("")}
+    </div>
+    <div id="activity-body"><p class="empty-note">Loading the log&hellip;</p></div>`;
+
+  root().querySelectorAll("[data-activity]").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      state.activityFilter = chip.dataset.activity;
+      renderActivityPage(page);
+    });
+  });
+
+  const body = root().querySelector("#activity-body");
+  let entries;
+  try {
+    entries = await listActivity();
+  } catch (err) {
+    body.innerHTML = `<div class="empty-state"><p>Could not read the log: ${escapeHTML(err.message || "unknown error")}.</p></div>`;
+    return;
+  }
+  if (state.route !== "activity") return;
+
+  const filter = state.activityFilter || "all";
+  const shown = entries.filter((e) => filter === "all" || e.action === filter);
+  if (!shown.length) {
+    body.innerHTML = `<div class="empty-state"><p>${filter === "all" ? "Nothing has changed yet." : "Nothing here."}</p></div>`;
+    return;
+  }
+
+  body.innerHTML = `<ol class="list activity-list">${shown.map((e) => {
+    const noun = TABLE_NOUNS[e.table_name] || e.table_name;
+    const restorable = e.action === "delete" && e.table_name !== "profiles" && !rowExists(e.table_name, e.row_id);
+    const fields = e.action === "update" && e.changed && e.changed.length ? `changed ${e.changed.join(", ")}` : "";
+    return `
+      <li class="list-row activity-row activity-${e.action}">
+        <span class="list-thumb activity-icon">${icon(ACTION_ICONS[e.action] || "pencil")}</span>
+        <span class="list-open">
+          <strong>${escapeHTML(who(e.actor_email))} ${ACTION_VERBS[e.action] || e.action} ${escapeHTML(noun)} ${escapeHTML(quoted(e.row_label))}</strong>
+          <span class="sub"><time datetime="${escapeAttr(e.at)}" title="${escapeAttr(new Date(e.at).toLocaleString("en-GB"))}">${escapeHTML(ago(e.at))}</time>${fields ? `, ${escapeHTML(fields)}` : ""}</span>
+        </span>
+        ${restorable ? `<button type="button" class="btn" data-restore="${escapeAttr(e.table_name)}" data-row="${escapeAttr(e.row_id)}" data-label="${escapeAttr(`${noun} ${quoted(e.row_label)}`)}">${icon("undo")}<span>Restore</span></button>` : ""}
+      </li>`;
+  }).join("")}</ol>
+  ${shown.length >= 300 ? '<p class="page-note">Showing the latest 300 changes.</p>' : ""}`;
+
+  body.querySelectorAll("[data-restore]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      await undoDelete(button.dataset.restore, button.dataset.row, button.dataset.label);
+    });
+  });
+}
+
+/* ==================================================================
+ * Member photos
+ *
+ * Picked photos are square-cropped and shrunk in the browser (480px
+ * WebP, plus a 24px PNG for the pixel portrait), previewed as data:
+ * URLs, and only uploaded when the drawer is saved, so a discarded
+ * edit leaves nothing behind in Storage.
+ * ================================================================== */
+
+function photoFieldHTML(field, row, id) {
+  const current = row.photo_url || "";
+  const shown = current ? `<img src="${escapeAttr(current)}" alt="Current photo" width="72" height="72" />` : icon("image");
+  return `
+    <div class="field field-wide field-photo" data-photo-field>
+      <span class="field-label">${escapeHTML(field.label)}</span>
+      <div class="photo-row">
+        <span class="photo-preview" data-photo-preview>${shown}</span>
+        <div class="photo-actions">
+          <label class="btn photo-pick">
+            ${icon("upload")}<span data-photo-pick-label>${current ? "Replace photo" : "Upload photo"}</span>
+            <input type="file" class="visually-hidden" accept="image/png,image/jpeg,image/webp"
+                   data-photo-input aria-describedby="${id}-help ${id}-error" />
+          </label>
+          <button type="button" class="btn btn-quiet" data-photo-remove${current ? "" : " hidden"}>${icon("trash")}<span>Remove photo</span></button>
+        </div>
+      </div>
+      <span class="field-help" id="${id}-help">${escapeHTML(field.help || "")}</span>
+      <span class="field-error" id="${id}-error" data-error-for="photo_url" hidden></span>
+      <input type="hidden" name="photo_url" value="${escapeAttr(current)}" />
+      <input type="hidden" name="photo_thumb_url" value="${escapeAttr(row.photo_thumb_url || "")}" />
+    </div>`;
+}
+
+function readAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Could not read that file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("That file is not an image this browser can read."));
+    img.src = src;
+  });
+}
+
+async function processPhoto(file) {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("Use a JPG, PNG or WebP image.");
+  if (file.size > 15 * 1024 * 1024) throw new Error("That image is over 15 MB. Pick a smaller one.");
+  const img = await loadImage(await readAsDataURL(file));
+
+  const side = Math.min(img.naturalWidth, img.naturalHeight);
+  const sx = (img.naturalWidth - side) / 2;
+  const sy = (img.naturalHeight - side) / 2;
+  const draw = (size) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(img, sx, sy, side, side, 0, 0, size, size);
+    return canvas;
+  };
+  const toBlob = (canvas, type, quality) => new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+
+  const big = draw(Math.min(480, side));
+  const small = draw(24);
+  // Browsers that cannot encode WebP hand back PNG; both are allowed.
+  const full = await toBlob(big, "image/webp", 0.86);
+  const thumb = await toBlob(small, "image/png");
+  if (!full || !thumb) throw new Error("This browser could not process the image.");
+  if (full.size > 1024 * 1024) throw new Error("That photo is still over 1 MB after shrinking.");
+  return { full, thumb, fullURL: big.toDataURL(full.type, 0.86), thumbURL: small.toDataURL("image/png") };
+}
+
+function bindPhotoFields(form) {
+  form.querySelectorAll("[data-photo-field]").forEach((field) => {
+    const preview = field.querySelector("[data-photo-preview]");
+    const input = field.querySelector("[data-photo-input]");
+    const remove = field.querySelector("[data-photo-remove]");
+    const error = field.querySelector("[data-error-for]");
+    const changed = () => form.dispatchEvent(new Event("input", { bubbles: true }));
+
+    input.addEventListener("change", async () => {
+      const file = input.files && input.files[0];
+      input.value = "";
+      if (!file) return;
+      error.hidden = true;
+      try {
+        const photo = await processPhoto(file);
+        form._photo = photo;
+        form.elements.photo_url.value = photo.fullURL;
+        form.elements.photo_thumb_url.value = photo.thumbURL;
+        preview.innerHTML = `<img src="${photo.fullURL}" alt="New photo, not uploaded yet" width="72" height="72" />`;
+        field.querySelector("[data-photo-pick-label]").textContent = "Replace photo";
+        remove.hidden = false;
+        changed();
+      } catch (err) {
+        error.textContent = err.message;
+        error.hidden = false;
+      }
+    });
+
+    remove.addEventListener("click", () => {
+      form._photo = null;
+      form.elements.photo_url.value = "";
+      form.elements.photo_thumb_url.value = "";
+      preview.innerHTML = icon("image");
+      field.querySelector("[data-photo-pick-label]").textContent = "Upload photo";
+      remove.hidden = true;
+      changed();
+    });
+  });
+}
+
+/* On save: a data: URL in photo_url means a picked photo that is not
+ * uploaded yet. Upload it and swap in the real URLs. */
+async function uploadPendingPhoto(values) {
+  if (!values || !String(values.photo_url || "").startsWith("data:")) return;
+  const form = document.getElementById("drawer-form");
+  if (!form || !form._photo) throw new Error("The new photo was lost. Pick it again.");
+  Object.assign(values, await uploadMemberPhoto(form._photo.full, form._photo.thumb));
+  form._photo = null;
+}
+
+/* ==================================================================
+ * Idle sign-out
+ *
+ * 30 minutes without a click, key, scroll or touch in any admin tab
+ * signs you out, for shared and lab computers. A sticky toast warns two
+ * minutes before. Activity is shared between tabs through localStorage.
+ * ================================================================== */
+
+const IDLE_MS = 30 * 60 * 1000;
+const IDLE_WARN_MS = 2 * 60 * 1000;
+const ACTIVE_KEY = "fcs-admin-last-active";
+
+function startIdleWatch() {
+  let lastWrite = 0;
+  let warning = null;
+  const mark = (force = false) => {
+    const now = Date.now();
+    if (!force && now - lastWrite < 5000) return;
+    lastWrite = now;
+    try {
+      localStorage.setItem(ACTIVE_KEY, String(now));
+    } catch {
+      /* private mode: this tab still tracks itself */
+    }
+  };
+  ["pointerdown", "keydown", "wheel", "touchstart"].forEach((type) =>
+    addEventListener(type, () => mark(), { passive: true })
+  );
+  mark(true);
+
+  setInterval(async () => {
+    // The shared value is the truth: any tab's activity keeps all tabs in.
+    let last = lastWrite;
+    try {
+      last = Number(localStorage.getItem(ACTIVE_KEY)) || lastWrite;
+    } catch {
+      /* no storage: this tab's own time */
+    }
+    const idle = Date.now() - last;
+
+    if (idle >= IDLE_MS) {
+      try {
+        sessionStorage.setItem("fcs-idle-signout", "1");
+      } catch {
+        /* the login screen just will not say why */
+      }
+      await signOut().catch(() => {});
+      location.reload();
+    } else if (idle >= IDLE_MS - IDLE_WARN_MS && !warning) {
+      warning = toast("No activity for 28 minutes. You will be signed out in 2 minutes.", "info", {
+        sticky: true,
+        action: { label: "Stay signed in", run: () => mark(true) },
+      });
+    } else if (idle < IDLE_MS - IDLE_WARN_MS && warning) {
+      dismiss(warning);
+      warning = null;
+    }
+  }, 15000);
 }

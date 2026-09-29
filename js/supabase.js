@@ -260,6 +260,95 @@ export const setProfileRole = (id, role) =>
   write((s) => s.from("profiles").update({ role }).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Changing the role"));
 
+/* ---- activity log, undo and trash ----------------------------------
+ *
+ * The log is written by database triggers (migration 006); the panel
+ * only reads it. A delete keeps a snapshot of the row, so restoring is
+ * re-inserting that snapshot with its original id.
+ * ------------------------------------------------------------------ */
+
+export async function listActivity(limit = 300) {
+  const { data, error } = await getClientOrThrow()
+    .from("activity_log")
+    .select("id, at, actor_email, action, table_name, row_id, row_label, changed")
+    .order("at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+/** The newest log entry for one row: "last edited by X, 2h ago". */
+export async function lastChange(table, rowId) {
+  const { data, error } = await getClientOrThrow()
+    .from("activity_log")
+    .select("at, actor_email, action")
+    .eq("table_name", table)
+    .eq("row_id", String(rowId))
+    .order("at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+
+/* The tables a snapshot may be restored into. Named, so the UI cannot
+ * turn this into a general "insert anything anywhere" call. */
+const RESTORABLE = new Set([
+  "events", "class_sessions", "resources", "study_groups",
+  "social_links", "core_members", "repo_kinds",
+]);
+
+/** Re-inserts the most recently deleted version of a row. */
+export async function restoreDeleted(table, rowId) {
+  if (!RESTORABLE.has(table)) throw new Error("That kind of row cannot be restored.");
+  const supabase = getClientOrThrow();
+  const { data, error } = await supabase
+    .from("activity_log")
+    .select("snapshot")
+    .eq("table_name", table)
+    .eq("row_id", String(rowId))
+    .eq("action", "delete")
+    .order("at", { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  const snapshot = data && data[0] && data[0].snapshot;
+  if (!snapshot) throw new Error("There is no deleted copy of that row to restore.");
+  return write((s) => s.from(table).insert(snapshot).select().single());
+}
+
+/* ---- member photos (Storage bucket from migration 007) --------------- */
+
+const PHOTO_BUCKET = "member-photos";
+
+function bucketPath(url) {
+  const marker = `/storage/v1/object/public/${PHOTO_BUCKET}/`;
+  const at = String(url || "").indexOf(marker);
+  return at === -1 ? null : decodeURIComponent(String(url).slice(at + marker.length));
+}
+
+/** Uploads the full photo and its 24px pixel version; returns their URLs. */
+export async function uploadMemberPhoto(full, thumb) {
+  const bucket = getClientOrThrow().storage.from(PHOTO_BUCKET);
+  const base = `members/${crypto.randomUUID()}`;
+  const ext = { "image/webp": "webp", "image/png": "png", "image/jpeg": "jpg" }[full.type] || "webp";
+  const files = [[`${base}.${ext}`, full, full.type || "image/webp"], [`${base}-24.png`, thumb, "image/png"]];
+  for (const [path, blob, contentType] of files) {
+    const { error } = await bucket.upload(path, blob, { contentType, cacheControl: "31536000", upsert: false });
+    if (error) throw error;
+  }
+  return {
+    photo_url: bucket.getPublicUrl(files[0][0]).data.publicUrl,
+    photo_thumb_url: bucket.getPublicUrl(files[1][0]).data.publicUrl,
+  };
+}
+
+/** Deletes photos that live in our bucket; other URLs are ignored. */
+export async function removeMemberPhotos(urls) {
+  const paths = urls.map(bucketPath).filter(Boolean);
+  if (!paths.length) return;
+  const { error } = await getClientOrThrow().storage.from(PHOTO_BUCKET).remove(paths);
+  if (error) throw error;
+}
+
 /** repo_kinds is keyed by repo_name, so this upserts rather than inserts. */
 export const saveRepoKind = (repoName, patch) =>
   write((s) =>
