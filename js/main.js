@@ -61,6 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const yearEl = document.getElementById("year");
   if (yearEl) yearEl.textContent = new Date().getFullYear();
 
+  pinHashTarget();
   setupMobileNav();
   setupScrollSpy();
   setupReveal();
@@ -1038,5 +1039,41 @@ async function setMetaDiscord(links) {
   } catch (err) {
     console.warn("[FCS] Discord counts could not be read:", err);
   }
+}
+
+/* ------------------------------------------------------------------
+ * Deep links: keep the #target in place while the page fills in.
+ *
+ * On a load or reload with a hash, the browser jumps to the target
+ * immediately. Projects, events, groups and members then arrive from
+ * GitHub and Supabase and render ABOVE the target, pushing it down, so
+ * the reader ends up a section or more too high. Instead of guessing
+ * heights, this watches the page and re-aligns the actual element
+ * whenever the layout changes, for any id (sections without a nav link,
+ * like #core, included). It lets go the moment the reader scrolls,
+ * clicks, taps or types, or after a few seconds, so it never fights them.
+ * ---------------------------------------------------------------- */
+function pinHashTarget() {
+  const id = decodeURIComponent(location.hash.slice(1));
+  const target = id && document.getElementById(id);
+  if (!target || !("ResizeObserver" in window)) return;
+
+  // The browser's own scroll restoration would otherwise put the reader
+  // back at the old pixel offset from before the reload.
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+  const align = () => target.scrollIntoView({ block: "start", behavior: "instant" });
+  const observer = new ResizeObserver(align);
+  const stopEvents = ["wheel", "touchstart", "pointerdown", "keydown"];
+  const stop = () => {
+    observer.disconnect();
+    clearTimeout(timer);
+    stopEvents.forEach((type) => removeEventListener(type, stop));
+  };
+
+  stopEvents.forEach((type) => addEventListener(type, stop, { passive: true }));
+  const timer = setTimeout(stop, 6000);
+  observer.observe(document.body);
+  align();
 }
 
