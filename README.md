@@ -144,20 +144,34 @@ in `js/config.js`** — it would be readable by anyone who visits the site.
 
 ## Deploying to GitHub Pages
 
-1. Push to the root of a repository, a `/docs` folder, or a dedicated branch.
-2. Set **Settings → Pages** to that location.
-3. In Supabase → Authentication → URL Configuration, set **Site URL** to the
-   published Pages URL. Left on localhost, password-reset emails point at a
-   dead page.
+The site deploys with GitHub Actions (`.github/workflows/pages.yml`), on
+every push to `master`, every 30 minutes, and on demand from the Actions
+tab.
+
+One-time setup: **Settings → Pages → Build and deployment → Source:
+GitHub Actions**.
+
+Each run runs the unit tests, then writes `data/github.json` (the
+organisation's repositories and the latest commit) with the workflow's own
+token, and publishes it with the site. Visitors read that file instead of
+calling GitHub's API, so the 60-requests-an-hour limit per visitor no
+longer applies. The committed `data/github.json` is a placeholder: locally,
+or if the workflow ever stalls for more than three hours, the page falls
+back to the live API.
+
+GitHub pauses scheduled workflows in repositories with no activity for 60
+days; any push re-enables them, and the page falls back to the live API in
+the meantime.
 
 `.nojekyll` makes Pages serve the files as-is.
 
 ## Notes and limits
 
-- The GitHub API call is unauthenticated and rate-limited to 60 requests per
-  hour per visitor IP. Each visitor's browser makes one request, so this is fine
-  at community scale. If it is hit, the Projects section degrades to a link to
-  the organisation page and every other section is unaffected.
+- Visitors read GitHub data from `data/github.json`, refreshed by the deploy
+  workflow every 30 minutes. Only if that file is missing or stale does the
+  browser call GitHub's API directly (60 requests an hour per visitor IP);
+  those answers are cached for ten minutes, and if the limit is hit the
+  Projects section degrades to a link to the organisation page.
 - The Supabase free project pauses after a period of inactivity. Because every
   read falls back to seed data, that degrades to a stale-but-working page rather
   than a broken one. Reactivate it from the Supabase dashboard.

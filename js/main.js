@@ -193,6 +193,27 @@ async function cachedJSON(url, headers = {}) {
   }
 }
 
+/* data/github.json is written by the deploy workflow every 30 minutes
+ * with the repository's own token (tools/github-snapshot.mjs). Reading
+ * it means no visitor spends GitHub's 60-an-hour anonymous allowance.
+ * Missing or older than three hours (a stalled workflow, or local
+ * development with the placeholder): use the live API instead. */
+const SNAPSHOT_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+let snapshotRequest = null;
+
+function githubSnapshot() {
+  if (!snapshotRequest) {
+    snapshotRequest = fetch("data/github.json", { cache: "no-cache" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((snap) => {
+        const age = snap && snap.fetched_at ? Date.now() - new Date(snap.fetched_at).getTime() : Infinity;
+        return age < SNAPSHOT_MAX_AGE_MS && Array.isArray(snap.repos) ? snap : null;
+      })
+      .catch(() => null);
+  }
+  return snapshotRequest;
+}
+
 function githubJSON(path) {
   return cachedJSON(`https://api.github.com${path}`, { Accept: "application/vnd.github+json" });
 }
@@ -206,9 +227,10 @@ async function loadRepositories() {
   if (!statusEl || !gridEl) return;
 
   try {
-    const repos = await githubJSON(
-      `/orgs/${encodeURIComponent(window.GITHUB_ORG)}/repos?per_page=100&sort=updated`
-    );
+    const snapshot = await githubSnapshot();
+    const repos = snapshot
+      ? snapshot.repos.map((repo) => ({ ...repo }))
+      : await githubJSON(`/orgs/${encodeURIComponent(window.GITHUB_ORG)}/repos?per_page=100&sort=updated`);
     if (!Array.isArray(repos) || repos.length === 0) {
       statusEl.textContent = "No public repositories were found.";
       return;
@@ -976,9 +998,12 @@ async function setMetaCommit(repos) {
   if (label) label.textContent = `Last commit, ${timeAgo(latest.pushed_at)}`;
 
   try {
-    const [commit] = await githubJSON(
-      `/repos/${encodeURIComponent(window.GITHUB_ORG)}/${encodeURIComponent(latest.name)}/commits?per_page=1`
-    );
+    const snapshot = await githubSnapshot();
+    const [commit] = snapshot && snapshot.latest_commit_repo === latest.name && snapshot.latest_commit
+      ? [snapshot.latest_commit]
+      : await githubJSON(
+        `/repos/${encodeURIComponent(window.GITHUB_ORG)}/${encodeURIComponent(latest.name)}/commits?per_page=1`
+      );
     if (!commit) return;
     const message = String(commit.commit.message || "").split("\n")[0].trim();
     const when = commit.commit.committer && commit.commit.committer.date;
