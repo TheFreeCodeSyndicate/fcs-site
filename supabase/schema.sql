@@ -212,6 +212,8 @@ to anon, authenticated;
 -- profiles is NOT granted to anon. A signed-in user may read and update
 -- their own row only; the policy below restricts it to auth.uid().
 grant select, update on public.profiles to authenticated;
+-- The invite-member Edge Function reads and sets roles as service_role.
+grant select, update on public.profiles to service_role;
 
 -- Signed-in users get write privileges at the TABLE level. Whether a
 -- given editor or admin may actually perform the write is decided by the

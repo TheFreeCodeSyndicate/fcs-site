@@ -60,7 +60,8 @@ Deno.serve(async (req) => {
   if (callerError || !caller?.user) return reply(origin, 401, { error: "Sign in first." });
 
   const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const { data: me } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  const { data: me, error: meError } = await admin.from("profiles").select("role").eq("id", caller.user.id).maybeSingle();
+  if (meError) return reply(origin, 500, { error: `Could not check your role: ${meError.message}` });
   if (me?.role !== "admin") return reply(origin, 403, { error: "Only admins can invite people." });
 
   let payload: { email?: string; role?: string; redirectTo?: string };
