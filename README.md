@@ -34,29 +34,42 @@ node tools/verify-admin.mjs http://localhost:8000/
 <http://localhost:8000/admin.html> locally, `/admin` once deployed. Sign in
 with a Supabase account.
 
-| Column | Meaning on the public site |
-|--------|----------------------------|
-| Draft  | Being written. Not shown. |
-| Scheduled | Shown as **UPCOMING**. |
-| Live | Shown as **LIVE NOW** during the session window. |
-| Done | Shown as **FINISHED**. |
+A sidebar lists one page per kind of content, each at its own address
+(`admin.html#/core`, `#/events`, ...):
 
-Dragging a card between columns updates the public site on the next visitor
-reload. Every card's edit form also has a Stage dropdown, which is the
-keyboard path. **The public page derives the displayed status from each
-event's own timestamp**, so a past event shows FINISHED even if nobody moved
-its card, and the list can never present a month-old event as upcoming.
+| Page | What it edits |
+|------|---------------|
+| Events | The Kanban board: Draft, Scheduled, Live, Done |
+| Class schedule | Weekly recurring sessions (the countdown and week strip) |
+| Core members | Leads and mentors, including Move to alumni |
+| Study groups, Resources, Social links | The matching public sections |
+| Repo curation | Which GitHub repos show under Resources instead of Projects |
+| Team (admins only) | Who has access, and approving new accounts |
 
-Below the board, tabs edit the class schedule, resources, study groups,
-social links, and repo curation (which GitHub repos appear under Resources
-instead of Projects).
+Clicking a row opens an editing drawer with a **live preview** of the card,
+drawn by the same code as the public page (`js/render.js`). Lists reorder
+by dragging the handle or with the arrow buttons. Delete asks for a second
+click. `/` focuses search and `n` starts a new item.
+
+**The public page derives each event's status from its own timestamp**, so
+a past event shows FINISHED even if nobody moved its card.
+
+### Access
+
+- New accounts start with **no access** until an admin approves them on the
+  Team page. Editors add and edit; admins can also delete and manage the team.
+- The database refuses role changes by anyone but an admin, and never lets
+  the last admin be removed (`supabase/migrations/003_team_roles.sql`).
+- To stop strangers creating accounts at all, turn off **Authentication →
+  Sign In / Providers → Allow new users to sign up** in Supabase and invite
+  people from **Authentication → Users** instead.
 
 ## Where content lives
 
 | Content | Source |
 |---------|--------|
-| Principles, contribution lanes, maintainers | `js/data.js` — fixed page copy |
-| Events, class schedule, resources, study groups, social links | Supabase, editable at `/admin` |
+| Principles, contribution lanes | `js/data.js`, fixed page copy |
+| Events, class schedule, resources, study groups, social links, core members | Supabase, editable at `/admin` |
 | Projects | GitHub API, live at page load |
 | Fallback for all database content | the `SEED_*` arrays in `js/data.js` |
 
@@ -66,15 +79,16 @@ not in code.
 ## Setting up Supabase
 
 1. Create a free project at <https://supabase.com>.
-2. Run `supabase/schema.sql` in the SQL editor.
+2. Run `supabase/schema.sql` in the SQL editor, then each file in
+   `supabase/migrations/` in number order.
 3. Paste the project URL and anon key into `js/config.js`.
 4. Sign up, then promote yourself to admin:
    ```sql
    update public.profiles set role = 'admin' where email = 'you@example.com';
    ```
 5. For each other maintainer, create an account under **Authentication →
-   Users**. Every new signup gets an `editor` profile automatically. Editors can
-   add and edit; only admins can delete.
+   Users**, then approve it on the admin panel's Team page. New accounts have
+   no access until approved.
 
 The anon key is designed to be public and is safe to commit. All authorisation
 is enforced by Row Level Security in Postgres. **Never put the service-role key

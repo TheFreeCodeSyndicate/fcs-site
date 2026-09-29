@@ -1,7 +1,7 @@
 # Leads & Mentors section, and the admin CMS rework
 
 - **Date:** 2026-09-30
-- **Status:** Approved. Phases 1 and 2 built; 3 to 5 next
+- **Status:** Built. All five phases done; migration 003 to run
 - **Builds on:** `2026-09-28-fcs-cms-dashboard.md` (Phases 0 to 6, done)
 
 ## Why

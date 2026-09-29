@@ -45,9 +45,36 @@
     </div>
   </header>
 
-  <main id="admin-root" class="admin-root">
-    <p class="empty-note">Checking your access&hellip;</p>
-  </main>
+  <div class="admin-shell">
+    <nav class="admin-sidebar" id="admin-sidebar" aria-label="Content sections" hidden></nav>
+    <main id="admin-root" class="admin-root">
+      <p class="empty-note">Checking your access&hellip;</p>
+    </main>
+  </div>
+
+  <!-- The edit drawer. One instance, filled per row by js/admin.js. -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+    <header class="drawer-head">
+      <h2 id="drawer-title"></h2>
+      <button type="button" class="icon-btn" data-drawer-close aria-label="Close">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-close"></use></svg>
+      </button>
+    </header>
+    <div class="drawer-body">
+      <form id="drawer-form" novalidate></form>
+      <section class="drawer-preview" aria-label="Preview">
+        <p class="drawer-preview-label">Preview, as it appears on the site</p>
+        <div id="drawer-preview-slot"></div>
+      </section>
+    </div>
+    <div class="drawer-confirm" id="drawer-confirm" role="alertdialog" aria-label="Unsaved changes" hidden>
+      <span>You have unsaved changes.</span>
+      <button type="button" class="btn btn-danger" data-discard><span>Discard</span></button>
+      <button type="button" class="btn" data-keep><span>Keep editing</span></button>
+    </div>
+    <footer class="drawer-actions" id="drawer-actions"></footer>
+  </aside>
 
   <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
 

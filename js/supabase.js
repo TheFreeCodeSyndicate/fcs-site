@@ -169,7 +169,7 @@ export const updateEvent = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the event"));
 
 export const deleteEvent = (id) =>
-  write((s) => s.from("events").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("events").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the event"));
 
 export const createClassSession = (patch) =>
@@ -180,7 +180,7 @@ export const updateClassSession = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the class session"));
 
 export const deleteClassSession = (id) =>
-  write((s) => s.from("class_sessions").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("class_sessions").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the class session"));
 
 export const createResource = (patch) =>
@@ -191,7 +191,7 @@ export const updateResource = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the resource"));
 
 export const deleteResource = (id) =>
-  write((s) => s.from("resources").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("resources").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the resource"));
 
 export const createStudyGroup = (patch) =>
@@ -202,7 +202,7 @@ export const updateStudyGroup = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the study group"));
 
 export const deleteStudyGroup = (id) =>
-  write((s) => s.from("study_groups").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("study_groups").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the study group"));
 
 export const createSocialLink = (patch) =>
@@ -213,7 +213,7 @@ export const updateSocialLink = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the social link"));
 
 export const deleteSocialLink = (id) =>
-  write((s) => s.from("social_links").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("social_links").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the social link"));
 
 export const createCoreMember = (patch) =>
@@ -224,8 +224,26 @@ export const updateCoreMember = (id, patch) =>
     .then((rows) => assertChanged(rows, "Updating the core member"));
 
 export const deleteCoreMember = (id) =>
-  write((s) => s.from("core_members").delete().eq("id", id).select(WRITE_OPTS))
+  write((s) => s.from("core_members").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the core member"));
+
+/* ---- team (admins only; RLS returns just your own row otherwise) --- */
+
+export async function listProfiles() {
+  const { data, error } = await getClientOrThrow()
+    .from("profiles")
+    .select("id, email, display_name, role, created_at")
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+}
+
+/* The guard_profile_update trigger (migration 003) refuses role
+ * changes by non-admins and removing the last admin; its message comes
+ * back as the error. */
+export const setProfileRole = (id, role) =>
+  write((s) => s.from("profiles").update({ role }).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Changing the role"));
 
 /** repo_kinds is keyed by repo_name, so this upserts rather than inserts. */
 export const saveRepoKind = (repoName, patch) =>
@@ -237,5 +255,5 @@ export const saveRepoKind = (repoName, patch) =>
   );
 
 export const deleteRepoKind = (repoName) =>
-  write((s) => s.from("repo_kinds").delete().eq("repo_name", repoName).select(WRITE_OPTS))
+  write((s) => s.from("repo_kinds").delete(WRITE_OPTS).eq("repo_name", repoName).select())
     .then((rows) => assertChanged(rows, "Deleting the repository kind"));
