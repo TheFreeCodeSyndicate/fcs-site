@@ -99,7 +99,11 @@ not in code.
     inactive sessions; `004_hide_unpublished.sql`);
   - editors add and edit, admins also delete, and new accounts have no
     access until approved (`003_team_roles.sql`);
-  - the anon role has no write grants at all.
+  - the anon role has no write grants at all;
+  - the role helper lives in a `private` schema the API does not expose,
+    and trigger functions cannot be called over RPC (`005_advisor_fixes.sql`).
+- Supabase's security and performance advisors report nothing to fix
+  except leaked-password protection, which is a password-policy choice.
 - Both pages carry a Content-Security-Policy `<meta>`: scripts from this
   site only, network calls only to Supabase, GitHub and Discord. If you add
   another service, add its origin to `connect-src` in both `index.html`
