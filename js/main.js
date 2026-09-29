@@ -40,7 +40,10 @@ import {
   resourceCardHTML,
   studyGroupCardHTML,
   eventCardHTML,
+  watchFavicons,
 } from "./render.js";
+
+watchFavicons();
 import {
   getEvents, getClassSessions, getResources,
   getStudyGroups, getSocialLinks, getRepoKinds, getCoreMembers, eventMail,
@@ -803,8 +806,8 @@ function renderJoinLinks(links) {
   grid.innerHTML = list.map((item) => {
     const url = safeURL(item.url);
     const shown = escapeHTML(String(item.url).replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, ""));
-    // "other" says nothing, so those links use their own name: join --notion-wiki
-    const name = item.platform && item.platform !== "other" ? item.platform : item.label || "link";
+    // "web" and "other" say nothing, so those links use their own name: join --linkedin
+    const name = PLATFORM_ICONS.has(String(item.platform)) ? item.platform : item.label || item.platform || "link";
     const flag = escapeHTML(String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
     return `
       <div class="join-card">

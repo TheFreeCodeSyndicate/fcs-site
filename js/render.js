@@ -19,28 +19,83 @@ export function icon(name, className = "") {
 /* Social platforms map onto the sprite; anything unknown gets a link. */
 export const PLATFORM_ICONS = new Set(["discord", "instagram", "whatsapp", "github", "x"]);
 
-export function platformIcon(platform, className = "", url = "") {
-  const key = String(platform || "").toLowerCase();
-  if (key === "other") {
-    const favicon = faviconURL(url);
-    if (favicon) {
-      return `<img class="icon icon-favicon ${className}" src="${favicon}" alt="" width="24" height="24" loading="lazy" referrerpolicy="no-referrer" />`;
-    }
+/* Sites we have a pixel icon for, recognised from the link itself, so a
+ * LinkedIn link saved as "web" still gets the LinkedIn icon. */
+const KNOWN_SITES = [
+  [/(^|\.)(discord\.gg|discord\.com|discordapp\.com)$/, "discord"],
+  [/(^|\.)instagram\.com$/, "instagram"],
+  [/(^|\.)(wa\.me|whatsapp\.com)$/, "whatsapp"],
+  [/(^|\.)(github\.com|github\.io)$/, "github"],
+  [/(^|\.)(x\.com|twitter\.com)$/, "x"],
+  [/(^|\.)(linkedin\.com|lnkd\.in)$/, "linkedin"],
+  [/(^|\.)(youtube\.com|youtu\.be)$/, "youtube"],
+];
+
+function parseLink(url) {
+  try {
+    return new URL(String(url || "").trim());
+  } catch {
+    return null;
   }
-  return icon(PLATFORM_ICONS.has(key) ? key : "link", className);
 }
 
-/* An "other" link shows that site's own icon, from Google's favicon
- * service (a generic globe when the site has none). Only the domain is
- * sent, never the full link. */
+/** The pixel icon for a link's site, or null if we have none. */
+export function knownSiteIcon(url) {
+  const link = parseLink(url);
+  if (!link) return null;
+  if (link.protocol === "mailto:") return "mail";
+  if (!/^https?:$/.test(link.protocol)) return null;
+  const host = link.hostname.toLowerCase();
+  const hit = KNOWN_SITES.find(([pattern]) => pattern.test(host));
+  return hit ? hit[1] : null;
+}
+
+/* Any link's icon, in order: our pixel icon for a known site; otherwise
+ * that site's favicon; otherwise `fallback`. The favicon comes from
+ * Google's favicon service (only the domain is sent). When it has no
+ * icon it answers with a 16px default globe, so watchFavicons() swaps
+ * anything that small, or that fails to load, for the fallback.
+ * className and fallback are icon names from code, never user input. */
+export function linkIcon(url, className = "", fallback = "link") {
+  const known = knownSiteIcon(url);
+  if (known) return icon(known, className);
+  const favicon = faviconURL(url);
+  if (!favicon) return icon(fallback, className);
+  return `<img class="icon icon-favicon ${className}" src="${favicon}" alt="" width="24" height="24" loading="lazy" referrerpolicy="no-referrer" data-fallback="${fallback}" data-class="${className}" />`;
+}
+
+let watching = false;
+/** Call once per page. load/error do not bubble, so listen in the capture phase. */
+export function watchFavicons() {
+  if (watching || typeof document === "undefined") return;
+  watching = true;
+  const swap = (img) => {
+    const t = document.createElement("template");
+    t.innerHTML = icon(img.dataset.fallback || "link", img.dataset.class || "");
+    img.replaceWith(t.content);
+  };
+  const check = (event) => {
+    const img = event.target;
+    if (!(img instanceof HTMLImageElement) || !img.classList.contains("icon-favicon")) return;
+    // ponytail: a site whose only favicon is 16px also falls back; the
+    // service gives no other signal that it found nothing.
+    if (event.type === "error" || img.naturalWidth <= 16) swap(img);
+  };
+  document.addEventListener("load", check, true);
+  document.addEventListener("error", check, true);
+}
+
+/* A named platform keeps its icon; "web", "other" or anything else is
+ * worked out from the link (see linkIcon). */
+export function platformIcon(platform, className = "", url = "") {
+  const key = String(platform || "").toLowerCase();
+  return PLATFORM_ICONS.has(key) ? icon(key, className) : linkIcon(url, className);
+}
+
 export function faviconURL(url) {
-  try {
-    const { protocol, hostname } = new URL(String(url || "").trim());
-    if (!/^https?:$/.test(protocol) || !hostname) return "";
-    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(hostname)}&sz=64`;
-  } catch {
-    return "";
-  }
+  const link = parseLink(url);
+  if (!link || !/^https?:$/.test(link.protocol) || !link.hostname) return "";
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(link.hostname)}&sz=64`;
 }
 
 /* ------------------------------------------------------------------
@@ -123,7 +178,8 @@ export function personLinksHTML(member) {
       const href = iconName === "mail" && member.email ? escapeAttr(`mailto:${member.email}`) : url;
       if (!href) return "";
       const external = iconName === "mail" ? "" : ' target="_blank" rel="noopener"';
-      return `<li><a href="${href}"${external} aria-label="${escapeAttr(`${member.name} on ${label}`)}">${icon(iconName)}</a></li>`;
+      const glyph = iconName === "globe" ? linkIcon(url, "", "globe") : icon(iconName);
+      return `<li><a href="${href}"${external} aria-label="${escapeAttr(`${member.name} on ${label}`)}">${glyph}</a></li>`;
     })
     .join("");
   const discord = member.discord_handle
@@ -224,7 +280,7 @@ export function resourceCardHTML(resource) {
       <span class="resource-card-top">
         <span class="resource-kind">${escapeHTML(RESOURCE_KIND_LABELS[resource.kind] || resource.kind || "Resource")}</span>
         ${resource.via_github ? `<span class="resource-origin">via GitHub</span>` : ""}
-        ${icon("external-link", "resource-ext")}
+        ${linkIcon(href, "resource-ext", "external-link")}
       </span>
       <h3>${escapeHTML(resource.title)}</h3>
       ${resource.summary ? `<p>${escapeHTML(resource.summary)}</p>` : ""}
@@ -245,7 +301,7 @@ export function studyGroupCardHTML(group) {
   const href = safeURL(group.link);
 
   const link = href
-    ? `<a href="${href}" target="_blank" rel="noopener">${escapeHTML(group.link_text || "Open the group")} &rarr;</a>`
+    ? `<a class="site-link" href="${href}" target="_blank" rel="noopener">${linkIcon(href)}<span>${escapeHTML(group.link_text || "Open the group")} &rarr;</span></a>`
     : "";
 
   return `
@@ -272,7 +328,7 @@ export function eventCardHTML(event) {
 
   const links = [];
   if (href) {
-    links.push(`<a href="${href}" target="_blank" rel="noopener">${escapeHTML(event.link_text || "Open event")} &rarr;</a>`);
+    links.push(`<a class="site-link" href="${href}" target="_blank" rel="noopener">${linkIcon(href)}<span>${escapeHTML(event.link_text || "Open event")} &rarr;</span></a>`);
   }
   if (state !== "finished") {
     links.push(`<button type="button" class="link-button" data-ics-single="${escapeAttr(event.id)}">Add to calendar</button>`);

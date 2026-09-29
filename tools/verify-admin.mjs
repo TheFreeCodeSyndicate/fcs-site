@@ -71,7 +71,7 @@ const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors = [];
 const writes = [];
 page.on("pageerror", (e) => errors.push(String(e)));
-page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+page.on("console", (m) => m.type() === "error" && !/\/s2\/favicons/.test(m.location().url || "") && errors.push(m.text()));
 
 // Avatars come from github.com; answer with a 1px PNG so no real request is made.
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");

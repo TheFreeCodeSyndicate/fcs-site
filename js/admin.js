@@ -35,7 +35,7 @@ import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./lib/forms.js";
 import {
-  escapeHTML, escapeAttr, safeURL, icon, platformIcon,
+  escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
   personFileHTML, mentorBadgeHTML, portraitHTML, roleStamp,
   resourceCardHTML, studyGroupCardHTML, eventCardHTML,
 } from "./render.js";
@@ -215,6 +215,7 @@ async function signOutBecause(reason) {
 }
 
 async function boot() {
+  watchFavicons();
   // Clickjacking guard: never run the admin inside another site's frame.
   // (GitHub Pages cannot send a frame-ancestors header.)
   if (window.top !== window.self) {
@@ -837,6 +838,7 @@ const EDITORS = {
     noun: "group",
     title: (r) => r.name,
     subtitle: (r) => r.topic,
+    thumb: (r) => linkIcon(r.link, "", "book-open"),
     badges: (r) => [`<span class="badge">${escapeHTML(r.status)}</span>`, r.is_published === false ? '<span class="badge">Hidden</span>' : ""],
     fields: [
       { name: "name", label: "Name", type: "text", required: true },
@@ -858,6 +860,7 @@ const EDITORS = {
     noun: "resource",
     title: (r) => r.title,
     subtitle: (r) => `${r.kind}, ${r.url}`,
+    thumb: (r) => linkIcon(r.url, "", "bookmark"),
     badges: (r) => [r.is_published === false ? '<span class="badge">Hidden</span>' : ""],
     fields: [
       { name: "title", label: "Title", type: "text", required: true },

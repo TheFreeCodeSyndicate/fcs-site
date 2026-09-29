@@ -72,6 +72,21 @@ a past event shows FINISHED even if nobody moved its card.
   Sign In / Providers → Allow new users to sign up** in Supabase and invite
   people from **Authentication → Users** instead.
 
+## Link icons
+
+Every link on the site and in the panel (social links, a core member's
+website, resources, event and study-group links) gets its icon the same
+way (`linkIcon` in `js/render.js`):
+
+1. a **pixel icon** when the site is known from the link itself: Discord,
+   Instagram, WhatsApp, GitHub, X/Twitter, LinkedIn, YouTube, and email;
+2. otherwise that site's **favicon**, from Google's favicon service (only
+   the domain is sent);
+3. otherwise, if the site has no favicon, the **default** link icon.
+
+To add a known site: draw a 24px symbol in `assets/icons.svg` and add its
+domain to `KNOWN_SITES`.
+
 ## Where content lives
 
 | Content | Source |

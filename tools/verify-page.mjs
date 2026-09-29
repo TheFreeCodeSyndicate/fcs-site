@@ -32,7 +32,8 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const consoleErrors = [];
 const pageErrors = [];
 page.on("console", (m) => {
-  if (m.type() === "error") consoleErrors.push(m.text());
+  // A site with no favicon answers 404; the page then shows the default icon.
+  if (m.type() === "error" && !/\/s2\/favicons/.test(m.location().url || "")) consoleErrors.push(m.text());
 });
 page.on("pageerror", (e) => pageErrors.push(String(e)));
 
