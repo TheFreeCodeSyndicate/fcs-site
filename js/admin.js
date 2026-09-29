@@ -762,7 +762,7 @@ const EDITORS = {
   core: {
     table: "core_members",
     noun: "member",
-    intro: "Leads and mentors get the same card, front and back — only the band's colour tells them apart. Only the links you fill in appear on the site.",
+    intro: "Leads and mentors get the same card; only the stamp's colour tells them apart. Only the links you fill in appear on the site.",
     title: (r) => r.name,
     subtitle: (r) => [r.title, r.group_name, r.github_username && `@${r.github_username}`].filter(Boolean).join(", "),
     thumb: (r) => portraitHTML(r, "portrait-sm"),
@@ -816,7 +816,7 @@ const EDITORS = {
       if (v.status === "alumni" && !v.ended_on) errors.ended_on = "Set when they left, so the alumni list shows their years.";
       return errors;
     },
-    // Leads and mentors get the same card; click "Full profile" to flip it.
+    // Leads and mentors get the same card.
     preview: (v) => `<div class="core-roster">${coreCardHTML(v)}</div>`,
     actions: (row) => row && [
       row.status === "alumni"
@@ -1060,17 +1060,8 @@ function bindDrawer() {
   const el = document.getElementById("drawer");
   document.getElementById("drawer-backdrop").addEventListener("click", () => closeDrawer());
   el.querySelector("[data-drawer-close]").addEventListener("click", () => closeDrawer());
-  el.addEventListener("click", (event) => {
-    const flip = event.target.closest("[data-flip]");
-    if (flip) flip.closest(".core-card")?.classList.toggle("is-flipped");
-  });
   el.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      const flipped = el.querySelector(".core-card.is-flipped");
-      if (flipped) {
-        flipped.classList.remove("is-flipped");
-        return;
-      }
       event.preventDefault();
       closeDrawer();
     } else if (event.key === "Tab") {

@@ -493,23 +493,9 @@ function bindCoreMembers() {
 
   section.addEventListener("click", (event) => {
     const chip = event.target.closest("#core-filters .chip");
-    if (chip) {
-      mentorGroup = chip.dataset.group;
-      renderMentors();
-      return;
-    }
-    const flip = event.target.closest("[data-flip]");
-    if (flip) flip.closest(".core-card").classList.toggle("is-flipped");
-  });
-
-  // Escape flips a card back and returns focus to what opened it,
-  // rather than closing the whole page's focus trap.
-  section.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    const card = event.target.closest(".core-card.is-flipped");
-    if (!card) return;
-    card.classList.remove("is-flipped");
-    card.querySelector("[data-flip]").focus();
+    if (!chip) return;
+    mentorGroup = chip.dataset.group;
+    renderMentors();
   });
 }
 

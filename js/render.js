@@ -204,65 +204,37 @@ export function whoisHTML(member) {
     </div>`;
 }
 
-/* One card for every core member — lead or mentor — the same shape and
- * the same size. The old design gave mentors a visibly smaller card
- * than leads; that size difference read as a hierarchy nobody intended,
- * and is why the club ended up marking everyone as a lead. Here the
- * band's colour and label are the only thing that differs.
+/* One card for every core member, lead or mentor: the full personnel
+ * file (portrait, name, whois, bio, links), all of it visible at once.
+ * The old design gave mentors a smaller badge than leads; that size gap
+ * read as a hierarchy, and is why everyone ended up marked "lead". Now
+ * the role only changes the stamp's colour. Cards in a row stretch to
+ * the tallest, and links sit at the bottom, so a row lines up.
  *
- * The front is an ID badge: portrait, name, title, handle. Clicking
- * "Full profile" (or pressing Enter/Space on it) flips the card over
- * to a back face with the dossier: what they run, their focus, their
- * bio and their links — the same depth of information a lead's card
- * always had, now available for a mentor's too. bindCoreMembers() in
- * main.js wires up the flip and a cursor-following tilt; the CSS still
- * works, minus the flourish, if that never runs.
- *
- * The tilt is a small, fixed angle per position, so a wall of cards
- * looks pinned up rather than printed. */
-const CARD_TILTS = [-1.2, 0.9, -0.5, 1.3, -0.9, 0.4, -1.4, 0.7];
+ * The fixed tilt per position makes a wall of cards look pinned up
+ * rather than printed; bindCoreMembers() in main.js adds a tilt that
+ * follows the cursor. */
+const CARD_TILTS = [-0.8, 0.6, -0.4, 0.9, -0.6, 0.3, -1, 0.5];
 
 export function coreCardHTML(member, index = 0) {
-  const since = member.joined_on ? String(member.joined_on).slice(0, 4) : "";
   const handle = member.github_username
     ? `<a class="core-handle" href="${safeURL(`https://github.com/${encodeURIComponent(member.github_username)}`)}" target="_blank" rel="noopener">@${escapeHTML(member.github_username)}</a>`
     : "";
-  const role = member.role === "lead" ? "Lead" : "Mentor";
-  const name = escapeHTML(member.name);
-  const dossier = `${whoisHTML(member)}${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}${personLinksHTML(member)}`;
-
   return `
-    <article class="core-card badge-${member.role === "lead" ? "lead" : "mentor"}" data-person-card
-             style="--tilt: ${CARD_TILTS[index % CARD_TILTS.length]}deg">
-      <div class="core-card-inner">
-        <div class="core-card-face core-card-front">
-          <header class="badge-band">
-            <span>${role}</span>
-            ${since ? `<span>Since ${escapeHTML(since)}</span>` : ""}
-          </header>
-          <div class="badge-body">
-            <div class="badge-id">
-              ${portraitHTML(member, "portrait-md")}
-              <div class="badge-who">
-                <h3 class="core-name">${name}</h3>
-                ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
-                ${handle}
-              </div>
-            </div>
-            <button type="button" class="core-flip-cue" data-flip aria-label="Show ${name}'s full profile">
-              Full profile <span aria-hidden="true">&rarr;</span>
-            </button>
+    <article class="core-card" data-person-card style="--tilt: ${CARD_TILTS[index % CARD_TILTS.length]}deg">
+      <div class="core-file">
+        <div class="core-file-head">
+          ${portraitHTML(member, "portrait-md")}
+          <div class="core-file-id">
+            ${roleStamp(member)}
+            <h3 class="core-name">${escapeHTML(member.name)}</h3>
+            ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
+            ${handle}
           </div>
         </div>
-        <div class="core-card-face core-card-back">
-          <header class="badge-band">
-            <span>${name}</span>
-            <button type="button" class="core-flip-back" data-flip aria-label="Back to ${name}'s card">${icon("close")}</button>
-          </header>
-          <div class="badge-body badge-body-back">
-            ${dossier || `<p class="empty-note">Nothing filed yet.</p>`}
-          </div>
-        </div>
+        ${whoisHTML(member)}
+        ${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}
+        ${personLinksHTML(member)}
       </div>
     </article>`;
 }

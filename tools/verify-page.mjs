@@ -97,34 +97,23 @@ for (const [name, y] of [["projects", 3000], ["resources", 3700], ["groups", 405
 check("nav tracks the section being read", track.every((t) => !t.endsWith("NONE")), track.join("  "));
 
 // --- every core member card is the same size, lead or mentor --------
-// The old design gave leads a visibly bigger card than mentors; every
-// card now goes through the same template, so a size difference here
-// would mean that regressed. Scrolling to click below disturbs the
-// page's scroll position, so this runs after the checks above that
-// depend on it.
+// The old design gave leads a bigger card than mentors. Now every card
+// has the same template and width, cards in a row share a height, and
+// nothing inside a card scrolls or gets cut off.
 const cardBoxes = await page.evaluate(() =>
   [...document.querySelectorAll("#core .core-card")].map((c) => {
-    const r = c.getBoundingClientRect();
-    return { w: Math.round(r.width), h: Math.round(r.height) };
+    // offset* is the layout size, before each card's small idle tilt.
+    const file = c.querySelector(".core-file");
+    return { top: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight, clipped: file.scrollHeight > file.clientHeight + 1 };
   })
 );
-// A few px of slack: CSS Grid can split 1fr columns unevenly, and a
-// title or handle line some members have and others don't is a normal,
-// legitimate difference — not the old lead-vs-mentor size gap (which
-// was 60-100px, a different card shape entirely).
-const maxW = Math.max(...cardBoxes.map((b) => b.w));
-const minW = Math.min(...cardBoxes.map((b) => b.w));
-const maxH = Math.max(...cardBoxes.map((b) => b.h));
-const minH = Math.min(...cardBoxes.map((b) => b.h));
-check("core member cards share one width", maxW - minW <= 4, `${minW}-${maxW}`);
-check("core member cards are within a line's height of each other", maxH - minH <= 24, `${minH}-${maxH}`);
-
-// --- the card flips to a back face and back again --------------------
-const firstCard = page.locator("#core .core-card").first();
-await firstCard.locator("[data-flip]").first().click();
-check("clicking Full profile flips the card", await firstCard.evaluate((c) => c.classList.contains("is-flipped")));
-await firstCard.locator(".core-card-back [data-flip]").click();
-check("the back button flips it back", !(await firstCard.evaluate((c) => c.classList.contains("is-flipped"))));
+const ws = cardBoxes.map((b) => b.w);
+check("core member cards share one width", Math.max(...ws) - Math.min(...ws) <= 4, `${Math.min(...ws)}-${Math.max(...ws)}`);
+const rows = {};
+for (const b of cardBoxes) (rows[Math.round(b.top / 40)] ||= []).push(b.h);
+const ragged = Object.values(rows).filter((hs) => Math.max(...hs) - Math.min(...hs) > 4);
+check("cards in the same row share a height", ragged.length === 0, JSON.stringify(Object.values(rows)));
+check("no card cuts off or scrolls its content", cardBoxes.every((b) => !b.clipped));
 
 // --- no javascript: URLs survived into the DOM ----------------------
 const badHrefs = await page.evaluate(() =>
