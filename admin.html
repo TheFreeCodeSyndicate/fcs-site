@@ -33,7 +33,8 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/admin.css" />
 </head>
-<body class="admin-body">
+<body class="admin-body is-gate">
+  <canvas id="pixel-field" class="pixel-field" aria-hidden="true"></canvas>
   <header class="doc-nav admin-header">
     <a class="nav-brand" href="./">TFCS<span class="nav-brand-sub">/admin</span></a>
     <div class="admin-header-right">
@@ -76,7 +77,8 @@
     <footer class="drawer-actions" id="drawer-actions"></footer>
   </aside>
 
-  <div id="admin-toast" class="admin-toast" role="status" aria-live="polite" hidden></div>
+  <!-- Toast stack; each toast carries its own role (status or alert). -->
+  <div class="toasts" id="toasts" aria-label="Notifications"></div>
 
   <script src="js/theme.js"></script>
   <script src="js/config.js"></script>

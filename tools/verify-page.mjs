@@ -46,7 +46,7 @@ const counts = await page.evaluate(() => ({
   groups: document.querySelectorAll(".group-card").length,
   events: document.querySelectorAll(".event-card").length,
   repos: document.querySelectorAll(".repo-card").length,
-  coreMembers: document.querySelectorAll(".core-card, .core-row").length,
+  coreMembers: document.querySelectorAll(".core-card, .core-badge").length,
   join: document.querySelectorAll(".join-card").length,
   refs: document.querySelectorAll("#ref-list li").length,
   nav: document.querySelectorAll(".nav-links a").length,

@@ -24,22 +24,9 @@
 .admin-root { padding: 28px var(--page-pad) 96px; min-width: 0; }
 .admin-root h2, .admin-root h3 { text-wrap: balance; }
 
-/* --------------------------------------------------------------- login */
-.admin-login {
-  max-width: 420px;
-  margin: 10vh auto;
-  padding: 28px;
-  background: var(--paper-raised);
-  border: var(--border-w) solid var(--rule-strong);
-  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
-}
-.admin-login h1 { font-size: 1.25rem; margin: 0 0 20px; }
-.admin-login label { display: block; margin-bottom: 14px; font-size: 0.8rem; color: var(--ink-muted); }
-.admin-login code { word-break: break-all; }
 .admin-error { color: var(--live); font-size: 0.8rem; min-height: 1.4em; margin: 0 0 12px; }
 
 /* ------------------------------------------------------------- inputs */
-.admin-login input,
 .field input, .field select, .field textarea {
   display: block;
   width: 100%;
@@ -51,7 +38,6 @@
   font: inherit;
   font-size: 0.85rem;
 }
-.admin-login input:focus-visible,
 .field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
@@ -139,21 +125,6 @@
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--ink); }
 .checkbox-row input { accent-color: var(--accent); width: 18px; height: 18px; }
 
-/* --------------------------------------------------------------- toast */
-.admin-toast {
-  position: fixed;
-  left: 50%;
-  bottom: 24px;
-  transform: translateX(-50%);
-  background: var(--ink);
-  color: var(--paper);
-  border: 2px solid var(--ink);
-  padding: 10px 18px;
-  font-size: 0.8rem;
-  z-index: 100;
-  max-width: 90vw;
-}
-.admin-toast[data-tone="error"] { background: var(--live); border-color: var(--live); color: var(--paper); }
 
 /* ================================================================
    SHELL: sidebar + page
@@ -612,3 +583,305 @@ button.list-open:focus-visible { outline: 2px solid var(--focus); outline-offset
 }
 
 .admin-signout { white-space: nowrap; }
+
+/* ================================================================
+   GATE: every signed-out screen (sign in, reset, no access)
+   A single card on a twinkling pixel field.
+   ================================================================ */
+
+/* Without the sidebar the shell must not keep a 250px first column:
+   that is what squeezed the old login card into a narrow strip. */
+.admin-shell:has(> .admin-sidebar[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.pixel-field {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  display: none;
+}
+
+.is-gate .pixel-field { display: block; }
+.is-gate .admin-shell { position: relative; z-index: 1; }
+
+.gate {
+  display: grid;
+  place-items: center;
+  min-height: calc(100dvh - 3.25rem - 124px);
+  padding: 24px 0;
+}
+
+.gate-card {
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  padding: 32px 30px 26px;
+  border: var(--border-w) solid var(--rule-strong);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
+  text-align: center;
+}
+
+.gate-mark {
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 72px;
+  height: 72px;
+  border: 2px solid var(--ink);
+  background: var(--plate);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.gate-card h1 {
+  font-family: var(--font-display);
+  font-stretch: 112%;
+  font-weight: 800;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.gate-sub {
+  margin-top: -6px;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  text-wrap: balance;
+}
+
+.gate-field {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+}
+
+.gate-field label {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.gate-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px 0 10px;
+  border: 2px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink-muted);
+}
+
+.gate-input:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  color: var(--ink);
+}
+
+.gate-input input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 11px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.gate-input input:focus { outline: none; }
+
+.gate-reveal {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.gate-reveal:hover { color: var(--ink); }
+.gate-reveal:focus-visible { outline: 2px solid var(--focus); }
+.gate-reveal .icon-eye-off,
+.gate-reveal[aria-pressed="true"] .icon-eye { display: none; }
+.gate-reveal[aria-pressed="true"] .icon-eye-off { display: block; }
+
+.gate-card .admin-error {
+  min-height: 1.2em;
+  margin: -4px 0 0;
+  text-align: left;
+}
+
+.gate-submit,
+.gate-secondary {
+  justify-content: center;
+  width: 100%;
+  padding-block: 11px;
+  font-size: 0.88rem;
+}
+
+.btn[aria-busy="true"] { cursor: progress; opacity: 0.8; }
+
+.gate-divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-muted);
+}
+
+.gate-divider::before,
+.gate-divider::after {
+  content: "";
+  height: 2px;
+  background: var(--rule);
+}
+
+.gate-foot {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+  text-wrap: balance;
+}
+
+.gate-card code { word-break: break-all; }
+
+@media (max-width: 480px) {
+  .gate-card { padding: 26px 18px 20px; }
+}
+
+/* ================================================================
+   TOASTS
+   Bottom-right stack on wide screens, full-width at the bottom on
+   phones. A colour stripe per kind, a pixel icon, a time-left bar.
+   ================================================================ */
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  width: min(400px, calc(100vw - 40px));
+  pointer-events: none;
+}
+
+.toast {
+  --toast-accent: var(--accent);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 8px 14px 10px;
+  overflow: hidden;
+  border: var(--border-w) solid var(--ink);
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.22s cubic-bezier(0.2, 0, 0, 1),
+    transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.toast.is-in { opacity: 1; transform: none; }
+.toast.is-leaving { opacity: 0; transform: translateX(16px); transition-duration: 0.18s; }
+
+.toast-success { --toast-accent: var(--accent); }
+.toast-delete { --toast-accent: var(--magenta); }
+.toast-info { --toast-accent: var(--cyan); }
+.toast-error { --toast-accent: var(--live); background: var(--live-soft); }
+
+/* The icon sits on a small tile in the toast's colour, like a stamp. */
+.toast .toast-icon {
+  box-sizing: content-box;
+  padding: 6px;
+  border: 2px solid var(--ink);
+  background: var(--toast-accent);
+  color: #0a0a0a;
+}
+
+.toast-text {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.toast-close {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 2px solid transparent;
+  background: none;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.toast-close:hover { color: var(--ink); border-color: var(--rule-strong); }
+.toast-close:focus-visible { outline: 2px solid var(--focus); }
+
+/* Time left: shrinks over the toast's lifetime, stops while paused. */
+.toast-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: var(--toast-accent);
+  transform-origin: 0 50%;
+  animation: toast-timer var(--toast-ms, 4200ms) linear forwards;
+}
+
+.toast.is-paused .toast-timer { animation-play-state: paused; }
+
+@keyframes toast-timer {
+  to { transform: scaleX(0); }
+}
+
+@media (max-width: 620px) {
+  .toasts {
+    left: 12px;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: auto;
+    align-items: stretch;
+  }
+
+  .toast { box-shadow: 4px 4px 0 var(--ink); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast,
+  .toast.is-leaving { transition: none; transform: none; }
+  .toast-timer { animation: none; display: none; }
+}
+
+/* While a drawer is open its footer holds Save and Delete; lift the
+   toast stack above it so a toast never covers those buttons. */
+body:has(.drawer.is-open) .toasts {
+  bottom: calc(var(--drawer-footer, 76px) + 20px);
+}
+
+@media (max-width: 620px) {
+  body:has(.drawer.is-open) .toasts {
+    bottom: calc(var(--drawer-footer, 120px) + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}

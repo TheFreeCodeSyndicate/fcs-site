@@ -35,6 +35,7 @@ import {
   personLinksHTML,
   whoisHTML,
   personFileHTML,
+  mentorBadgeHTML,
   RESOURCE_KIND_LABELS,
   resourceCardHTML,
   studyGroupCardHTML,
@@ -316,45 +317,23 @@ function formatDate(isoString) {
 /* ------------------------------------------------------------------
  * Section 9: Core members
  *
- * Leads get a full personnel-file card each. Everyone else goes in a
- * roster: one row per person that expands in place into the same card,
- * with a focus-driven preview panel beside it on desktop. One layout
- * from 3 people to 30+; group filters appear past 8. Alumni sit in a
+ * Leads get a full personnel-file card each. Mentors get ID badges in
+ * a grid: everything visible at rest, no click to expand. Badges sit at
+ * small tilts and straighten on hover while coloured cards fan out
+ * behind them. Group filters appear past 8 mentors; alumni sit in a
  * collapsed list at the end.
  *
  * No GitHub API calls: avatars are plain image URLs
  * (github.com/<user>.png), which the rate limit does not count.
  * ---------------------------------------------------------------- */
-const ROSTER_FILTER_THRESHOLD = 8;
-let rosterGroup = "All";
-let rosterMembers = [];
-
+const MENTOR_FILTER_THRESHOLD = 8;
+let mentorGroup = "All";
+let mentors = [];
 
 function sortMembers(list) {
   return [...list].sort(
     (a, b) => (a.sort_order || 0) - (b.sort_order || 0) || String(a.name).localeCompare(String(b.name))
   );
-}
-
-
-function rosterRowHTML(member, index) {
-  const id = `core-row-${index}`;
-  const focus = Array.isArray(member.focus) ? member.focus.slice(0, 2).join(", ") : "";
-  return `
-    <li class="core-row" data-person="${index}">
-      <button type="button" class="core-row-head" aria-expanded="false" aria-controls="${id}">
-        <span class="core-no">${String(index + 1).padStart(2, "0")}</span>
-        ${portraitHTML(member, "portrait-sm")}
-        <span class="core-row-name">${escapeHTML(member.name)}</span>
-        ${roleStamp(member)}
-        <span class="core-row-runs">${escapeHTML(member.group_name || "")}</span>
-        <span class="core-row-focus">${escapeHTML(focus)}</span>
-        ${icon("chevron-down", "core-chevron")}
-      </button>
-      <div class="core-row-body" id="${id}">
-        <div class="core-row-inner">${personFileHTML(member, { withPortrait: false })}</div>
-      </div>
-    </li>`;
 }
 
 function renderCoreMembers(members) {
@@ -365,18 +344,19 @@ function renderCoreMembers(members) {
   const active = all.filter((m) => m.status !== "alumni");
   const alumni = all.filter((m) => m.status === "alumni");
   const leads = active.filter((m) => m.role === "lead");
-  rosterMembers = active.filter((m) => m.role !== "lead");
+  mentors = active.filter((m) => m.role !== "lead");
 
   const count = document.getElementById("core-count");
   if (count) count.textContent = active.length ? `${active.length} ${active.length === 1 ? "person" : "people"}` : "";
 
+  const leadsWrap = document.getElementById("core-leads-wrap");
   const leadsEl = document.getElementById("core-leads");
   leadsEl.innerHTML = leads
     .map((m) => `<article class="core-card" data-person-card>${personFileHTML(m)}</article>`)
     .join("");
-  leadsEl.hidden = !leads.length;
+  leadsWrap.hidden = !leads.length;
 
-  renderRoster();
+  renderMentors();
 
   const alumniEl = document.getElementById("core-alumni");
   alumniEl.hidden = !alumni.length;
@@ -392,64 +372,38 @@ function renderCoreMembers(members) {
     : "";
 
   if (!active.length && !alumni.length) {
-    leadsEl.hidden = false;
+    leadsWrap.hidden = false;
     leadsEl.innerHTML = `<p class="empty-note">The core member list is being written. Ask in the rooms below who runs what.</p>`;
   }
 
   bindCoreMembers();
 }
 
-function renderRoster() {
-  const wrap = document.getElementById("core-roster-wrap");
-  const list = document.getElementById("core-roster");
+function renderMentors() {
+  const wrap = document.getElementById("core-mentors-wrap");
+  const grid = document.getElementById("core-mentors");
   const filters = document.getElementById("core-filters");
-  if (!wrap || !list) return;
+  if (!wrap || !grid) return;
 
-  wrap.hidden = !rosterMembers.length;
-  if (!rosterMembers.length) return;
+  wrap.hidden = !mentors.length;
+  if (!mentors.length) return;
 
-  const groups = [...new Set(rosterMembers.map((m) => m.group_name).filter(Boolean))];
-  const showFilters = rosterMembers.length > ROSTER_FILTER_THRESHOLD && groups.length > 1;
+  const groups = [...new Set(mentors.map((m) => m.group_name).filter(Boolean))];
+  const showFilters = mentors.length > MENTOR_FILTER_THRESHOLD && groups.length > 1;
   filters.hidden = !showFilters;
   if (showFilters) {
     filters.innerHTML = ["All", ...groups]
-      .map((g) => `<button type="button" class="chip${g === rosterGroup ? " is-active" : ""}" data-group="${escapeAttr(g)}" aria-pressed="${g === rosterGroup}">${escapeHTML(g)}</button>`)
+      .map((g) => `<button type="button" class="chip${g === mentorGroup ? " is-active" : ""}" data-group="${escapeAttr(g)}" aria-pressed="${g === mentorGroup}">${escapeHTML(g)}</button>`)
       .join("");
   } else {
-    rosterGroup = "All";
+    mentorGroup = "All";
   }
 
-  const shown = rosterMembers
-    .map((m, i) => [m, i])
-    .filter(([m]) => rosterGroup === "All" || m.group_name === rosterGroup);
-  list.innerHTML = shown.map(([m, i]) => rosterRowHTML(m, i)).join("");
-  previewPerson(shown.length ? shown[0][1] : null);
-}
-
-/* The preview panel shows whichever row was last hovered or focused. */
-function previewPerson(index) {
-  const panel = document.getElementById("core-preview");
-  if (!panel) return;
-  const member = index == null ? null : rosterMembers[index];
-  if (!member) {
-    panel.innerHTML = "";
-    return;
-  }
-  if (panel.dataset.person === String(index)) return;
-  panel.dataset.person = String(index);
-  panel.innerHTML = `
-    ${portraitHTML(member, "portrait-xl")}
-    <p class="core-preview-name">${escapeHTML(member.name)}</p>
-    ${member.title ? `<p class="core-preview-title">${escapeHTML(member.title)}</p>` : ""}`;
-  developPortraits(panel);
-
-  // Start the scanline wipe only once the photo is there to reveal.
-  const portrait = panel.querySelector(".portrait");
-  const photo = panel.querySelector(".portrait-photo");
-  if (!portrait || !photo) return;
-  const develop = () => requestAnimationFrame(() => portrait.classList.add("is-developing"));
-  if (photo.complete && photo.naturalWidth) develop();
-  else photo.addEventListener("load", develop, { once: true });
+  grid.innerHTML = mentors
+    .filter((m) => mentorGroup === "All" || m.group_name === mentorGroup)
+    .map((m, i) => mentorBadgeHTML(m, i))
+    .join("");
+  watchBadgesOnTouch(grid);
 }
 
 /* Give a portrait its real photo. Called when someone looks at it. */
@@ -460,41 +414,45 @@ function developPortraits(scope) {
   });
 }
 
+/* Touch screens have no hover, so a badge develops its photo as it
+ * scrolls into view instead, once. */
+let badgeObserver = null;
+function watchBadgesOnTouch(grid) {
+  if (!window.matchMedia("(hover: none)").matches || !("IntersectionObserver" in window)) return;
+  if (!badgeObserver) {
+    badgeObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        developPortraits(entry.target);
+        entry.target.classList.add("is-developed");
+        badgeObserver.unobserve(entry.target);
+      });
+    }, { threshold: 0.6 });
+  }
+  grid.querySelectorAll("[data-person-card]").forEach((card) => badgeObserver.observe(card));
+}
+
 let coreBound = false;
 function bindCoreMembers() {
   if (coreBound) return;
   coreBound = true;
   const section = document.getElementById("core");
 
-  // Hover or focus anywhere on a card or row loads its photo.
+  // Hover or focus on a card loads its photo, just before it develops.
   const look = (event) => {
-    const target = event.target.closest("[data-person-card], .core-row");
-    if (target) developPortraits(target);
-    const row = event.target.closest(".core-row");
-    if (row) previewPerson(Number(row.dataset.person));
+    const card = event.target.closest("[data-person-card]");
+    if (card) developPortraits(card);
   };
   section.addEventListener("pointerover", look);
   section.addEventListener("focusin", look);
 
   section.addEventListener("click", (event) => {
     const chip = event.target.closest("#core-filters .chip");
-    if (chip) {
-      rosterGroup = chip.dataset.group;
-      renderRoster();
-      return;
-    }
-
-    const head = event.target.closest(".core-row-head");
-    if (!head) return;
-    const open = head.getAttribute("aria-expanded") !== "true";
-    // One open at a time keeps a long roster short.
-    section.querySelectorAll('.core-row-head[aria-expanded="true"]').forEach((other) => {
-      if (other !== head) other.setAttribute("aria-expanded", "false");
-    });
-    head.setAttribute("aria-expanded", String(open));
+    if (!chip) return;
+    mentorGroup = chip.dataset.group;
+    renderMentors();
   });
 }
-
 
 /* ------------------------------------------------------------------
  * Section 5: Resources

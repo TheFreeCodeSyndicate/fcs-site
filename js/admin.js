@@ -26,13 +26,14 @@ import {
   createCoreMember, updateCoreMember, deleteCoreMember,
   saveRepoKind, deleteRepoKind,
   listProfiles, setProfileRole,
+  requestPasswordReset, updatePassword,
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./lib/forms.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon,
-  personFileHTML, portraitHTML, roleStamp,
+  personFileHTML, mentorBadgeHTML, portraitHTML, roleStamp,
   resourceCardHTML, studyGroupCardHTML, eventCardHTML,
 } from "./render.js";
 
@@ -57,17 +58,74 @@ const root = () => document.getElementById("admin-root");
  * Small helpers
  * ================================================================== */
 
-function toast(message, tone) {
-  const el = document.getElementById("admin-toast");
-  if (!el) return;
-  el.textContent = message;
-  el.dataset.tone = tone === "error" ? "error" : "ok";
-  el.hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => {
-    el.hidden = true;
-  }, 3600);
+/* ------------------------------------------------------------------
+ * Toasts
+ *
+ * Every action says what happened, to what: "Created event “Explain-3”".
+ * They stack in a corner (full width on phones), at most three at once.
+ * A bar shows time left; hovering or focusing a toast pauses it. Errors
+ * stay longer and are announced assertively.
+ *
+ * tone: success | delete | info | error
+ * ------------------------------------------------------------------ */
+const TOAST_ICONS = { success: "check", delete: "trash", info: "circle-info", error: "square-alert" };
+const TOAST_MS = { success: 4200, delete: 4200, info: 5200, error: 8000 };
+
+function toast(message, tone = "success") {
+  const stack = document.getElementById("toasts");
+  if (!stack) return;
+  if (!TOAST_ICONS[tone]) tone = "success";
+
+  const item = document.createElement("div");
+  item.className = `toast toast-${tone}`;
+  item.setAttribute("role", tone === "error" ? "alert" : "status");
+  item.style.setProperty("--toast-ms", `${TOAST_MS[tone]}ms`);
+  item.innerHTML = `
+    ${icon(TOAST_ICONS[tone], "toast-icon")}
+    <p class="toast-text">${escapeHTML(message)}</p>
+    <button type="button" class="toast-close" aria-label="Dismiss">${icon("close")}</button>
+    <span class="toast-timer" aria-hidden="true"></span>`;
+  stack.append(item);
+
+  // Keep the stack short: the oldest leaves first.
+  const live = stack.querySelectorAll(".toast:not(.is-leaving)");
+  if (live.length > 3) dismiss(live[0]);
+
+  requestAnimationFrame(() => item.classList.add("is-in"));
+
+  let remaining = TOAST_MS[tone];
+  let started = performance.now();
+  let timer = setTimeout(() => dismiss(item), remaining);
+  const pause = () => {
+    clearTimeout(timer);
+    remaining -= performance.now() - started;
+    item.classList.add("is-paused");
+  };
+  const resume = () => {
+    started = performance.now();
+    timer = setTimeout(() => dismiss(item), Math.max(remaining, 1200));
+    item.classList.remove("is-paused");
+  };
+  item.addEventListener("pointerenter", pause);
+  item.addEventListener("pointerleave", resume);
+  item.addEventListener("focusin", pause);
+  item.addEventListener("focusout", resume);
+  item.querySelector(".toast-close").addEventListener("click", () => {
+    clearTimeout(timer);
+    dismiss(item);
+  });
 }
+
+function dismiss(item) {
+  if (item.classList.contains("is-leaving")) return;
+  item.classList.add("is-leaving");
+  item.classList.remove("is-in");
+  const done = () => item.remove();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) done();
+  else setTimeout(done, 200);
+}
+
+const quoted = (text) => `“${String(text || "untitled").slice(0, 60)}”`;
 
 async function readTable(name, order = "sort_order") {
   const { data, error } = await getClientOrThrow().from(name).select("*").order(order);
@@ -110,19 +168,24 @@ function armedDelete(button, run) {
 
 document.addEventListener("DOMContentLoaded", boot);
 
+/* A password-reset link lands here with the recovery token in the URL
+ * hash. supabase-js reads it and signs the user in; we show the
+ * choose-a-new-password card instead of the panel. Read the flag before
+ * anything touches the hash. */
+const RECOVERY = /type=recovery/.test(location.hash);
+
 async function boot() {
   document.getElementById("admin-signout").addEventListener("click", () =>
     signOut().then(() => location.reload())
   );
   bindDrawer();
+  startPixelField();
 
   if (!isConfigured()) {
-    root().innerHTML = `
-      <div class="admin-login">
-        <h1>Admin panel</h1>
-        <p>Supabase is not configured yet. Set <code>supabaseUrl</code> and
-           <code>supabaseAnonKey</code> in <code>js/config.js</code>, then reload.</p>
-      </div>`;
+    gate(`
+      <h1>Admin panel</h1>
+      <p class="gate-sub">Supabase is not configured yet. Set <code>supabaseUrl</code> and
+         <code>supabaseAnonKey</code> in <code>js/config.js</code>, then reload.</p>`);
     return;
   }
 
@@ -130,57 +193,239 @@ async function boot() {
   try {
     session = await getSession();
   } catch (err) {
-    root().innerHTML = `
-      <div class="admin-login">
-        <h1>Cannot reach the database</h1>
-        <p>${escapeHTML(err.message || "Unknown error")}</p>
-        <p>The public site is unaffected and still works from its seed data.</p>
-      </div>`;
+    gate(`
+      <h1>Cannot reach the database</h1>
+      <p class="gate-sub">${escapeHTML(err.message || "Unknown error")}</p>
+      <p class="gate-foot">The public site is unaffected and still works from its seed data.</p>`);
     return;
   }
 
+  if (session && RECOVERY) return renderSetPassword(session.user);
   if (!session) return renderLogin();
   await onSignedIn(session.user);
 }
 
-function renderLogin() {
-  root().innerHTML = `
-    <form class="admin-login" id="login-form">
-      <h1>Admin panel</h1>
-      <label>Email
-        <input type="email" id="login-email" autocomplete="username" required />
-      </label>
-      <label>Password
-        <input type="password" id="login-password" autocomplete="current-password" required />
-      </label>
-      <p class="admin-error" id="login-error" role="alert"></p>
-      <button type="submit" class="btn btn-primary">Sign in</button>
-    </form>`;
+/* ------------------------------------------------------------------
+ * The gate: every signed-out screen is one card on the pixel field.
+ * ------------------------------------------------------------------ */
 
-  root().querySelector("#login-form").addEventListener("submit", async (event) => {
+function gate(inner, { form = false } = {}) {
+  document.body.classList.add("is-gate");
+  const tag = form ? "form" : "div";
+  root().innerHTML = `
+    <section class="gate">
+      <${tag} class="gate-card" ${form ? 'id="gate-form" novalidate' : ""}>
+        <span class="gate-mark" aria-hidden="true"><img src="assets/favicon-192.png" alt="" width="56" height="56" /></span>
+        ${inner}
+      </${tag}>
+    </section>`;
+  return root().querySelector(".gate-card");
+}
+
+function gateField({ id, label, type, icon: iconName, autocomplete, reveal = false }) {
+  return `
+    <div class="gate-field">
+      <label for="${id}">${label}</label>
+      <span class="gate-input">
+        ${icon(iconName)}
+        <input id="${id}" type="${type}" autocomplete="${autocomplete}" required />
+        ${reveal ? `<button type="button" class="gate-reveal" data-reveal="${id}" aria-label="Show password" aria-pressed="false">${icon("eye", "icon-eye")}${icon("eye-off", "icon-eye-off")}</button>` : ""}
+      </span>
+    </div>`;
+}
+
+function bindReveal(card) {
+  card.querySelectorAll("[data-reveal]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const input = card.querySelector(`#${button.dataset.reveal}`);
+      const shown = input.type === "text";
+      input.type = shown ? "password" : "text";
+      button.setAttribute("aria-pressed", String(!shown));
+      button.setAttribute("aria-label", shown ? "Show password" : "Hide password");
+      input.focus();
+    });
+  });
+}
+
+/* Button text and a disabled state while a request is in flight. */
+async function busy(button, label, run) {
+  const text = button.querySelector("span:last-child");
+  const idle = text.textContent;
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  text.textContent = label;
+  try {
+    return await run();
+  } finally {
+    button.disabled = false;
+    button.removeAttribute("aria-busy");
+    text.textContent = idle;
+  }
+}
+
+function renderLogin(message) {
+  const card = gate(`
+    <h1>Sign in to the panel</h1>
+    <p class="gate-sub">For editors and admins of The Free Code Syndicate.</p>
+    ${gateField({ id: "login-email", label: "Email", type: "email", icon: "mail", autocomplete: "username" })}
+    ${gateField({ id: "login-password", label: "Password", type: "password", icon: "lock", autocomplete: "current-password", reveal: true })}
+    <p class="admin-error" id="login-error" role="alert">${message ? escapeHTML(message) : ""}</p>
+    <button type="submit" class="btn btn-primary gate-submit">${icon("login")}<span>Sign in</span></button>
+    <div class="gate-divider"><span>or</span></div>
+    <button type="button" class="btn gate-secondary" id="forgot">${icon("key")}<span>Email me a reset link</span></button>
+    <p class="gate-foot">Accounts are invite-only. Ask a club admin to add you, then sign in here.</p>`, { form: true });
+
+  bindReveal(card);
+  const email = card.querySelector("#login-email");
+  const errorEl = card.querySelector("#login-error");
+  email.focus();
+
+  card.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const errorEl = root().querySelector("#login-error");
     errorEl.textContent = "";
+    const password = card.querySelector("#login-password").value;
+    if (!email.value.trim() || !password) {
+      errorEl.textContent = "Enter your email and password.";
+      return;
+    }
     try {
-      const user = await signIn(
-        root().querySelector("#login-email").value.trim(),
-        root().querySelector("#login-password").value
+      const user = await busy(card.querySelector(".gate-submit"), "Signing in…", () =>
+        signIn(email.value.trim(), password)
       );
       await onSignedIn(user);
     } catch (err) {
       errorEl.textContent = err.message || "Sign in failed.";
     }
   });
+
+  card.querySelector("#forgot").addEventListener("click", async (event) => {
+    errorEl.textContent = "";
+    if (!email.value.trim()) {
+      errorEl.textContent = "Enter your email first, then ask for the link.";
+      email.focus();
+      return;
+    }
+    try {
+      await busy(event.currentTarget, "Sending…", () =>
+        requestPasswordReset(email.value.trim(), `${location.origin}${location.pathname}`)
+      );
+      toast(`Reset link sent to ${email.value.trim()}. Check your inbox.`, "info");
+    } catch (err) {
+      errorEl.textContent = err.message || "Could not send the reset link.";
+    }
+  });
+}
+
+function renderSetPassword(user) {
+  const card = gate(`
+    <h1>Choose a new password</h1>
+    <p class="gate-sub">For <strong>${escapeHTML(user.email)}</strong>. At least 8 characters.</p>
+    ${gateField({ id: "new-password", label: "New password", type: "password", icon: "lock", autocomplete: "new-password", reveal: true })}
+    <p class="admin-error" id="login-error" role="alert"></p>
+    <button type="submit" class="btn btn-primary gate-submit">${icon("check")}<span>Save password</span></button>`, { form: true });
+
+  bindReveal(card);
+  history.replaceState(null, "", location.pathname);
+  const input = card.querySelector("#new-password");
+  input.focus();
+  card.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const errorEl = card.querySelector("#login-error");
+    if (input.value.length < 8) {
+      errorEl.textContent = "Use at least 8 characters.";
+      return;
+    }
+    try {
+      const updated = await busy(card.querySelector(".gate-submit"), "Saving…", () => updatePassword(input.value));
+      toast("Password changed. You are signed in.", "success");
+      await onSignedIn(updated);
+    } catch (err) {
+      errorEl.textContent = err.message || "Could not change the password.";
+    }
+  });
 }
 
 function noAccess(title, body) {
-  root().innerHTML = `
-    <div class="admin-login">
-      <h1>${title}</h1>
-      ${body}
-      <button type="button" class="btn" id="back-to-login">Back to sign in</button>
-    </div>`;
-  root().querySelector("#back-to-login").addEventListener("click", renderLogin);
+  const card = gate(`
+    <h1>${title}</h1>
+    ${body}
+    <button type="button" class="btn gate-secondary" id="back-to-login">${icon("undo")}<span>Back to sign in</span></button>`);
+  card.querySelector("#back-to-login").addEventListener("click", () => renderLogin());
+}
+
+/* The twinkling pixel field behind the gate. A few cells change per
+ * frame at about 12 fps; still under reduced motion; stops for good once
+ * someone signs in. */
+function startPixelField() {
+  const canvas = document.getElementById("pixel-field");
+  if (!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext("2d");
+  const STEP = 16;
+  const SIZE = 3;
+  let cols = 0;
+  let rows = 0;
+  let cells = [];
+
+  const colors = () => {
+    const css = getComputedStyle(document.documentElement);
+    return { ink: css.getPropertyValue("--ink").trim(), accent: css.getPropertyValue("--accent").trim() };
+  };
+
+  const resize = () => {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = innerWidth * dpr;
+    canvas.height = innerHeight * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cols = Math.ceil(innerWidth / STEP);
+    rows = Math.ceil(innerHeight / STEP);
+    cells = Array.from({ length: cols * rows }, () => ({
+      a: Math.random() < 0.55 ? 0 : Math.random() * 0.35,
+      yellow: Math.random() < 0.05,
+    }));
+  };
+
+  const draw = () => {
+    const { ink, accent } = colors();
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    const cx = innerWidth / 2;
+    const cy = innerHeight / 2;
+    const reach = Math.hypot(cx, cy);
+    for (let i = 0; i < cells.length; i++) {
+      const cell = cells[i];
+      if (!cell.a) continue;
+      const x = (i % cols) * STEP + (STEP - SIZE) / 2;
+      const y = Math.floor(i / cols) * STEP + (STEP - SIZE) / 2;
+      // Quieter near the card, busier toward the edges.
+      const edge = Math.min(1, Math.hypot(x - cx, y - cy) / reach + 0.15);
+      ctx.globalAlpha = cell.a * edge * (cell.yellow ? 2.2 : 1);
+      ctx.fillStyle = cell.yellow ? accent : ink;
+      ctx.fillRect(x, y, SIZE, SIZE);
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  resize();
+  draw();
+  window.addEventListener("resize", () => {
+    resize();
+    draw();
+  });
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  let last = 0;
+  const tick = (t) => {
+    if (!document.body.classList.contains("is-gate")) return; // signed in: stop
+    if (t - last > 80 && !document.hidden) {
+      last = t;
+      for (let n = 0; n < Math.ceil(cells.length * 0.02); n++) {
+        const cell = cells[(Math.random() * cells.length) | 0];
+        cell.a = Math.random() < 0.5 ? 0 : Math.random() * 0.35;
+      }
+      draw();
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 async function onSignedIn(user) {
@@ -192,18 +437,19 @@ async function onSignedIn(user) {
     await signOut().catch(() => {});
     if (role === "pending") {
       noAccess("Waiting for approval", `
-        <p>Your account exists, but an admin has not approved it yet.</p>
-        <p>Ask an admin to open <strong>Team</strong> in this panel and approve
+        <p class="gate-sub">Your account exists, but an admin has not approved it yet.</p>
+        <p class="gate-foot">Ask an admin to open <strong>Team</strong> in this panel and approve
            <code>${escapeHTML(user.email)}</code>. You have been signed out.</p>`);
     } else {
       noAccess("No access", `
-        <p>Your account has no profile, so it has no role. You have been signed out.</p>`);
+        <p class="gate-sub">Your account has no profile, so it has no role. You have been signed out.</p>`);
     }
     return;
   }
 
   state.user = user;
   state.role = role;
+  document.body.classList.remove("is-gate");
   document.getElementById("admin-identity").textContent = `${user.email} · ${role}`;
   document.getElementById("admin-signout").hidden = false;
 
@@ -211,13 +457,12 @@ async function onSignedIn(user) {
   try {
     await loadAll();
   } catch (err) {
-    root().innerHTML = `
-      <div class="admin-login">
-        <h1>Could not load your content</h1>
-        <p>${escapeHTML(err.message || "Unknown error")}</p>
-        <button type="button" class="btn" id="retry">Retry</button>
-      </div>`;
-    root().querySelector("#retry").addEventListener("click", () => location.reload());
+    document.body.classList.add("is-gate");
+    const card = gate(`
+      <h1>Could not load your content</h1>
+      <p class="gate-sub">${escapeHTML(err.message || "Unknown error")}</p>
+      <button type="button" class="btn btn-primary gate-submit" id="retry">${icon("undo")}<span>Retry</span></button>`);
+    card.querySelector("#retry").addEventListener("click", () => location.reload());
     return;
   }
 
@@ -225,6 +470,7 @@ async function onSignedIn(user) {
   window.addEventListener("hashchange", onHashChange);
   bindShortcuts();
   go(routeFromHash());
+  toast(`Signed in as ${user.email}.`, "info");
 }
 
 const TABLES = [
@@ -414,7 +660,7 @@ const EDITORS = {
   core: {
     table: "core_members",
     noun: "member",
-    intro: "Leads show as full cards; everyone else in the roster. Only the links you fill in appear on the site.",
+    intro: "Leads show as full cards, mentors as ID badges. Only the links you fill in appear on the site.",
     title: (r) => r.name,
     subtitle: (r) => [r.title, r.group_name, r.github_username && `@${r.github_username}`].filter(Boolean).join(", "),
     thumb: (r) => portraitHTML(r, "portrait-sm"),
@@ -468,11 +714,16 @@ const EDITORS = {
       if (v.status === "alumni" && !v.ended_on) errors.ended_on = "Set when they left, so the alumni list shows their years.";
       return errors;
     },
-    preview: (v) => `<article class="core-card" data-person-card>${personFileHTML(v)}</article>`,
+    // Leads publish as a personnel card, mentors as an ID badge.
+    preview: (v) => (v.role === "lead"
+      ? `<article class="core-card" data-person-card>${personFileHTML(v)}</article>`
+      : `<div class="core-mentors">${mentorBadgeHTML(v)}</div>`),
     actions: (row) => row && [
       row.status === "alumni"
-        ? { label: "Restore to active", icon: "undo", patch: { status: "active", ended_on: null } }
-        : { label: "Move to alumni", icon: "archive", patch: { status: "alumni", ended_on: new Date().toISOString().slice(0, 10) } },
+        ? { label: "Restore to active", icon: "undo", patch: { status: "active", ended_on: null },
+            done: (r) => `Restored ${quoted(r.name)} to active.` }
+        : { label: "Move to alumni", icon: "archive", patch: { status: "alumni", ended_on: new Date().toISOString().slice(0, 10) },
+            done: (r) => `Moved ${quoted(r.name)} to alumni.`, tone: "info" },
     ],
     sortable: true,
     create: createCoreMember,
@@ -801,6 +1052,8 @@ function openDrawer(opts) {
   document.getElementById("drawer-backdrop").hidden = false;
   el.hidden = false;
   requestAnimationFrame(() => {
+    // The footer wraps to two rows on phones; toasts sit above whatever height it has.
+    document.body.style.setProperty("--drawer-footer", `${footer.offsetHeight}px`);
     el.classList.add("is-open");
     const first = form.querySelector("input:not([readonly]):not([type=checkbox]), select, textarea");
     if (first) first.focus();
@@ -999,7 +1252,7 @@ async function persistOrder(id, visibleKeysInNewOrder) {
 
   try {
     await Promise.all(changes.map(([row, i]) => editor.update(rowKey(editor, row), { sort_order: i })));
-    if (changes.length) toast("Order saved.");
+    if (changes.length) toast("Order saved.", "info");
   } catch (err) {
     state.data[table] = previous;
     renderPage();
@@ -1045,14 +1298,14 @@ function openEditor(id, row) {
         await editor.create(values);
       }
       await refresh();
-      toast(row ? "Saved." : `${editor.noun[0].toUpperCase()}${editor.noun.slice(1)} created.`);
+      toast(`${row ? "Saved" : "Created"} ${editor.noun} ${quoted(editor.title(values))}.`);
     },
     onDelete: row && (async () => {
       try {
         await editor.remove(key);
         closeDrawer(true);
         await refresh();
-        toast("Deleted.");
+        toast(`Deleted ${editor.noun} ${quoted(editor.title(row))}.`, "delete");
       } catch (err) {
         toast(err.message || "Could not delete. Only admins can delete.", "error");
       }
@@ -1064,7 +1317,7 @@ function openEditor(id, row) {
           await editor.update(key, action.patch);
           closeDrawer(true);
           await refresh();
-          toast(`${editor.title(row)}: ${action.label.toLowerCase()} done.`);
+          toast(action.done(row), action.tone || "success");
         } catch (err) {
           toast(err.message || "Could not update.", "error");
         }
@@ -1152,7 +1405,7 @@ async function onCardDropped(evt) {
     const moved = previous.find((e) => e.id === id);
     if (moved && moved.stage !== stage) await updateEvent(id, { stage });
     await Promise.all(ids.map((cardId, index) => updateEvent(cardId, { sort_order: index })));
-    toast(moved && moved.stage !== stage ? `Moved to ${stage}.` : "Order saved.");
+    toast(moved && moved.stage !== stage ? `Moved ${quoted(moved.title)} to ${stage}.` : "Order saved.", "info");
   } catch (err) {
     state.data.events = previous;
     renderBoard();
@@ -1185,14 +1438,14 @@ function openEventEditor(id) {
       if (event) await updateEvent(event.id, patch);
       else await createEvent(patch);
       await refresh();
-      toast(event ? "Event saved." : "Event created.");
+      toast(`${event ? "Saved" : "Created"} event ${quoted(values.title)}.`);
     },
     onDelete: event && (async () => {
       try {
         await deleteEvent(event.id);
         closeDrawer(true);
         await refresh();
-        toast("Event deleted.");
+        toast(`Deleted event ${quoted(event.title)}.`, "delete");
       } catch (err) {
         toast(err.message || "Could not delete. Only admins can delete.", "error");
       }
@@ -1248,11 +1501,15 @@ function renderTeamPage(page) {
     const id = li.dataset.id;
     const change = async (role) => {
       try {
+        const person = state.profiles.find((p) => p.id === id) || {};
         await setProfileRole(id, role);
         state.profiles = await listProfiles();
         renderSidebar();
         renderTeamPage(page);
-        toast("Role updated.");
+        const who = person.email || "the account";
+        if (role === "pending") toast(`Removed access for ${who}.`, "delete");
+        else if (person.role === "pending") toast(`Approved ${who} as ${role}.`);
+        else toast(`${who} is now ${ROLE_LABELS[role].toLowerCase()}.`);
       } catch (err) {
         toast(err.message || "Could not change the role.", "error");
         renderTeamPage(page);

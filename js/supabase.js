@@ -119,6 +119,21 @@ export async function signOut() {
   if (supabase) await supabase.auth.signOut();
 }
 
+/* Sends a password-reset email. The link returns to this page, where
+ * supabase-js reads the recovery token from the URL and signs the
+ * user in for the single purpose of choosing a new password. The page
+ * must be listed under Authentication > URL Configuration > Redirect URLs. */
+export async function requestPasswordReset(email, redirectTo) {
+  const { error } = await getClientOrThrow().auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+export async function updatePassword(password) {
+  const { data, error } = await getClientOrThrow().auth.updateUser({ password });
+  if (error) throw error;
+  return data.user;
+}
+
 /** @returns {Promise<"admin"|"editor"|null>} */
 export async function getRole(userId) {
   const supabase = getClient();
