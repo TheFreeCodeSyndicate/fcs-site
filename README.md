@@ -64,6 +64,9 @@ a past event shows FINISHED even if nobody moved its card.
 - **Remove** on the Team page deletes someone's login entirely, which ends
   their sessions; the content they edited stays. Admins only, and never
   yourself (`009_remove_member.sql`). Invite them again to bring them back.
+- Removing someone, or setting them to **No access**, signs them out at once
+  if they have the panel open (Realtime on `profiles`, `010_realtime_profiles.sql`),
+  and the sign-in screen tells them why.
 - To stop strangers creating accounts at all, turn off **Authentication →
   Sign In / Providers → Allow new users to sign up** in Supabase and invite
   people from **Authentication → Users** instead.

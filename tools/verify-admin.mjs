@@ -78,6 +78,7 @@ await page.route("**/storage/v1/object/**", (route) => {
 });
 await page.route("**/auth/v1/logout**", (route) => route.fulfill({ status: 204, body: "" }));
 const invites = [];
+let myRole = "admin"; // what profiles says about the signed-in user
 await page.route("**/functions/v1/invite-member", (route) => {
   invites.push(route.request().postData());
   return route.fulfill({ json: { ok: true } });
@@ -104,7 +105,7 @@ await page.route("**/rest/v1/**", (route) => {
   // getRole() selects only "role" for the signed-in user; the Team page
   // selects the full columns for everyone.
   if (table === "profiles" && url.searchParams.get("select") === "role") {
-    return route.fulfill({ json: [{ role: "admin" }] });
+    return route.fulfill({ json: myRole ? [{ role: myRole }] : [] });
   }
   return route.fulfill({ json: data[table] ?? [] });
 });
@@ -115,7 +116,7 @@ const config = await (await fetch(new URL("js/config.js", base))).text();
 const ref = /https:\/\/([a-z0-9]+)\.supabase\.co/.exec(config)?.[1];
 await page.addInitScript((r) => {
   if (location.protocol === "about:") return; // about:blank has no storage
-  if (sessionStorage.getItem("fcs-idle-signout") || sessionStorage.getItem("fcs-test-signed-out")) return;
+  if (sessionStorage.getItem("fcs-signout-reason") || sessionStorage.getItem("fcs-test-signed-out")) return;
   localStorage.setItem(`sb-${r}-auth-token`, JSON.stringify({
     access_token: "a.b.c", token_type: "bearer", expires_in: 3600, refresh_token: "r",
     expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -310,6 +311,14 @@ await page.click('.team-list [data-id="u2"] [data-remove]');
 await settle(500);
 check("the second Remove click deletes that login",
   writes.some((w) => w.table === "remove_member" && w.body.includes('"target":"u2"')), JSON.stringify(lastWrite()));
+
+// an admin removes you while your panel is open: signed out, and told why
+myRole = null;
+await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+await settle(1500);
+check("being removed by an admin signs you out and says why",
+  /removed your access/.test(await page.$eval(".gate-notice", (e) => e.textContent).catch(() => "")));
+myRole = "admin";
 
 // opening the invite link: set and confirm a password to accept
 await page.evaluate(() => sessionStorage.setItem("fcs-test-signed-out", "1"));

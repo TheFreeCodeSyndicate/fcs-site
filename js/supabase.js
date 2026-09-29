@@ -134,13 +134,34 @@ export async function updatePassword(password) {
   return data.user;
 }
 
-/** @returns {Promise<"admin"|"editor"|null>} */
-export async function getRole(userId) {
+/** strict: throw on a network or database error instead of answering
+ * null, so a hiccup is never mistaken for "this account was removed".
+ * @returns {Promise<"admin"|"editor"|"pending"|null>} null = no profile */
+export async function getRole(userId, { strict = false } = {}) {
   const supabase = getClient();
   if (!supabase || !userId) return null;
   const { data, error } = await supabase.from("profiles").select("role").eq("id", userId).maybeSingle();
-  if (error) return null;
+  if (error) {
+    if (strict) throw error;
+    return null;
+  }
   return (data && data.role) || null;
+}
+
+/* Calls onChange(role) the moment an admin changes this person's role,
+ * or onChange(null) when they remove them (migration 010 publishes
+ * profiles to Realtime). Deletes cannot be filtered server-side, so the
+ * id is compared here; under RLS a delete event carries only the id. */
+export function watchMyAccess(userId, onChange) {
+  return getClientOrThrow()
+    .channel(`access-${userId}`)
+    .on("postgres_changes", { event: "DELETE", schema: "public", table: "profiles" }, (change) => {
+      if (change.old && change.old.id === userId) onChange(null);
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${userId}` }, (change) =>
+      onChange(change.new.role)
+    )
+    .subscribe();
 }
 
 /* ---- admin writes --------------------------------------------------

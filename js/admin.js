@@ -25,7 +25,7 @@ import {
   createSocialLink, updateSocialLink, deleteSocialLink,
   createCoreMember, updateCoreMember, deleteCoreMember,
   saveRepoKind, deleteRepoKind,
-  listProfiles, setProfileRole, removeMember,
+  listProfiles, setProfileRole, removeMember, watchMyAccess,
   requestPasswordReset, updatePassword,
   listActivity, lastChange, restoreDeleted, inviteMember,
   uploadMemberPhoto, removeMemberPhotos,
@@ -194,6 +194,25 @@ document.addEventListener("DOMContentLoaded", boot);
 const RECOVERY = /type=(recovery|invite)/.test(location.hash);
 const INVITE = /type=invite/.test(location.hash);
 
+/* Why the last sign-out happened, carried across the reload so the
+ * sign-in screen can say so. */
+const SIGNOUT_REASON = "fcs-signout-reason";
+const SIGNOUT_NOTICES = {
+  idle: "You were signed out after 30 minutes without activity.",
+  removed: "An admin removed your access to this panel, so you were signed out. Ask an admin to invite you again if you need it back.",
+  paused: "An admin paused your access to this panel, so you were signed out. Ask an admin to restore it.",
+};
+
+async function signOutBecause(reason) {
+  try {
+    sessionStorage.setItem(SIGNOUT_REASON, reason);
+  } catch {
+    /* the sign-in screen just will not say why */
+  }
+  await signOut().catch(() => {});
+  location.reload();
+}
+
 async function boot() {
   // Clickjacking guard: never run the admin inside another site's frame.
   // (GitHub Pages cannot send a frame-ancestors header.)
@@ -229,14 +248,14 @@ async function boot() {
 
   if (session && RECOVERY) return renderSetPassword(session.user);
   if (!session) {
-    let idleOut = false;
+    let reason = null;
     try {
-      idleOut = sessionStorage.getItem("fcs-idle-signout") === "1";
-      sessionStorage.removeItem("fcs-idle-signout");
+      reason = sessionStorage.getItem(SIGNOUT_REASON);
+      sessionStorage.removeItem(SIGNOUT_REASON);
     } catch {
       /* storage unavailable */
     }
-    return renderLogin(idleOut ? "You were signed out after 30 minutes without activity." : undefined);
+    return renderLogin(SIGNOUT_NOTICES[reason]);
   }
   await onSignedIn(session.user);
 }
@@ -339,7 +358,9 @@ function renderLogin(notice, { email: prefillEmail = "" } = {}) {
       );
       await onSignedIn(user);
     } catch (err) {
-      errorEl.textContent = err.message || "Sign in failed.";
+      errorEl.textContent = /invalid login credentials/i.test(err.message || "")
+        ? "Wrong email or password. If an admin removed your access, ask them to invite you again."
+        : err.message || "Sign in failed.";
     }
   });
 
@@ -508,13 +529,14 @@ async function onSignedIn(user) {
   if (!role || role === "pending") {
     await signOut().catch(() => {});
     if (role === "pending") {
-      noAccess("Waiting for approval", `
-        <p class="gate-sub">Your account exists, but an admin has not approved it yet.</p>
+      noAccess("No access yet", `
+        <p class="gate-sub">Your account exists, but it has no access: an admin has not approved it yet, or has paused it.</p>
         <p class="gate-foot">Ask an admin to open <strong>Team</strong> in this panel and approve
            <code>${escapeHTML(user.email)}</code>. You have been signed out.</p>`);
     } else {
-      noAccess("No access", `
-        <p class="gate-sub">Your account has no profile, so it has no role. You have been signed out.</p>`);
+      noAccess("Access removed", `
+        <p class="gate-sub">An admin removed your access to this panel. You have been signed out.</p>
+        <p class="gate-foot">Ask an admin to invite you again if you need it back.</p>`);
     }
     return;
   }
@@ -542,6 +564,7 @@ async function onSignedIn(user) {
   window.addEventListener("hashchange", onHashChange);
   bindShortcuts();
   startIdleWatch();
+  startAccessWatch(user.id);
   go(routeFromHash());
   toast(`Signed in as ${user.email}.`, "info");
 }
@@ -1932,6 +1955,34 @@ const IDLE_MS = 30 * 60 * 1000;
 const IDLE_WARN_MS = 2 * 60 * 1000;
 const ACTIVE_KEY = "fcs-admin-last-active";
 
+/* An admin removing or pausing someone signs them out at once: live
+ * through Realtime, and again whenever the tab comes back into view (in
+ * case the connection dropped while the laptop slept). */
+function startAccessWatch(userId) {
+  const changed = async (role) => {
+    if (role === state.role) return;
+    if (!role) return signOutBecause("removed");
+    if (role === "pending") return signOutBecause("paused");
+    state.role = role;
+    document.getElementById("admin-identity").textContent = `${state.user.email} · ${role}`;
+    toast(`An admin made you ${ROLE_LABELS[role].toLowerCase()}.`, "info", {
+      sticky: true,
+      action: { label: "Reload", run: () => location.reload() },
+    });
+  };
+  try {
+    watchMyAccess(userId, changed);
+  } catch {
+    /* no Realtime: the visibility check below still catches it */
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") return;
+    getRole(userId, { strict: true }).then(changed, () => {
+      /* offline for a moment; check again next time */
+    });
+  });
+}
+
 function startIdleWatch() {
   let lastWrite = 0;
   let warning = null;
@@ -1961,13 +2012,7 @@ function startIdleWatch() {
     const idle = Date.now() - last;
 
     if (idle >= IDLE_MS) {
-      try {
-        sessionStorage.setItem("fcs-idle-signout", "1");
-      } catch {
-        /* the login screen just will not say why */
-      }
-      await signOut().catch(() => {});
-      location.reload();
+      await signOutBecause("idle");
     } else if (idle >= IDLE_MS - IDLE_WARN_MS && !warning) {
       warning = toast("No activity for 28 minutes. You will be signed out in 2 minutes.", "info", {
         sticky: true,
