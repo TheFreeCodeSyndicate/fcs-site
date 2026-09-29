@@ -260,6 +260,29 @@ export const setProfileRole = (id, role) =>
   write((s) => s.from("profiles").update({ role }).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Changing the role"));
 
+/* ---- invites (Edge Function supabase/functions/invite-member) -------
+ *
+ * The function checks the caller is an admin, sends Supabase's invite
+ * email and sets the new account's role. The service-role key it uses
+ * never leaves Supabase. */
+export async function inviteMember(email, role, redirectTo) {
+  const { data, error } = await getClientOrThrow().functions.invoke("invite-member", {
+    body: { email, role, redirectTo },
+  });
+  if (error) {
+    // The function answers errors as JSON { error }; surface that text.
+    let message = error.message;
+    try {
+      const body = await error.context.json();
+      if (body && body.error) message = body.error;
+    } catch {
+      /* not JSON: keep the generic message */
+    }
+    throw new Error(message);
+  }
+  return data;
+}
+
 /* ---- activity log, undo and trash ----------------------------------
  *
  * The log is written by database triggers (migration 006); the panel

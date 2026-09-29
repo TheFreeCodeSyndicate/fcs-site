@@ -91,6 +91,34 @@ not in code.
    Users**, then approve it on the admin panel's Team page. New accounts have
    no access until approved.
 
+### Email: password resets and invites
+
+Both the **Email me a reset link** button and **Send invite** on the Team
+page send email through Supabase Auth. Supabase's built-in email service
+only delivers to members of your Supabase organisation's team, a few an
+hour, and is not meant for production. To email anyone else, give Supabase
+an SMTP server. Free, with no domain needed, using the club Gmail:
+
+1. On the Google account (`thefreecodesyndicate@gmail.com`) turn on
+   **2-Step Verification**, then create an **App password**
+   (Google Account → Security → App passwords).
+2. Supabase → **Authentication → Emails → SMTP Settings** → enable custom SMTP:
+   - Host `smtp.gmail.com`, port `465`
+   - Username: the full Gmail address; password: the app password
+   - Sender email: the same Gmail address; sender name: `The Free Code Syndicate`
+3. Optional: edit the **Invite user** and **Reset password** templates on
+   the same page.
+
+Gmail allows about 500 emails a day, far more than a club needs. The invite
+and reset links return to `/admin.html`, which must be listed under
+**Authentication → URL Configuration → Redirect URLs** (it is, for both
+localhost and the Pages URL).
+
+Invites go through the `invite-member` Edge Function
+(`supabase/functions/invite-member/`): it checks the caller is an admin,
+sends the invite and sets the chosen role. The service-role key it uses
+stays inside Supabase. Deploy changes with the Supabase CLI or MCP.
+
 ### Security model
 
 - The anon key in `js/config.js` is public by design. Everything it can do

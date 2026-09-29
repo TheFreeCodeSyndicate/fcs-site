@@ -27,7 +27,7 @@ import {
   saveRepoKind, deleteRepoKind,
   listProfiles, setProfileRole,
   requestPasswordReset, updatePassword,
-  listActivity, lastChange, restoreDeleted,
+  listActivity, lastChange, restoreDeleted, inviteMember,
   uploadMemberPhoto, removeMemberPhotos,
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
@@ -190,7 +190,8 @@ document.addEventListener("DOMContentLoaded", boot);
  * hash. supabase-js reads it and signs the user in; we show the
  * choose-a-new-password card instead of the panel. Read the flag before
  * anything touches the hash. */
-const RECOVERY = /type=recovery/.test(location.hash);
+const RECOVERY = /type=(recovery|invite)/.test(location.hash);
+const INVITE = /type=invite/.test(location.hash);
 
 async function boot() {
   // Clickjacking guard: never run the admin inside another site's frame.
@@ -350,17 +351,28 @@ function renderLogin(message) {
   });
 }
 
-function renderSetPassword(user) {
+async function renderSetPassword(user) {
+  const role = INVITE ? await getRole(user.id).catch(() => null) : null;
+  const roleName = { admin: "Admin", editor: "Editor" }[role];
+  const heading = INVITE ? "Accept your invite" : "Choose a new password";
+  const sub = INVITE
+    ? `You have been invited to The Free Code Syndicate's panel${roleName ? ` as <strong>${roleName}</strong>` : ""}.
+       Choose a password for <strong>${escapeHTML(user.email)}</strong> to accept.`
+    : `For <strong>${escapeHTML(user.email)}</strong>. At least 8 characters.`;
+
   const card = gate(`
-    <h1>Choose a new password</h1>
-    <p class="gate-sub">For <strong>${escapeHTML(user.email)}</strong>. At least 8 characters.</p>
-    ${gateField({ id: "new-password", label: "New password", type: "password", icon: "lock", autocomplete: "new-password", reveal: true })}
+    <h1>${heading}</h1>
+    <p class="gate-sub">${sub}</p>
+    ${gateField({ id: "new-password", label: "Password", type: "password", icon: "lock", autocomplete: "new-password", reveal: true })}
+    ${gateField({ id: "confirm-password", label: "Confirm password", type: "password", icon: "lock", autocomplete: "new-password" })}
     <p class="admin-error" id="login-error" role="alert"></p>
-    <button type="submit" class="btn btn-primary gate-submit">${icon("check")}<span>Save password</span></button>`, { form: true });
+    <button type="submit" class="btn btn-primary gate-submit">${icon("check")}<span>${INVITE ? "Accept and set password" : "Save password"}</span></button>
+    ${INVITE ? '<p class="gate-foot">At least 8 characters. You can change it later with a reset link.</p>' : ""}`, { form: true });
 
   bindReveal(card);
   history.replaceState(null, "", location.pathname);
   const input = card.querySelector("#new-password");
+  const confirm = card.querySelector("#confirm-password");
   input.focus();
   card.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -369,12 +381,17 @@ function renderSetPassword(user) {
       errorEl.textContent = "Use at least 8 characters.";
       return;
     }
+    if (input.value !== confirm.value) {
+      errorEl.textContent = "The two passwords do not match.";
+      confirm.focus();
+      return;
+    }
     try {
       const updated = await busy(card.querySelector(".gate-submit"), "Saving…", () => updatePassword(input.value));
-      toast("Password changed. You are signed in.", "success");
+      toast(INVITE ? `Welcome${roleName ? `, ${roleName.toLowerCase()}` : ""}. Your password is set.` : "Password changed. You are signed in.", "success");
       await onSignedIn(updated);
     } catch (err) {
-      errorEl.textContent = err.message || "Could not change the password.";
+      errorEl.textContent = err.message || "Could not set the password.";
     }
   });
 }
@@ -1532,6 +1549,19 @@ function renderTeamPage(page) {
       an admin approves them. Editors add and edit content; admins can also
       delete and manage this list. There is always at least one admin.
     </p>
+    <form class="invite-form" id="invite-form" novalidate>
+      <div class="field">
+        <label for="invite-email">Invite by email</label>
+        <input id="invite-email" type="email" autocomplete="off" placeholder="friend@example.com" required />
+      </div>
+      <div class="field">
+        <label for="invite-role">As</label>
+        <select id="invite-role"><option value="editor">Editor</option><option value="admin">Admin</option></select>
+      </div>
+      <button type="submit" class="btn btn-primary">${icon("send")}<span>Send invite</span></button>
+      <p class="field-help invite-help">They get an email with a link to choose a password; their role is already set.
+        Emails to addresses outside your Supabase team need custom SMTP (see the README).</p>
+    </form>
     ${pending ? `<p class="page-alert">${icon("user")} ${pending} ${pending === 1 ? "account is" : "accounts are"} waiting for approval.</p>` : ""}
     <ol class="list team-list">
       ${people.map((p) => {
@@ -1556,6 +1586,29 @@ function renderTeamPage(page) {
           </li>`;
       }).join("")}
     </ol>`;
+
+  const inviteForm = root().querySelector("#invite-form");
+  inviteForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = inviteForm.querySelector("#invite-email").value.trim();
+    const role = inviteForm.querySelector("#invite-role").value;
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      toast("Enter the email address to invite.", "error");
+      inviteForm.querySelector("#invite-email").focus();
+      return;
+    }
+    try {
+      await busy(inviteForm.querySelector("[type=submit]"), "Sending…", () =>
+        inviteMember(email, role, `${location.origin}${location.pathname}`)
+      );
+      state.profiles = await listProfiles();
+      renderSidebar();
+      renderTeamPage(page);
+      toast(`Invited ${email} as ${role}. They will get an email with a link.`, "success");
+    } catch (err) {
+      toast(err.message || "Could not send the invite.", "error");
+    }
+  });
 
   root().querySelectorAll(".team-list .list-row").forEach((li) => {
     const id = li.dataset.id;

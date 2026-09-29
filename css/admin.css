@@ -961,3 +961,22 @@ body:has(.drawer.is-open) .toasts {
 .photo-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .photo-pick { cursor: pointer; }
 .photo-pick:focus-within { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+/* Team page: invite form */
+.invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: 12px 16px;
+  align-items: end;
+  margin-bottom: 20px;
+  padding: 16px;
+  border: var(--border-w) solid var(--rule-strong);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
+}
+
+.invite-form .invite-help { grid-column: 1 / -1; margin: 0; }
+
+@media (max-width: 620px) {
+  .invite-form { grid-template-columns: minmax(0, 1fr); }
+}

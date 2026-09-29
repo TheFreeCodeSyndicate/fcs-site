@@ -77,6 +77,15 @@ await page.route("**/storage/v1/object/**", (route) => {
   return route.fulfill({ json: { Key: "member-photos/x" } });
 });
 await page.route("**/auth/v1/logout**", (route) => route.fulfill({ status: 204, body: "" }));
+const invites = [];
+await page.route("**/functions/v1/invite-member", (route) => {
+  invites.push(route.request().postData());
+  return route.fulfill({ json: { ok: true } });
+});
+// An invite link: supabase-js reads the token from the URL and asks
+// /auth/v1/user who it belongs to; setting the password is a PUT there.
+const invitee = { id: "u9", email: "friend@fcs.test", aud: "authenticated", role: "authenticated" };
+await page.route("**/auth/v1/user**", (route) => route.fulfill({ json: invitee }));
 
 await page.route("**/rest/v1/**", (route) => {
   const req = route.request();
@@ -100,6 +109,7 @@ await page.route("**/rest/v1/**", (route) => {
 const config = await (await fetch(new URL("js/config.js", base))).text();
 const ref = /https:\/\/([a-z0-9]+)\.supabase\.co/.exec(config)?.[1];
 await page.addInitScript((r) => {
+  if (location.protocol === "about:") return; // about:blank has no storage
   if (sessionStorage.getItem("fcs-idle-signout") || sessionStorage.getItem("fcs-test-signed-out")) return;
   localStorage.setItem(`sb-${r}-auth-token`, JSON.stringify({
     access_token: "a.b.c", token_type: "bearer", expires_in: 3600, refresh_token: "r",
@@ -274,6 +284,36 @@ await page.waitForTimeout(17000);
 await settle(800);
 check("30 minutes idle signs out and says why",
   (await page.$eval("#admin-root", (r) => r.textContent)).includes("30 minutes without activity"));
+
+// --- invites ----------------------------------------------------------
+// Changing only the #hash does not reload the page; start from blank.
+await page.goto("about:blank");
+await page.goto(new URL("admin.html#/team", base).href);
+await settle(900);
+await page.fill("#invite-email", "friend@fcs.test");
+await page.selectOption("#invite-role", "admin");
+await page.click('#invite-form [type=submit]');
+await settle(900);
+check("the Team page sends an invite with the chosen role",
+  invites.length === 1 && invites[0].includes('"email":"friend@fcs.test"') && invites[0].includes('"role":"admin"'), invites.join(" | "));
+
+// opening the invite link: set and confirm a password to accept
+await page.evaluate(() => sessionStorage.setItem("fcs-test-signed-out", "1"));
+await page.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("sb-")) localStorage.removeItem(k); });
+await page.goto("about:blank");
+await page.goto(new URL("admin.html#access_token=a.b.c&expires_in=3600&refresh_token=r&token_type=bearer&type=invite", base).href);
+await settle(1500);
+const inviteText = await page.$eval("#admin-root", (r) => r.textContent);
+check("an invite link opens the accept page with the role", /Accept your invite/.test(inviteText) && /as Admin/.test(inviteText), inviteText.replace(/\s+/g, " ").slice(0, 120));
+await page.fill("#new-password", "correct horse");
+await page.fill("#confirm-password", "correct hose");
+await page.click(".gate-submit");
+await settle(300);
+check("mismatched passwords are refused", (await page.$eval("#login-error", (e) => e.textContent)).includes("do not match"));
+await page.fill("#confirm-password", "correct horse");
+await page.click(".gate-submit");
+await settle(1500);
+check("accepting signs the invitee in", Boolean(await page.$(".sidebar-link")));
 
 check("no console or page errors", errors.length === 0, errors.join(" | "));
 
