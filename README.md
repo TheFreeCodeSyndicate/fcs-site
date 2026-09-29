@@ -1,73 +1,178 @@
 # The Free Code Syndicate — website
 
-A static, frontend-only site for The Free Code Syndicate. No build step,
-no framework, no backend — it's plain HTML/CSS/JS, deployable straight to
-GitHub Pages.
+A static, frontend-only site for The Free Code Syndicate, with a
+Supabase-backed admin panel so a maintainer can update content without
+touching code. No build step, no framework, no bundler.
 
-## File structure
-
-```
-fcs-site/
-├── index.html          Page structure and copy (Abstract, How to Join, References)
-├── css/
-│   └── style.css       All styling
-├── js/
-│   ├── data.js         ← EDIT THIS to update content
-│   └── main.js         Rendering logic and nav behaviour (rarely needs editing)
-└── assets/
-    ├── fcs-mark.png            full-resolution logo mark
-    ├── fcs-mark-header.png     smaller logo used in the hero
-    └── favicon-*.png           favicon / touch-icon sizes
-```
-
-## Updating content
-
-Almost everything you'll want to change on a regular basis lives in
-**`js/data.js`**:
-
-- **Study groups** (Section 3) — add, remove, or edit entries in the
-  `STUDY_GROUPS` array. Each one needs a `name`, `topic`, `status`
-  (`"Active"`, `"Forming"`, or `"Paused"`), a `link`, and a `linkText`.
-- **Join links** (Section 4) — edit the `JOIN_LINKS` array.
-- **GitHub org** (Section 2) — change the `GITHUB_ORG` constant if the
-  organization is ever renamed. Repositories are pulled live from the
-  public GitHub API at page-load, so **you never need to hand-edit a
-  repo list** — push a new repo to the org and it shows up here on its
-  own.
-
-You should not need to touch `index.html`, `css/style.css`, or
-`js/main.js` for routine content updates. Those only change if you're
-adding a new *section* or *feature* to the page.
-
-## Running it locally
-
-No build step is required. From this folder, run any static file
-server, for example:
+## Run it locally
 
 ```bash
-python3 -m http.server 8000
+python -m http.server 8000    # Windows: `python`, not `python3`
 ```
 
-Then open `http://localhost:8000`. (Opening `index.html` directly via
-`file://` also mostly works, but some browsers block the GitHub API
-fetch under `file://` — a local server avoids that.)
+Then open <http://localhost:8000>. The site runs entirely from the seed
+data in `js/data.js` when no database is configured, so you can develop
+the front end before Supabase exists.
+
+Run the tests with:
+
+```bash
+npm test
+```
+
+Two headless browser checks live in `tools/`. They need Playwright, which is
+deliberately not a project dependency:
+
+```bash
+npm install --no-save --no-package-lock playwright
+node tools/verify-page.mjs      http://localhost:8000/
+node tools/verify-admin.mjs     http://localhost:8000/
+node tools/verify-deeplinks.mjs http://localhost:8000/
+```
+
+## The admin panel
+
+<http://localhost:8000/admin.html> locally, `/admin` once deployed. Sign in
+with a Supabase account.
+
+A sidebar lists one page per kind of content, each at its own address
+(`admin.html#/core`, `#/events`, ...):
+
+| Page | What it edits |
+|------|---------------|
+| Events | The Kanban board: Draft, Scheduled, Live, Done |
+| Class schedule | Weekly recurring sessions (the countdown and week strip) |
+| Core members | Leads and mentors, including Move to alumni |
+| Study groups, Resources, Social links | The matching public sections |
+| Repo curation | Which GitHub repos show under Resources instead of Projects |
+| Team (admins only) | Who has access, and approving new accounts |
+
+Clicking a row opens an editing drawer with a **live preview** of the card,
+drawn by the same code as the public page (`js/render.js`). Lists reorder
+by dragging the handle or with the arrow buttons. Delete asks for a second
+click. `/` focuses search and `n` starts a new item.
+
+**The public page derives each event's status from its own timestamp**, so
+a past event shows FINISHED even if nobody moved its card.
+
+### Access
+
+- New accounts start with **no access** until an admin approves them on the
+  Team page. Editors add and edit; admins can also delete and manage the team.
+- The database refuses role changes by anyone but an admin, and never lets
+  the last admin be removed (`supabase/migrations/003_team_roles.sql`).
+- To stop strangers creating accounts at all, turn off **Authentication →
+  Sign In / Providers → Allow new users to sign up** in Supabase and invite
+  people from **Authentication → Users** instead.
+
+## Where content lives
+
+| Content | Source |
+|---------|--------|
+| Principles, contribution lanes | `js/data.js`, fixed page copy |
+| Events, class schedule, resources, study groups, social links, core members | Supabase, editable at `/admin` |
+| Projects | GitHub API, live at page load |
+| Fallback for all database content | the `SEED_*` arrays in `js/data.js` |
+
+The `SEED_*` arrays are a **fallback only**. Edit content in the admin panel,
+not in code.
+
+## Setting up Supabase
+
+1. Create a free project at <https://supabase.com>.
+2. Run `supabase/schema.sql` in the SQL editor, then each file in
+   `supabase/migrations/` in number order.
+3. Paste the project URL and anon key into `js/config.js`.
+4. Sign up, then promote yourself to admin:
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.com';
+   ```
+5. For each other maintainer, create an account under **Authentication →
+   Users**, then approve it on the admin panel's Team page. New accounts have
+   no access until approved.
+
+### Email: password resets and invites
+
+Both the **Email me a reset link** button and **Send invite** on the Team
+page send email through Supabase Auth. Supabase's built-in email service
+only delivers to members of your Supabase organisation's team, a few an
+hour, and is not meant for production. To email anyone else, give Supabase
+an SMTP server. Free, with no domain needed, using the club Gmail:
+
+1. On the Google account (`thefreecodesyndicate@gmail.com`) turn on
+   **2-Step Verification**, then create an **App password**
+   (Google Account → Security → App passwords).
+2. Supabase → **Authentication → Emails → SMTP Settings** → enable custom SMTP:
+   - Host `smtp.gmail.com`, port `465`
+   - Username: the full Gmail address; password: the app password
+   - Sender email: the same Gmail address; sender name: `The Free Code Syndicate`
+3. Optional: edit the **Invite user** and **Reset password** templates on
+   the same page.
+
+Gmail allows about 500 emails a day, far more than a club needs. The invite
+and reset links return to `/admin.html`, which must be listed under
+**Authentication → URL Configuration → Redirect URLs** (it is, for both
+localhost and the Pages URL).
+
+Invites go through the `invite-member` Edge Function
+(`supabase/functions/invite-member/`): it checks the caller is an admin,
+sends the invite and sets the chosen role. The service-role key it uses
+stays inside Supabase. Deploy changes with the Supabase CLI or MCP.
+
+### Security model
+
+- The anon key in `js/config.js` is public by design. Everything it can do
+  is decided by Row Level Security in Postgres:
+  - visitors read only published rows (no drafts, hidden members or
+    inactive sessions; `004_hide_unpublished.sql`);
+  - editors add and edit, admins also delete, and new accounts have no
+    access until approved (`003_team_roles.sql`);
+  - the anon role has no write grants at all;
+  - the role helper lives in a `private` schema the API does not expose,
+    and trigger functions cannot be called over RPC (`005_advisor_fixes.sql`).
+- Supabase's security and performance advisors report nothing to fix
+  except leaked-password protection, which is a password-policy choice.
+- Both pages carry a Content-Security-Policy `<meta>`: scripts from this
+  site only, network calls only to Supabase, GitHub and Discord. If you add
+  another service, add its origin to `connect-src` in both `index.html`
+  and `admin.html`.
+- The admin panel refuses to run inside another site's frame.
+
+The anon key is designed to be public and is safe to commit. All authorisation
+is enforced by Row Level Security in Postgres. **Never put the service-role key
+in `js/config.js`** — it would be readable by anyone who visits the site.
 
 ## Deploying to GitHub Pages
 
-1. Push this folder to the root of a repository (or to a `/docs`
-   folder, or a dedicated branch — whatever your Pages settings use).
-2. In the repository's **Settings → Pages**, set the source to that
-   location.
-3. GitHub will publish it at `https://<org-or-user>.github.io/<repo>/`.
+The site deploys with GitHub Actions (`.github/workflows/pages.yml`), on
+every push to `master`, every 30 minutes, and on demand from the Actions
+tab.
 
-A `.nojekyll` file is included so GitHub Pages serves the files as-is,
-without running them through Jekyll first.
+One-time setup: **Settings → Pages → Build and deployment → Source:
+GitHub Actions**.
 
-## Notes on the GitHub API call
+Each run runs the unit tests, then writes `data/github.json` (the
+organisation's repositories and the latest commit) with the workflow's own
+token, and publishes it with the site. Visitors read that file instead of
+calling GitHub's API, so the 60-requests-an-hour limit per visitor no
+longer applies. The committed `data/github.json` is a placeholder: locally,
+or if the workflow ever stalls for more than three hours, the page falls
+back to the live API.
 
-Section 2 calls the public, unauthenticated GitHub REST API
-(`api.github.com/orgs/<org>/repos`). That's rate-limited to 60
-requests per hour *per visitor's IP* — fine for a community site like
-this, since each visitor's browser only makes one request. If the
-limit is ever hit, the section fails gracefully and links out to the
-GitHub org page instead of showing an error.
+GitHub pauses scheduled workflows in repositories with no activity for 60
+days; any push re-enables them, and the page falls back to the live API in
+the meantime.
+
+`.nojekyll` makes Pages serve the files as-is.
+
+## Notes and limits
+
+- Visitors read GitHub data from `data/github.json`, refreshed by the deploy
+  workflow every 30 minutes. Only if that file is missing or stale does the
+  browser call GitHub's API directly (60 requests an hour per visitor IP);
+  those answers are cached for ten minutes, and if the limit is hit the
+  Projects section degrades to a link to the organisation page.
+- The Supabase free project pauses after a period of inactivity. Because every
+  read falls back to seed data, that degrades to a stale-but-working page rather
+  than a broken one. Reactivate it from the Supabase dashboard.
+- Schedule edits appear on the next visitor reload. There is no live push.

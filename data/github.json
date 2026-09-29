@@ -1,0 +1,4 @@
+{
+  "fetched_at": null,
+  "note": "Placeholder. .github/workflows/pages.yml regenerates this file at every deploy with tools/github-snapshot.mjs. With no fetched_at the page treats it as stale and uses the live GitHub API instead."
+}

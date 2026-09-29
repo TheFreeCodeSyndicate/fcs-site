@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <!-- Scripts only from this site; network calls only to Supabase,
+       GitHub and Discord. Limits what an injected script could do. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.github.com https://discord.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <script src="js/theme-init.js"></script>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Admin | The Free Code Syndicate</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,700..800&family=Fira+Code:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/admin.css" />
+</head>
+<body class="admin-body is-gate">
+  <canvas id="pixel-field" class="pixel-field" aria-hidden="true"></canvas>
+  <header class="doc-nav admin-header">
+    <a class="nav-brand" href="./">TFCS<span class="nav-brand-sub">/admin</span></a>
+    <div class="admin-header-right">
+      <span id="admin-identity" class="admin-identity"></span>
+      <button type="button" id="admin-signout" class="admin-signout" hidden>Sign out</button>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false" aria-label="Switch theme">
+        <span class="theme-toggle-icons" aria-hidden="true"><svg class="icon icon-moon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-moon"></use></svg><svg class="icon icon-sun" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-sun"></use></svg></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="admin-shell">
+    <nav class="admin-sidebar" id="admin-sidebar" aria-label="Content sections" hidden></nav>
+    <main id="admin-root" class="admin-root">
+      <p class="empty-note">Checking your access&hellip;</p>
+    </main>
+  </div>
+
+  <!-- The edit drawer. One instance, filled per row by js/admin.js. -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+    <header class="drawer-head">
+      <div class="drawer-titles">
+        <h2 id="drawer-title"></h2>
+        <p class="drawer-meta" id="drawer-meta"></p>
+      </div>
+      <button type="button" class="icon-btn" data-drawer-close aria-label="Close">
+        <svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-close"></use></svg>
+      </button>
+    </header>
+    <div class="drawer-body">
+      <form id="drawer-form" novalidate></form>
+      <section class="drawer-preview" aria-label="Preview">
+        <p class="drawer-preview-label">Preview, as it appears on the site</p>
+        <div id="drawer-preview-slot"></div>
+      </section>
+    </div>
+    <div class="drawer-confirm" id="drawer-confirm" role="alertdialog" aria-label="Unsaved changes" hidden>
+      <span>You have unsaved changes.</span>
+      <button type="button" class="btn btn-danger" data-discard><span>Discard</span></button>
+      <button type="button" class="btn" data-keep><span>Keep editing</span></button>
+    </div>
+    <footer class="drawer-actions" id="drawer-actions"></footer>
+  </aside>
+
+  <!-- Toast stack; each toast carries its own role (status or alert). -->
+  <div class="toasts" id="toasts" aria-label="Notifications"></div>
+
+  <script src="js/theme.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.min.js"></script>
+  <script src="js/vendor/sortable.min.js"></script>
+  <script type="module" src="js/admin.js"></script>
+</body>
+</html>

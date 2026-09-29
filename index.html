@@ -2,8 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <!-- Scripts only from this site; network calls only to Supabase,
+       GitHub and Discord. Limits what an injected script could do. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.github.com https://discord.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <script src="js/theme-init.js"></script>
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Free Code Syndicate — RFC 0001</title>
+  <title>The Free Code Syndicate | RFC 0001</title>
   <meta name="description" content="The Free Code Syndicate is a public group for free code, study, and careful work." />
 
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
@@ -13,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link
-    href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,700..800&family=Fira+Code:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   />
 
@@ -30,16 +35,22 @@
         <span class="doc-meta-value">The Free Code Syndicate</span>
       </div>
       <div class="doc-meta-col">
-        <span class="doc-meta-label">Request for Comments</span>
-        <span class="doc-meta-value">0001</span>
+        <span class="doc-meta-label">Last commit</span>
+        <span class="doc-meta-value" data-meta="commit">
+          <a href="https://github.com/TheFreeCodeSyndicate" target="_blank" rel="noopener">On GitHub</a>
+        </span>
       </div>
       <div class="doc-meta-col">
-        <span class="doc-meta-label">Category</span>
-        <span class="doc-meta-value">Public Standard</span>
+        <span class="doc-meta-label">Study groups</span>
+        <span class="doc-meta-value" data-meta="groups">Listed below</span>
+      </div>
+      <div class="doc-meta-col">
+        <span class="doc-meta-label">Discord</span>
+        <span class="doc-meta-value" data-meta="discord">Listed below</span>
       </div>
       <div class="doc-meta-col doc-meta-col--status">
         <span class="doc-meta-label">Status</span>
-        <span class="doc-meta-value status-active">Active</span>
+        <a class="doc-meta-value status-active" data-meta="status" href="#events">Active</a>
       </div>
     </div>
   </header>
@@ -57,21 +68,27 @@
       aria-controls="nav-links"
       aria-label="Toggle navigation"
     >
-      <span></span><span></span><span></span>
+      <svg class="icon icon-menu" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-menu"></use></svg><svg class="icon icon-close" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-close"></use></svg>
     </button>
 
     <ul class="nav-links" id="nav-links">
-      <li><a href="#abstract" data-section="abstract">&sect;1 Abstract</a></li>
-      <li><a href="#icarus" data-section="icarus">&sect;2 Icarus</a></li>
-      <li><a href="#protocol" data-section="protocol">&sect;3 Protocol</a></li>
-      <li><a href="#repositories" data-section="repositories">&sect;4 Code</a></li>
-      <li><a href="#study-groups" data-section="study-groups">&sect;5 Groups</a></li>
-      <li><a href="#events" data-section="events">&sect;6 Events</a></li>
-      <li><a href="#contribute" data-section="contribute">&sect;7 Work</a></li>
-      <li><a href="#maintainers" data-section="maintainers">&sect;8 Maintainers</a></li>
-      <li><a href="#join" data-section="join">&sect;9 Entry</a></li>
-      <li><a href="#references" data-section="references">&sect;10 Refs</a></li>
+      <li><a href="#abstract" data-section="abstract">About</a></li>
+      <li><a href="#projects" data-section="projects">Projects</a></li>
+      <li><a href="#resources" data-section="resources">Resources</a></li>
+      <li><a href="#study-groups" data-section="study-groups">Groups</a></li>
+      <li><a href="#events" data-section="events">Events</a></li>
+      <li><a href="#join" data-section="join">Join</a></li>
     </ul>
+
+    <button
+      class="theme-toggle"
+      id="theme-toggle"
+      type="button"
+      aria-pressed="false"
+      aria-label="Switch to dark mode"
+    >
+      <span class="theme-toggle-icons" aria-hidden="true"><svg class="icon icon-moon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-moon"></use></svg><svg class="icon icon-sun" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-sun"></use></svg></span>
+    </button>
   </nav>
 
   <main id="top">
@@ -95,7 +112,7 @@
       </div>
       <div class="hero-text">
         <p class="kicker">RFC 0001 / public rule</p>
-        <h1>THE&nbsp;FREE<br />CODE<br />SYNDICATE</h1>
+        <h1>THE&nbsp;<span class="hl">FREE</span><br />CODE<br />SYNDICATE</h1>
         <p class="hero-sub">
           A public note on free code, shared study, and work that can be read,
           changed, and kept alive by others.
@@ -127,7 +144,7 @@
          SECTION 1 — ABSTRACT
          ======================================================== -->
     <section class="doc-section" id="abstract">
-      <h2><span class="sec-num">1</span> Abstract</h2>
+      <h2><span class="sec-num">01</span> Abstract</h2>
       <div class="sec-body">
         <p class="mission-line">
           The Free Code Syndicate holds one clear line:
@@ -144,7 +161,7 @@
           data, so the record can stay close to the work.
         </p>
         <p class="quote-line">
-          "Sapere aude." &mdash; Immanuel Kant
+          "Sapere aude." - Immanuel Kant
         </p>
       </div>
       <div class="abstract-grid">
@@ -172,7 +189,7 @@
          SECTION 2 — ICARUS
          ======================================================== -->
     <section class="doc-section" id="icarus">
-      <h2><span class="sec-num">2</span> The Icarus Mark</h2>
+      <h2><span class="sec-num">02</span> The Icarus Mark</h2>
       <div class="icarus-layout">
         <div class="icarus-copy">
           <p class="sec-intro">
@@ -189,7 +206,7 @@
           <p class="quote-line">
             "Never regret thy fall, O Icarus of the fearless flight. For the
             greatest tragedy of them all is never to feel the burning light."
-            &mdash; attributed to Oscar Wilde
+            - attributed to Oscar Wilde
           </p>
         </div>
         <div class="icarus-mark">
@@ -209,7 +226,7 @@
          SECTION 3 — PROTOCOL
          ======================================================== -->
     <section class="doc-section" id="protocol">
-      <h2><span class="sec-num">3</span> Operating Protocol</h2>
+      <h2><span class="sec-num">03</span> Operating Protocol</h2>
       <p class="sec-intro">
         These rules are plain by design. They are small enough to remember
         and firm enough to protect the work.
@@ -238,41 +255,58 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 4 — REPOSITORIES (live from GitHub API)
+         SECTION 4 — PROJECTS (live from the GitHub API)
          ======================================================== -->
-    <section class="doc-section" id="repositories">
-      <h2><span class="sec-num">4</span> Repositories</h2>
+    <section class="doc-section" id="projects">
+      <h2><span class="sec-num">04</span> Projects</h2>
       <p class="sec-intro">
-        This list comes from
+        Read live from
         <a
           href="https://github.com/TheFreeCodeSyndicate"
           target="_blank"
           rel="noopener"
           >github.com/TheFreeCodeSyndicate</a
-        >. It changes when the public repositories change. The record should
-        follow the source.
+        >, the live public organization. The list changes when the public
+        repositories change, so the record follows the source.
       </p>
 
       <p id="repo-status" class="repo-status" role="status" aria-live="polite">
         Reading repository list<span class="cursor" aria-hidden="true">_</span>
       </p>
 
+      <div id="activity-ticker" class="activity-ticker" hidden></div>
       <div id="repo-grid" class="repo-grid" hidden></div>
     </section>
 
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 5 — STUDY GROUPS (from js/data.js)
+         RESOURCES — curated learning material, from the database.
+         Distinct from Projects, which is the live GitHub list.
+         ======================================================== -->
+    <section class="doc-section" id="resources">
+      <h2><span class="sec-num">05</span> Resources</h2>
+      <p class="sec-intro">
+        Notes, videos, papers, courses, and tools kept by the group. Curated by
+        hand. Everything here is meant to be read, not just skimmed.
+      </p>
+
+      <div id="resource-grid" class="resource-grid"></div>
+    </section>
+
+    <div class="rule"></div>
+
+    <!-- ========================================================
+         SECTION 6 — STUDY GROUPS
          ======================================================== -->
     <section class="doc-section" id="study-groups">
-      <h2><span class="sec-num">5</span> Study Groups</h2>
+      <h2><span class="sec-num">06</span> Study Groups</h2>
       <p class="sec-intro">
         Study groups move slowly through one subject. They begin with first
         principles and end with public notes, code, or questions.
       </p>
       <p class="quote-line">
-        "There is no royal road to geometry." &mdash; Euclid
+        "There is no royal road to geometry." - Euclid
       </p>
 
       <div id="study-group-grid" class="study-group-grid"></div>
@@ -281,14 +315,29 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 6 — EVENTS (from js/data.js)
+         SECTION 7 — EVENTS
          ======================================================== -->
     <section class="doc-section" id="events">
-      <h2><span class="sec-num">6</span> Events</h2>
+      <h2><span class="sec-num">07</span> Events</h2>
       <p class="sec-intro">
-        A small calendar for study sessions, reading rooms, and group work.
-        Update the list from <code>js/data.js</code> when a new event is set.
+        Study sessions, reading rooms, and group work. Status is worked out from
+        each event's own time, so this list is never out of date.
       </p>
+
+      <div class="next-band" id="next-session" data-mode="loading">
+        <span class="mini-label">next session</span>
+        <h3 data-next-title>Loading&hellip;</h3>
+        <p class="next-group" data-next-group></p>
+        <p data-next-when>&nbsp;</p>
+        <p class="next-countdown" data-next-countdown aria-live="off">&nbsp;</p>
+      </div>
+
+      <ol class="week-strip" id="week-strip" aria-label="Weekly class schedule" hidden></ol>
+
+      <div class="event-toolbar">
+        <div class="event-filters" id="event-filters" role="group" aria-label="Filter events by group"></div>
+        <button type="button" class="btn-subscribe" id="subscribe-ics"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-calendar"></use></svg><span>Subscribe (.ics)</span></button>
+      </div>
 
       <div id="event-list" class="event-list"></div>
     </section>
@@ -296,10 +345,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 7 — CONTRIBUTION LANES
+         SECTION 8 — CONTRIBUTION LANES
          ======================================================== -->
     <section class="doc-section" id="contribute">
-      <h2><span class="sec-num">7</span> Contribution Lanes</h2>
+      <h2><span class="sec-num">08</span> Contribution Lanes</h2>
       <p class="sec-intro">
         Permission is not the first step. Useful work is the first step. Pick
         a small task, finish it, and leave a clear path for the next person.
@@ -324,29 +373,36 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 8 — MAINTAINERS
+         SECTION 9 — MAINTAINERS
          ======================================================== -->
-    <section class="doc-section" id="maintainers">
-      <h2><span class="sec-num">8</span> Maintainers</h2>
+    <section class="doc-section" id="core">
+      <h2><span class="sec-num">09</span> Core Members <span class="core-count" id="core-count"></span></h2>
       <p class="sec-intro">
-        Maintainers keep the public record usable. They review, repair,
-        answer, and decide when silence would harm the work.
+        Core members keep the public record usable. They run the rooms,
+        mentor newcomers, and decide when silence would harm the work.
       </p>
 
-      <p id="maintainer-status" class="repo-status" role="status" aria-live="polite">
-        Reading maintainer profiles<span class="cursor" aria-hidden="true">_</span>
-      </p>
+      <div id="core-leads-wrap" class="core-group" hidden>
+        <h3 class="core-subhead">Leads</h3>
+        <div id="core-leads" class="core-leads"></div>
+      </div>
 
-      <div id="maintainer-grid" class="maintainer-grid" hidden></div>
+      <div id="core-mentors-wrap" class="core-group" hidden>
+        <h3 class="core-subhead">Mentors</h3>
+        <div id="core-filters" class="event-filters core-filters" role="group" aria-label="Filter mentors by group" hidden></div>
+        <div id="core-mentors" class="core-mentors"></div>
+      </div>
+
+      <details id="core-alumni" class="core-alumni past-events" hidden></details>
     </section>
 
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 9 — HOW TO JOIN
+         SECTION 10 — HOW TO JOIN
          ======================================================== -->
     <section class="doc-section" id="join">
-      <h2><span class="sec-num">9</span> Entry</h2>
+      <h2><span class="sec-num">10</span> Entry</h2>
       <p class="sec-intro">
         There is no form and no gate. Choose a room. State your purpose.
       </p>
@@ -374,43 +430,27 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 10 — REFERENCES
+         SECTION 11 — REFERENCES
          ======================================================== -->
     <section class="doc-section" id="references">
-      <h2><span class="sec-num">10</span> References</h2>
-      <ul class="ref-list">
-        <li>
-          <span class="ref-tag">[GITHUB]</span>
-          <a href="https://github.com/TheFreeCodeSyndicate" target="_blank" rel="noopener"
-            >The Free Code Syndicate &mdash; GitHub Organization</a
-          >
-        </li>
-        <li>
-          <span class="ref-tag">[DISCORD]</span>
-          <a href="https://discord.gg/nH2PRmbB5" target="_blank" rel="noopener"
-            >The Free Code Syndicate &mdash; Discord Server</a
-          >
-        </li>
-        <li>
-          <span class="ref-tag">[WHATSAPP]</span>
-          <a
-            href="https://chat.whatsapp.com/Dks4VUe0E5n7xmilaKTqXS"
-            target="_blank"
-            rel="noopener"
-            >The Free Code Syndicate &mdash; WhatsApp Community</a
-          >
-        </li>
-      </ul>
+      <h2><span class="sec-num">11</span> References</h2>
+      <ul class="ref-list" id="ref-list"></ul>
     </section>
   </main>
 
   <footer class="doc-footer">
-    <p>"No great thing is created suddenly." &mdash; Epictetus</p>
+    <p>"No great thing is created suddenly." - Epictetus</p>
     <p>This document has no end date. Distribution of this memo is unlimited.</p>
+    <p class="colophon">Set in Archivo and Fira Code. Written in plain HTML, CSS and JavaScript.
+      <a href="https://github.com/TheFreeCodeSyndicate/fcs-site" target="_blank" rel="noopener">Read the source</a>.</p>
+    <ul class="footer-socials" id="footer-socials" aria-label="The Free Code Syndicate elsewhere"></ul>
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
 
+  <script src="js/theme.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.min.js"></script>
   <script src="js/data.js"></script>
-  <script src="js/main.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
