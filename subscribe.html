@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="robots" content="noindex" />
+  <script src="js/theme-init.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email updates | The Free Code Syndicate</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,700..800&family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="sub-page">
+  <main class="sub-card" id="sub-card" aria-live="polite">
+    <img src="assets/favicon-192.png" alt="" width="56" height="56" class="sub-mark" />
+    <h1 id="sub-title">One moment&hellip;</h1>
+    <p id="sub-text"></p>
+    <div class="sub-actions" id="sub-actions"></div>
+    <p class="sub-foot"><a href="./">The Free Code Syndicate</a></p>
+  </main>
+  <script src="js/config.js"></script>
+  <script src="js/vendor/supabase.min.js"></script>
+  <script type="module" src="js/subscribe.js"></script>
+</body>
+</html>

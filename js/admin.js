@@ -26,6 +26,7 @@ import {
   createCoreMember, updateCoreMember, deleteCoreMember,
   saveRepoKind, deleteRepoKind,
   listProfiles, setProfileRole, removeMember, watchMyAccess,
+  eventMail, listSubscriptions, addSubscribers, removeSubscription, listEmailSends,
   requestPasswordReset, updatePassword,
   listActivity, lastChange, restoreDeleted, inviteMember,
   uploadMemberPhoto, removeMemberPhotos,
@@ -605,6 +606,7 @@ const PAGES = [
   { id: "social", label: "Social links", icon: "link", site: "#join" },
   { id: "repos", label: "Repo curation", icon: "github", site: "#projects" },
   { id: "activity", label: "Activity", icon: "list-box" },
+  { id: "subscribers", label: "Subscribers", icon: "mail", adminOnly: true },
   { id: "team", label: "Team", icon: "shield", adminOnly: true },
 ];
 
@@ -672,6 +674,7 @@ function renderPage() {
   if (state.route === "events") renderEventsPage(page);
   else if (state.route === "team") renderTeamPage(page);
   else if (state.route === "activity") renderActivityPage(page);
+  else if (state.route === "subscribers") renderSubscribersPage(page);
   else renderListPage(page);
 }
 
@@ -1695,13 +1698,186 @@ function renderTeamPage(page) {
 }
 
 /* ==================================================================
+ * Subscribers: email lists per event, plus "all events"
+ *
+ * Visitors join from the public site and confirm by email; admins can
+ * add addresses directly. Sending goes through the event-mail Edge
+ * Function: an event's update reaches that event's list and the
+ * all-events list; an "all events" update reaches everyone on any list.
+ * ================================================================== */
+
+const people = (n) => `${n} ${n === 1 ? "person" : "people"}`;
+
+async function renderSubscribersPage(page) {
+  root().innerHTML = `${pageHead(page, { search: false })}<p class="empty-note">Loading the lists&hellip;</p>`;
+  let subs, sends;
+  try {
+    [subs, sends] = await Promise.all([listSubscriptions(), listEmailSends()]);
+  } catch (err) {
+    root().innerHTML = `${pageHead(page, { search: false })}<div class="empty-state"><p>Could not load the lists: ${escapeHTML(err.message || "unknown error")}.</p></div>`;
+    return;
+  }
+  if (state.route !== "subscribers") return;
+
+  const events = [...state.data.events].sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+  const list = events.some((e) => e.id === state.subsList) ? state.subsList : "all";
+  const eventId = list === "all" ? null : list;
+  const event = events.find((e) => e.id === eventId);
+  const confirmed = subs.filter((s) => s.confirmed_at);
+  const onList = subs.filter((s) => (s.event_id || null) === eventId);
+  // Who a send reaches, one email per address.
+  const reach = new Set(confirmed.filter((s) => !eventId || !s.event_id || s.event_id === eventId).map((s) => s.email)).size;
+  const countFor = (id) => subs.filter((s) => (s.event_id || null) === id && s.confirmed_at).length;
+  const listName = event ? `“${event.title}”` : "all events";
+  const history = sends.filter((s) => !eventId || s.event_id === eventId);
+
+  root().innerHTML = `
+    ${pageHead(page, { count: new Set(confirmed.map((s) => s.email)).size, search: false })}
+    <p class="page-intro">
+      People who asked for email updates about events. Visitors sign up on the site and
+      confirm by email; addresses you add here count straight away. Every email has an
+      unsubscribe link.
+    </p>
+    <div class="field subs-picker">
+      <label for="subs-list">List</label>
+      <select id="subs-list">
+        <option value="all">All events (${countFor(null)})</option>
+        ${events.map((e) => `<option value="${escapeAttr(e.id)}"${list === e.id ? " selected" : ""}>${escapeHTML(e.title)}, ${escapeHTML(new Date(e.starts_at).toLocaleDateString("en-GB", { day: "numeric", month: "short" }))} (${countFor(e.id)})</option>`).join("")}
+      </select>
+    </div>
+
+    <form class="subs-card" id="subs-compose" novalidate>
+      <h2>Send an update</h2>
+      <p class="field-help">${eventId
+        ? `Goes to this event's list and the all-events list: <strong>${people(reach)}</strong>. The email shows the event's date and link.`
+        : `Goes to everyone on any list: <strong>${people(reach)}</strong>.`}</p>
+      <div class="field">
+        <label for="subs-subject">Subject</label>
+        <input id="subs-subject" maxlength="150" required value="${escapeAttr(event ? `Update: ${event.title}` : "")}" />
+      </div>
+      <div class="field">
+        <label for="subs-body">Message</label>
+        <textarea id="subs-body" rows="7" maxlength="20000" required placeholder="Plain text. Leave a blank line between paragraphs; links become clickable."></textarea>
+      </div>
+      <div class="subs-buttons">
+        <button type="button" class="btn" id="subs-test">${icon("mail")}<span>Send a test to me</span></button>
+        <button type="button" class="btn btn-primary" id="subs-send"${reach ? "" : " disabled"}>${icon("send")}<span>Send to ${people(reach)}</span></button>
+      </div>
+    </form>
+
+    <form class="subs-card" id="subs-add" novalidate>
+      <h2>On this list (${onList.length})</h2>
+      <div class="field">
+        <label for="subs-emails">Add people to ${escapeHTML(listName)}</label>
+        <textarea id="subs-emails" rows="2" placeholder="one@example.com, two@example.com"></textarea>
+        <p class="field-help">Separate addresses with commas or new lines. They are added without a confirmation email, so only add people who expect to hear from the club.</p>
+      </div>
+      <div class="subs-buttons"><button type="submit" class="btn">${icon("user-plus")}<span>Add</span></button></div>
+      ${onList.length ? `<ol class="list subs-list">${onList.map((s) => `
+        <li class="list-row" data-id="${escapeAttr(s.id)}">
+          <span class="list-thumb">${icon("mail")}</span>
+          <span class="list-open">
+            <strong>${escapeHTML(s.email)}</strong>
+            <span class="sub">${s.added_by ? "Added by an admin" : "Signed up on the site"}, ${escapeHTML(ago(s.created_at))}</span>
+          </span>
+          <span class="list-badges"><span class="badge${s.confirmed_at ? "" : " badge-muted"}">${s.confirmed_at ? "Subscribed" : "Not confirmed yet"}</span></span>
+          <button type="button" class="btn btn-danger" data-remove aria-label="Remove ${escapeAttr(s.email)}">${icon("trash")}<span>Remove</span></button>
+        </li>`).join("")}</ol>` : '<p class="empty-note">Nobody yet.</p>'}
+    </form>
+
+    <section class="subs-card">
+      <h2>Sent (${history.length})</h2>
+      ${history.length ? `<ol class="list">${history.map((s) => `
+        <li class="list-row">
+          <span class="list-thumb">${icon("send")}</span>
+          <span class="list-open">
+            <strong>${escapeHTML(s.title)}</strong>
+            <span class="sub">${escapeHTML(who(s.sent_by_email))}, ${escapeHTML(ago(s.created_at))}, to ${people(s.recipients)}${s.failed ? `, ${s.failed} failed` : ""}</span>
+          </span>
+        </li>`).join("")}</ol>` : '<p class="empty-note">Nothing sent from this list yet.</p>'}
+    </section>`;
+
+  const again = () => renderSubscribersPage(page);
+  root().querySelector("#subs-list").addEventListener("change", (e) => {
+    state.subsList = e.target.value;
+    again();
+  });
+
+  const compose = root().querySelector("#subs-compose");
+  const draft = () => {
+    const subject = compose.querySelector("#subs-subject").value.trim();
+    const body = compose.querySelector("#subs-body").value.trim();
+    if (!subject || !body) {
+      toast("Write a subject and a message first.", "error");
+      compose.querySelector(subject ? "#subs-body" : "#subs-subject").focus();
+      return null;
+    }
+    return { event_id: eventId, subject, body };
+  };
+  const testButton = compose.querySelector("#subs-test");
+  testButton.addEventListener("click", async () => {
+    const payload = draft();
+    if (!payload) return;
+    try {
+      await busy(testButton, "Sending…", () => eventMail("send", { ...payload, test: true }));
+      toast(`Test sent to ${state.user.email}.`, "success");
+    } catch (err) {
+      toast(err.message || "Could not send the test.", "error");
+    }
+  });
+  armedDelete(compose.querySelector("#subs-send"), async () => {
+    const payload = draft();
+    if (!payload) return;
+    try {
+      const { sent, failed } = await eventMail("send", payload);
+      toast(`Sent to ${people(sent)}${failed ? `; ${failed} failed` : ""}.`, failed ? "error" : "success");
+      again();
+    } catch (err) {
+      toast(err.message || "Could not send.", "error");
+    }
+  });
+
+  const add = root().querySelector("#subs-add");
+  add.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const raw = add.querySelector("#subs-emails").value.split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+    const bad = raw.filter((x) => !EMAIL_RE.test(x));
+    if (!raw.length || bad.length) {
+      toast(bad.length ? `Not an email address: ${bad.slice(0, 3).join(", ")}` : "Enter at least one email address.", "error");
+      return;
+    }
+    const emails = [...new Set(raw)];
+    try {
+      const added = await busy(add.querySelector("[type=submit]"), "Adding…", () => addSubscribers(emails, eventId, state.user.id));
+      const skipped = emails.length - added;
+      toast(`Added ${added} to ${listName}${skipped ? `; ${skipped} already on it` : ""}.`, "success");
+      again();
+    } catch (err) {
+      toast(err.message || "Could not add them.", "error");
+    }
+  });
+  add.querySelectorAll("[data-remove]").forEach((button) => {
+    const id = button.closest("[data-id]").dataset.id;
+    armedDelete(button, async () => {
+      try {
+        await removeSubscription(id);
+        toast("Removed from the list.", "delete");
+        again();
+      } catch (err) {
+        toast(err.message || "Could not remove them.", "error");
+      }
+    });
+  });
+}
+
+/* ==================================================================
  * Activity log, undo and trash
  * ================================================================== */
 
 const TABLE_NOUNS = {
   events: "event", class_sessions: "session", resources: "resource",
   study_groups: "group", social_links: "link", core_members: "member",
-  repo_kinds: "repo curation", profiles: "account",
+  repo_kinds: "repo curation", profiles: "account", email_sends: "email",
 };
 const ACTION_VERBS = { create: "created", update: "edited", delete: "deleted", restore: "restored" };
 const ACTION_ICONS = { create: "plus", update: "pencil", delete: "trash", restore: "undo" };
@@ -1798,7 +1974,7 @@ async function renderActivityPage(page) {
       <li class="list-row activity-row activity-${e.action}">
         <span class="list-thumb activity-icon">${icon(ACTION_ICONS[e.action] || "pencil")}</span>
         <span class="list-open">
-          <strong>${escapeHTML(who(e.actor_email))} ${ACTION_VERBS[e.action] || e.action} ${escapeHTML(noun)} ${escapeHTML(quoted(e.row_label))}</strong>
+          <strong>${escapeHTML(who(e.actor_email))} ${e.table_name === "email_sends" ? "sent" : ACTION_VERBS[e.action] || e.action} ${escapeHTML(noun)} ${escapeHTML(quoted(e.row_label))}</strong>
           <span class="sub"><time datetime="${escapeAttr(e.at)}" title="${escapeAttr(new Date(e.at).toLocaleString("en-GB"))}">${escapeHTML(ago(e.at))}</time>${fields ? `, ${escapeHTML(fields)}` : ""}</span>
         </span>
         ${restorable ? `<button type="button" class="btn" data-restore="${escapeAttr(e.table_name)}" data-row="${escapeAttr(e.row_id)}" data-label="${escapeAttr(`${noun} ${quoted(e.row_label)}`)}">${icon("undo")}<span>Restore</span></button>` : ""}

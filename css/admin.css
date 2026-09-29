@@ -994,3 +994,20 @@ body:has(.drawer.is-open) .toasts {
 }
 .gate-notice-ok { background: var(--accent); color: var(--accent-ink); }
 .gate-notice-info { background: var(--paper); color: var(--ink); }
+
+/* Subscribers page */
+.subs-picker { max-width: 520px; margin-bottom: 20px; }
+.subs-card {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 18px;
+  border: var(--border-w) solid var(--rule-strong);
+  background: var(--paper-raised);
+  box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
+}
+.subs-card h2 { margin: 0; font-size: 1.1rem; }
+.subs-card .field-help { margin: 0; }
+.subs-buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.subs-card .list { margin: 0; }
+.badge-muted { opacity: 0.65; border-style: dashed; }

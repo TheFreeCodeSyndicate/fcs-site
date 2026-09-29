@@ -43,7 +43,7 @@ import {
 } from "./render.js";
 import {
   getEvents, getClassSessions, getResources,
-  getStudyGroups, getSocialLinks, getRepoKinds, getCoreMembers,
+  getStudyGroups, getSocialLinks, getRepoKinds, getCoreMembers, eventMail,
 } from "./supabase.js";
 
 let allEvents = [];
@@ -689,7 +689,102 @@ function bindIcs() {
     });
   }
 
+  bindCalendarMenu();
+  bindNotify();
   icsBound = true;
+}
+
+/* The calendar feed: events.ics, rebuilt by the deploy workflow every 30
+ * minutes (tools/events-feed.mjs). Subscribing, rather than importing a
+ * file, is what keeps someone's calendar up to date. */
+function bindCalendarMenu() {
+  const menu = document.getElementById("cal-menu");
+  if (!menu) return;
+  const feed = new URL("events.ics", location.href.split("#")[0]).href;
+  const webcal = feed.replace(/^https?:/, "webcal:");
+  menu.querySelector("#cal-google").href = `https://calendar.google.com/calendar/render?cid=${encodeURIComponent(webcal)}`;
+  menu.querySelector("#cal-webcal").href = webcal;
+  const copy = menu.querySelector("#cal-copy");
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(feed);
+      copy.textContent = "Copied. Paste it into your calendar's “add by URL”.";
+    } catch {
+      copy.textContent = feed;
+    }
+  });
+  // Close on outside click or Escape, like a menu.
+  document.addEventListener("click", (evt) => {
+    if (menu.open && !menu.contains(evt.target)) menu.open = false;
+  });
+  menu.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape") {
+      menu.open = false;
+      menu.querySelector("summary").focus();
+    }
+  });
+}
+
+/* "Email me updates": one dialog for a single event or all events. The
+ * event-mail function sends a confirmation email; nothing else is sent
+ * until that link is clicked. */
+function bindNotify() {
+  const dialog = document.getElementById("notify-dialog");
+  if (!dialog || !dialog.showModal) return;
+  const form = dialog.querySelector("#notify-form");
+  const email = form.querySelector("#notify-email");
+  const status = form.querySelector("#notify-status");
+  const submit = form.querySelector("#notify-submit");
+  let eventId = null;
+
+  document.addEventListener("click", (evt) => {
+    const trigger = evt.target.closest("[data-notify]");
+    if (!trigger) return;
+    const id = trigger.dataset.notify;
+    const event = id === "all" ? null : allEvents.find((e) => String(e.id) === id);
+    eventId = event ? event.id : null;
+    form.querySelector("#notify-what").textContent = event
+      ? `Updates about “${event.title}”: changes, links and reminders from the organisers.`
+      : "Updates about every FCS event: new sessions, changes and reminders.";
+    status.textContent = "";
+    status.dataset.tone = "";
+    form.hidden = false;
+    submit.disabled = false;
+    dialog.showModal();
+    email.focus();
+  });
+
+  form.querySelector("#notify-cancel").addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (evt) => {
+    if (evt.target === dialog) dialog.close(); // the backdrop
+  });
+
+  form.addEventListener("submit", async (evt) => {
+    evt.preventDefault();
+    const value = email.value.trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) {
+      status.dataset.tone = "error";
+      status.textContent = "Enter your email address.";
+      email.focus();
+      return;
+    }
+    submit.disabled = true;
+    status.dataset.tone = "";
+    status.textContent = "Sending…";
+    try {
+      await eventMail("subscribe", {
+        email: value,
+        event_id: eventId,
+        company: form.querySelector("#notify-company").value,
+      });
+      status.dataset.tone = "ok";
+      status.textContent = `Check ${value} for a confirmation email. Click the link in it to finish.`;
+    } catch (err) {
+      submit.disabled = false;
+      status.dataset.tone = "error";
+      status.textContent = err.message || "That did not work. Try again in a minute.";
+    }
+  });
 }
 
 /* ------------------------------------------------------------------

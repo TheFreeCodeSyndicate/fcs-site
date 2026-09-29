@@ -293,10 +293,53 @@ export async function removeMember(id) {
  * The function checks the caller is an admin, sends Supabase's invite
  * email and sets the new account's role. The service-role key it uses
  * never leaves Supabase. */
-export async function inviteMember(email, role, redirectTo) {
-  const { data, error } = await getClientOrThrow().functions.invoke("invite-member", {
-    body: { email, role, redirectTo },
-  });
+export const inviteMember = (email, role, redirectTo) =>
+  invokeFunction("invite-member", { email, role, redirectTo });
+
+/* ---- event email updates (Edge Function supabase/functions/event-mail)
+ *
+ * subscribe / lookup / confirm / unsubscribe work for anyone; send is
+ * admins only. Lists are read and edited directly (migration 011). */
+export const eventMail = (action, payload = {}) => invokeFunction("event-mail", { action, ...payload });
+
+export async function listSubscriptions() {
+  const { data, error } = await getClientOrThrow()
+    .from("subscriptions")
+    .select("id, email, event_id, confirmed_at, added_by, created_at")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+/* Admin adds count as confirmed straight away. Addresses already on the
+ * list are skipped rather than failing the whole batch. */
+export async function addSubscribers(emails, eventId, adminId) {
+  const now = new Date().toISOString();
+  const rows = emails.map((email) => ({ email, event_id: eventId, confirmed_at: now, added_by: adminId }));
+  const { data, error } = await getClientOrThrow()
+    .from("subscriptions")
+    .upsert(rows, { onConflict: "email,event_id", ignoreDuplicates: true })
+    .select("id");
+  if (error) throw error;
+  return (data || []).length;
+}
+
+export const removeSubscription = (id) =>
+  write((s) => s.from("subscriptions").delete(WRITE_OPTS).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Removing the subscriber"));
+
+export async function listEmailSends() {
+  const { data, error } = await getClientOrThrow()
+    .from("email_sends")
+    .select("id, title, body, event_id, sent_by_email, recipients, failed, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (error) throw error;
+  return data || [];
+}
+
+async function invokeFunction(name, body) {
+  const { data, error } = await getClientOrThrow().functions.invoke(name, { body });
   if (error) {
     // The function answers errors as JSON { error }; surface that text.
     let message = error.message;

@@ -336,7 +336,19 @@
 
       <div class="event-toolbar">
         <div class="event-filters" id="event-filters" role="group" aria-label="Filter events by group"></div>
-        <button type="button" class="btn-subscribe" id="subscribe-ics"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-calendar"></use></svg><span>Subscribe (.ics)</span></button>
+        <div class="event-subscribe">
+          <details class="cal-menu" id="cal-menu">
+            <summary class="btn-subscribe"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-calendar"></use></svg><span>Add to your calendar</span><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-chevron-down"></use></svg></summary>
+            <div class="cal-menu-list">
+              <a id="cal-google" href="#" target="_blank" rel="noopener">Google Calendar</a>
+              <a id="cal-webcal" href="#">Apple Calendar or Outlook</a>
+              <button type="button" id="cal-copy">Copy the calendar link</button>
+              <button type="button" id="subscribe-ics">Download a one-off file</button>
+              <p>Subscribed calendars pick up new and changed events by themselves.</p>
+            </div>
+          </details>
+          <button type="button" class="btn-subscribe btn-subscribe-alt" data-notify="all"><svg class="icon" aria-hidden="true" focusable="false"><use href="assets/icons.svg#i-mail"></use></svg><span>Email me about events</span></button>
+        </div>
       </div>
 
       <div id="event-list" class="event-list"></div>
@@ -446,6 +458,22 @@
     <ul class="footer-socials" id="footer-socials" aria-label="The Free Code Syndicate elsewhere"></ul>
     <p>&copy; <span id="year"></span> The Free Code Syndicate.</p>
   </footer>
+
+  <dialog class="notify-dialog" id="notify-dialog" aria-labelledby="notify-title">
+    <form id="notify-form" novalidate>
+      <h3 id="notify-title">Get email updates</h3>
+      <p class="notify-what" id="notify-what"></p>
+      <label for="notify-email">Your email</label>
+      <input id="notify-email" type="email" autocomplete="email" required maxlength="254" />
+      <input class="notify-hp" id="notify-company" name="company" tabindex="-1" autocomplete="off" aria-hidden="true" />
+      <p class="notify-status" id="notify-status" role="status"></p>
+      <div class="notify-actions">
+        <button type="button" class="link-button" id="notify-cancel">Close</button>
+        <button type="submit" class="btn-subscribe" id="notify-submit"><span>Subscribe</span></button>
+      </div>
+      <p class="notify-fine">We send a confirmation email first. Every email has a one-click unsubscribe.</p>
+    </form>
+  </dialog>
 
   <script src="js/theme.js"></script>
   <script src="js/config.js"></script>

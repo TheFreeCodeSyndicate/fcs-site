@@ -99,9 +99,9 @@ check("nav tracks the section being read", track.every((t) => !t.endsWith("NONE"
 const badHrefs = await page.evaluate(() =>
   [...document.querySelectorAll("a[href]")]
     .map((a) => a.getAttribute("href"))
-    .filter((h) => !/^(https?:|#|mailto:)/i.test(h))
+    .filter((h) => !/^(https?:|#|mailto:|webcal:)/i.test(h))
 );
-check("every href is http(s), # or mailto", badHrefs.length === 0, badHrefs.join(" | "));
+check("every href is http(s), #, mailto or webcal", badHrefs.length === 0, badHrefs.join(" | "));
 
 // --- dark mode: no flash, and the toggle works ----------------------
 await page.evaluate(() => localStorage.clear());
@@ -125,6 +125,43 @@ check("toggle persists the choice", themeAfter.stored === "light", JSON.stringif
 await page.reload({ waitUntil: "networkidle" });
 const themePersisted = await page.evaluate(() => document.documentElement.getAttribute("data-theme"));
 check("choice survives a reload", themePersisted === "light", String(themePersisted));
+
+// --- event subscriptions -----------------------------------------------
+// The calendar menu points at the live feed, not a one-off download.
+await page.click("#cal-menu > summary");
+const cal = await page.evaluate(() => ({
+  open: document.getElementById("cal-menu").open,
+  google: document.getElementById("cal-google").href,
+  webcal: document.getElementById("cal-webcal").href,
+}));
+check("calendar menu opens", cal.open, JSON.stringify(cal));
+check("calendar menu subscribes to the events.ics feed",
+  cal.webcal.startsWith("webcal:") && cal.webcal.endsWith("/events.ics") && cal.google.includes(encodeURIComponent(cal.webcal)), JSON.stringify(cal));
+await page.keyboard.press("Escape");
+check("Escape closes the calendar menu", !(await page.$eval("#cal-menu", (d) => d.open)));
+const feed = await page.request.get(new URL("events.ics", base).href);
+check("events.ics is served as a calendar", feed.ok() && (await feed.text()).startsWith("BEGIN:VCALENDAR"), String(feed.status()));
+
+// "Email me about events" signs up through the event-mail function
+// (stubbed here, so no email is sent).
+const signups = [];
+await page.route("**/functions/v1/event-mail", (route) => {
+  signups.push(JSON.parse(route.request().postData() || "{}"));
+  return route.fulfill({ json: { ok: true } });
+});
+await page.click('[data-notify="all"]');
+check("the email dialog opens", await page.$eval("#notify-dialog", (d) => d.open));
+await page.click("#notify-submit");
+check("an empty email is refused", /Enter your email/.test(await page.textContent("#notify-status")) && signups.length === 0);
+await page.fill("#notify-email", "visitor@example.com");
+await page.click("#notify-submit");
+await page.waitForTimeout(500);
+check("subscribing asks the function for the all-events list",
+  signups.length === 1 && signups[0].action === "subscribe" && signups[0].email === "visitor@example.com" && signups[0].event_id === null,
+  JSON.stringify(signups));
+check("the dialog says to check the inbox", /Check visitor@example\.com/.test(await page.textContent("#notify-status")));
+await page.click("#notify-cancel");
+check("the dialog closes", !(await page.$eval("#notify-dialog", (d) => d.open)));
 
 await browser.close();
 

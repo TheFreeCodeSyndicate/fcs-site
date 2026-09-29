@@ -54,6 +54,12 @@ const data = {
     { id: 1, at: new Date(Date.now() - 864e5).toISOString(), actor_email: null, action: "create",
       table_name: "resources", row_id: "r1", row_label: "Intro to Git", changed: [], snapshot: null },
   ],
+  subscriptions: [
+    { id: "s1", email: "fan@example.com", event_id: null, confirmed_at: "2026-09-20T10:00:00Z", added_by: null, created_at: "2026-09-20T10:00:00Z" },
+    { id: "s2", email: "pal@example.com", event_id: "e1", confirmed_at: "2026-09-21T10:00:00Z", added_by: "u1", created_at: "2026-09-21T10:00:00Z" },
+    { id: "s3", email: "maybe@example.com", event_id: null, confirmed_at: null, added_by: null, created_at: "2026-09-22T10:00:00Z" },
+  ],
+  email_sends: [],
   profiles: [
     { id: "u1", email: "maintainer@fcs.test", role: "admin", created_at: "2026-09-01" },
     { id: "u2", email: "newcomer@fcs.test", role: "pending", created_at: "2026-09-20" },
@@ -77,6 +83,12 @@ await page.route("**/storage/v1/object/**", (route) => {
   return route.fulfill({ json: { Key: "member-photos/x" } });
 });
 await page.route("**/auth/v1/logout**", (route) => route.fulfill({ status: 204, body: "" }));
+const mails = [];
+await page.route("**/functions/v1/event-mail", (route) => {
+  const body = JSON.parse(route.request().postData() || "{}");
+  mails.push(body);
+  return route.fulfill({ json: body.test ? { sent: 1, failed: 0, test: true } : { sent: 2, failed: 0 } });
+});
 const invites = [];
 let myRole = "admin"; // what profiles says about the signed-in user
 await page.route("**/functions/v1/invite-member", (route) => {
@@ -133,7 +145,7 @@ await settle(800);
 
 // --- shell --------------------------------------------------------------
 const links = await page.$$eval(".sidebar-link", (a) => a.map((x) => x.dataset.page));
-check("sidebar lists every page, Team included for an admin", links.length === 9 && links.includes("team") && links.includes("activity"), links.join(","));
+check("sidebar lists every page, Team included for an admin", links.length === 10 && links.includes("team") && links.includes("subscribers") && links.includes("activity"), links.join(","));
 
 // --- events board -------------------------------------------------------
 const counts = () => page.$$eval(".board-column h3", (h) => h.map((x) => x.textContent.replace(/\s+/g, " ").trim()).join(", "));
@@ -290,6 +302,35 @@ await page.waitForTimeout(17000);
 await settle(800);
 check("30 minutes idle signs out and says why",
   (await page.$eval("#admin-root", (r) => r.textContent)).includes("30 minutes without activity"));
+
+// --- subscribers --------------------------------------------------------
+await page.goto("about:blank");
+await page.goto(new URL("admin.html#/subscribers", base).href);
+await settle(1200);
+const subsText = await page.$eval("#admin-root", (r) => r.textContent.replace(/\s+/g, " "));
+check("Subscribers counts confirmed people only", /Send to 2 people/.test(subsText), subsText.slice(0, 200));
+check("unconfirmed signups are marked", /Not confirmed yet/.test(subsText));
+await page.fill("#subs-subject", "Room change");
+await page.fill("#subs-body", "We moved to room 4.");
+await page.click("#subs-test");
+await settle(400);
+check("a test send goes only to you", mails.length === 1 && mails[0].action === "send" && mails[0].test === true, JSON.stringify(mails));
+await page.click("#subs-send");
+check("the first Send click only arms it", mails.length === 1);
+await page.click("#subs-send");
+await settle(600);
+check("the second Send click emails everyone", mails.length === 2 && mails[1].action === "send" && !mails[1].test && mails[1].event_id === null
+  && mails[1].subject === "Room change", JSON.stringify(mails[1]));
+await page.fill("#subs-emails", "new1@example.com, new2@example.com");
+await page.click('#subs-add [type=submit]');
+await settle(500);
+const addWrite = writes.find((w) => w.table === "subscriptions" && w.method === "POST") || {};
+check("adding people saves them as confirmed", /new1@example\.com/.test(addWrite.body) && /new2@example\.com/.test(addWrite.body) && /confirmed_at/.test(addWrite.body), JSON.stringify(addWrite));
+await page.selectOption("#subs-list", "e1");
+await settle(800);
+check("an event's list prefills the subject and reaches its list plus all-events",
+  (await page.inputValue("#subs-subject")).startsWith("Update: ") && /Send to 2 people/.test(await page.textContent("#subs-send")),
+  await page.textContent("#subs-send"));
 
 // --- invites ----------------------------------------------------------
 // Changing only the #hash does not reload the page; start from blank.

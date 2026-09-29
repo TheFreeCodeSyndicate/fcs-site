@@ -257,6 +257,7 @@ export function eventCardHTML(event) {
   }
   if (state !== "finished") {
     links.push(`<button type="button" class="link-button" data-ics-single="${escapeAttr(event.id)}">Add to calendar</button>`);
+    links.push(`<button type="button" class="link-button" data-notify="${escapeAttr(event.id)}">Email me updates</button>`);
   }
 
   const tag = isLive

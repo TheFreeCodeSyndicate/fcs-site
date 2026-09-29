@@ -1,0 +1,31 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//The Free Code Syndicate//Events//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+REFRESH-INTERVAL;VALUE=DURATION:PT1H
+X-PUBLISHED-TTL:PT1H
+X-WR-CALNAME:FCS Events
+BEGIN:VEVENT
+UID:f7e1bb96-9efc-4872-9c2c-12358348fc00@freecodesyndicate
+DTSTAMP:20260929T141959Z
+DTSTART:20260804T153000Z
+DTEND:20260804T163000Z
+SUMMARY:CryptoMeet-3 Session
+DESCRIPTION:A meeting for discussing the PCSP project\, DES and AES\, and s
+ ome public key cryptography.
+CATEGORIES:Crypto Study Group
+URL:https://discord.gg/97BAafVesn
+END:VEVENT
+BEGIN:VEVENT
+UID:856c0f61-3651-4026-bb68-fbf4b962f0c0@freecodesyndicate
+DTSTAMP:20260929T141959Z
+DTSTART:20260809T153000Z
+DTEND:20260809T163000Z
+SUMMARY:Quantum Computing and PQC Session
+DESCRIPTION:A meeting for discussing quantum computing and post-quantum cry
+ ptography.
+CATEGORIES:Crypto Study Group
+URL:https://calendar.app.google/4agDYABbWPYyvWQc9
+END:VEVENT
+END:VCALENDAR

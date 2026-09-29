@@ -45,6 +45,7 @@ A sidebar lists one page per kind of content, each at its own address
 | Core members | Leads and mentors, including Move to alumni |
 | Study groups, Resources, Social links | The matching public sections |
 | Repo curation | Which GitHub repos show under Resources instead of Projects |
+| Subscribers (admins only) | Email lists per event and for all events; send updates |
 | Team (admins only) | Who has access, and approving new accounts |
 
 Clicking a row opens an editing drawer with a **live preview** of the card,
@@ -137,6 +138,39 @@ Invites go through the `invite-member` Edge Function
 (`supabase/functions/invite-member/`): it checks the caller is an admin,
 sends the invite and sets the chosen role. The service-role key it uses
 stays inside Supabase. Deploy changes with the Supabase CLI or MCP.
+
+### Event updates: calendar feed and email lists
+
+**Calendar.** The deploy workflow writes `events.ics` every 30 minutes
+(`tools/events-feed.mjs`). "Add to your calendar" on the events section
+subscribes Google, Apple or Outlook Calendar to it, so new and changed
+events appear on their own. Each event card still offers a one-off
+"Add to calendar".
+
+**Email.** "Email me about events" and each event's "Email me updates"
+sign people up through the `event-mail` Edge Function
+(`supabase/functions/event-mail/`). They get a confirmation email and
+count only once they click it. Admins see the lists on the **Subscribers**
+page, can add addresses directly (counted straight away, no confirmation),
+send a test to themselves, and send a plain-text update:
+
+- an event's update goes to that event's list and the all-events list;
+- an "all events" update goes to everyone on any list;
+- one email per person, each with its own unsubscribe link
+  (`subscribe.html`), and the send is recorded in the activity log.
+
+The function sends through Gmail with the club's app password. Set it once
+under **Supabase → Edge Functions → Secrets**:
+
+| Name | Value |
+|------|-------|
+| `GMAIL_USER` | `thefreecodesyndicate@gmail.com` |
+| `GMAIL_APP_PASSWORD` | the 16-character app password (the same one as the Auth SMTP settings) |
+
+Lists and sends are admin-only in the database
+(`011_event_subscriptions.sql`): visitors and editors cannot read them.
+Signups are capped at 100 unconfirmed an hour, one confirmation email per
+address every 10 minutes, and Gmail allows about 500 emails a day.
 
 ### Security model
 
