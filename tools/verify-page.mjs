@@ -46,7 +46,7 @@ const counts = await page.evaluate(() => ({
   groups: document.querySelectorAll(".group-card").length,
   events: document.querySelectorAll(".event-card").length,
   repos: document.querySelectorAll(".repo-card").length,
-  maintainers: document.querySelectorAll(".maintainer-card").length,
+  coreMembers: document.querySelectorAll(".core-card, .core-row").length,
   join: document.querySelectorAll(".join-card").length,
   refs: document.querySelectorAll("#ref-list li").length,
   nav: document.querySelectorAll(".nav-links a").length,
@@ -56,7 +56,7 @@ check("no console errors", consoleErrors.length === 0, consoleErrors.join(" | ")
 check("principles rendered", counts.principles > 0, `${counts.principles}`);
 check("lanes rendered", counts.lanes > 0, `${counts.lanes}`);
 check("groups rendered", counts.groups > 0, `${counts.groups}`);
-check("maintainers rendered", counts.maintainers > 0, `${counts.maintainers}`);
+check("core members rendered", counts.coreMembers > 0, `${counts.coreMembers}`);
 check("join links rendered", counts.join === 4, `${counts.join}`);
 check("references rendered", counts.refs === 4, `${counts.refs}`);
 check("nav has links", counts.nav === 6, `${counts.nav}`);

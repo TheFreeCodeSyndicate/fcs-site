@@ -1,7 +1,7 @@
 /*
  * js/data.js
  * ------------------------------------------------------------------
- * PRINCIPLES, CONTRIBUTION_LANES and MAINTAINERS are fixed page copy
+ * PRINCIPLES and CONTRIBUTION_LANES are fixed page copy
  * and live here permanently.
  *
  * The SEED_* arrays are a FALLBACK used only when Supabase is
@@ -16,24 +16,14 @@
 const GITHUB_ORG = "TheFreeCodeSyndicate";
 
 /*
- * Maintainers (Section 9).
+ * Core members (Section 9). A FALLBACK like the SEED_* arrays below:
+ * the real list lives in the core_members table and is edited in the
+ * admin panel. Only filled-in links are shown on the page.
  */
-const MAINTAINERS = [
-  {
-    name: "Ronit Choudhury",
-    username: "nonQualities",
-    url: "https://github.com/nonQualities",
-  },
-  {
-    name: "Jyotirmoy Das",
-    username: "JyotirmoyDas05",
-    url: "https://github.com/JyotirmoyDas05",
-  },
-  {
-    name: "Ved Bhandary",
-    username: "no3465",
-    url: "https://github.com/no3465",
-  },
+const SEED_CORE_MEMBERS = [
+  { name: "Ronit Choudhury", role: "lead", status: "active", github_username: "nonQualities" },
+  { name: "Jyotirmoy Das", role: "lead", status: "active", github_username: "JyotirmoyDas05" },
+  { name: "Ved Bhandary", role: "lead", status: "active", github_username: "no3465" },
 ];
 
 /*
@@ -239,7 +229,7 @@ const SEED_REPO_KINDS = [];
    Everything main.js needs must be published on `window` explicitly. */
 window.PRINCIPLES = PRINCIPLES;
 window.CONTRIBUTION_LANES = CONTRIBUTION_LANES;
-window.MAINTAINERS = MAINTAINERS;
+window.SEED_CORE_MEMBERS = SEED_CORE_MEMBERS;
 window.GITHUB_ORG = GITHUB_ORG;
 window.SEED_EVENTS = SEED_EVENTS;
 window.SEED_STUDY_GROUPS = SEED_STUDY_GROUPS;

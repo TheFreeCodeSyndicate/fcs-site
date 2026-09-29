@@ -23,7 +23,7 @@ import { buildICS } from "./lib/ics.js";
 import { splitRepos } from "./lib/repos.js";
 import {
   getEvents, getClassSessions, getResources,
-  getStudyGroups, getSocialLinks, getRepoKinds,
+  getStudyGroups, getSocialLinks, getRepoKinds, getCoreMembers,
 } from "./supabase.js";
 
 let allEvents = [];
@@ -52,7 +52,6 @@ document.addEventListener("DOMContentLoaded", () => {
   // others.
   loadContent();
   loadRepositories();
-  fetchMaintainers();
 });
 
 /* ------------------------------------------------------------------
@@ -148,12 +147,13 @@ function renderContributionLanes() {
  * rejecting, so Promise.all cannot blank the page.
  * ---------------------------------------------------------------- */
 async function loadContent() {
-  const [events, classSessions, resources, studyGroups, socialLinks] = await Promise.all([
+  const [events, classSessions, resources, studyGroups, socialLinks, coreMembers] = await Promise.all([
     getEvents(window.SEED_EVENTS || []),
     getClassSessions([]),
     getResources(window.SEED_RESOURCES || []),
     getStudyGroups(window.SEED_STUDY_GROUPS || []),
     getSocialLinks(window.SEED_JOIN_LINKS || []),
+    getCoreMembers(window.SEED_CORE_MEMBERS || []),
   ]);
 
   allEvents = Array.isArray(events) ? events : [];
@@ -167,6 +167,7 @@ async function loadContent() {
   setMetaGroups(studyGroups);
   renderJoinLinks(socialLinks);
   setMetaDiscord(socialLinks);
+  renderCoreMembers(coreMembers);
   renderReferences(socialLinks);
   bindIcs();
 }
@@ -330,106 +331,276 @@ function formatDate(isoString) {
 }
 
 /* ------------------------------------------------------------------
- * Section 9 — Maintainers
+ * Section 9: Core members
+ *
+ * Leads get a full personnel-file card each. Everyone else goes in a
+ * roster: one row per person that expands in place into the same card,
+ * with a focus-driven preview panel beside it on desktop. One layout
+ * from 3 people to 30+; group filters appear past 8. Alumni sit in a
+ * collapsed list at the end.
+ *
+ * No GitHub API calls: avatars are plain image URLs
+ * (github.com/<user>.png), which the rate limit does not count.
  * ---------------------------------------------------------------- */
-async function fetchMaintainers() {
-  const statusEl = document.getElementById("maintainer-status");
-  const gridEl = document.getElementById("maintainer-grid");
-  if (!statusEl || !gridEl) return;
+const ROSTER_FILTER_THRESHOLD = 8;
+let rosterGroup = "All";
+let rosterMembers = [];
 
-  const maintainers = window.MAINTAINERS || [];
-  if (!maintainers.length) {
-    statusEl.textContent = "No maintainers are listed yet.";
-    gridEl.hidden = true;
+/* The links a person filled in, in a fixed order, each with its icon.
+ * Discord has no linkable profile, so it is a copy button. */
+const PERSON_LINKS = [
+  ["github", (m) => m.github_username && `https://github.com/${encodeURIComponent(m.github_username)}`, "GitHub"],
+  ["linkedin", (m) => m.linkedin_url, "LinkedIn"],
+  ["instagram", (m) => m.instagram_url, "Instagram"],
+  ["x", (m) => m.x_url, "X"],
+  ["globe", (m) => m.website_url, "Website"],
+  ["mail", (m) => m.email && `mailto:${m.email}`, "Email"],
+];
+
+function sortMembers(list) {
+  return [...list].sort(
+    (a, b) => (a.sort_order || 0) - (b.sort_order || 0) || String(a.name).localeCompare(String(b.name))
+  );
+}
+
+function avatarURL(member, size) {
+  if (member.photo_url && size > 24) return safeURL(member.photo_url);
+  if (!member.github_username) return "";
+  return safeURL(`https://github.com/${encodeURIComponent(member.github_username)}.png?size=${size}`);
+}
+
+/* A 24px avatar blown up with hard pixels, with the real photo stacked
+ * on top and clipped away. The photo's src waits in data-src until
+ * someone looks at the person, so a long roster costs 24px avatars. */
+function portraitHTML(member, className = "") {
+  const pixel = avatarURL(member, 24);
+  const photo = avatarURL(member, 192);
+  const initial = escapeHTML(String(member.name || "?").trim().charAt(0).toUpperCase());
+  return `
+    <span class="portrait ${className}" aria-hidden="true">
+      ${pixel
+        ? `<img class="portrait-pixel" src="${pixel}" width="24" height="24" alt="" loading="lazy" />`
+        : `<span class="portrait-initial">${initial}</span>`}
+      ${photo ? `<img class="portrait-photo" data-src="${photo}" alt="" />` : ""}
+    </span>`;
+}
+
+function roleStamp(member) {
+  const role = member.role === "lead" ? "lead" : "mentor";
+  return `<span class="stamp stamp-${role}">${role === "lead" ? "Lead" : "Mentor"}</span>`;
+}
+
+function personLinksHTML(member) {
+  const items = PERSON_LINKS
+    .map(([iconName, toURL, label]) => {
+      const url = safeURL(toURL(member) || "");
+      // mailto: is not http(s), so safeURL refuses it; build it separately.
+      const href = iconName === "mail" && member.email ? escapeAttr(`mailto:${member.email}`) : url;
+      if (!href) return "";
+      const external = iconName === "mail" ? "" : ' target="_blank" rel="noopener"';
+      return `<li><a href="${href}"${external} aria-label="${escapeAttr(`${member.name} on ${label}`)}">${icon(iconName)}</a></li>`;
+    })
+    .join("");
+  const discord = member.discord_handle
+    ? `<li><button type="button" class="core-discord join-copy" data-copy="${escapeAttr(member.discord_handle)}"
+          aria-label="Copy ${escapeAttr(member.name)}'s Discord handle">${icon("discord")}<span class="join-copy-text">${escapeHTML(member.discord_handle)}</span></button></li>`
+    : "";
+  return items || discord ? `<ul class="core-links">${items}${discord}</ul>` : "";
+}
+
+function whoisHTML(member) {
+  const rows = [
+    ["runs", member.group_name],
+    ["focus", Array.isArray(member.focus) && member.focus.length ? member.focus.join(", ") : ""],
+    ["since", member.joined_on ? String(member.joined_on).slice(0, 4) : ""],
+  ].filter(([, value]) => value);
+  if (!rows.length) return "";
+  const handle = member.github_username || String(member.name || "").split(" ")[0].toLowerCase();
+  return `
+    <div class="core-whois">
+      <p class="core-whois-cmd"><span aria-hidden="true">$</span> whois ${escapeHTML(handle)}</p>
+      <dl>${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHTML(v)}</dd></div>`).join("")}</dl>
+    </div>`;
+}
+
+/* The personnel file. Used for lead cards and inside expanded rows. */
+function personFileHTML(member, { withPortrait = true } = {}) {
+  const handle = member.github_username
+    ? `<a class="core-handle" href="${safeURL(`https://github.com/${encodeURIComponent(member.github_username)}`)}" target="_blank" rel="noopener">@${escapeHTML(member.github_username)}</a>`
+    : "";
+  return `
+    <div class="core-file">
+      <div class="core-file-head">
+        ${withPortrait ? portraitHTML(member, "portrait-lg") : ""}
+        <div class="core-file-id">
+          ${roleStamp(member)}
+          <h3 class="core-name">${escapeHTML(member.name)}</h3>
+          ${member.title ? `<p class="core-title">${escapeHTML(member.title)}</p>` : ""}
+          ${handle}
+        </div>
+      </div>
+      ${whoisHTML(member)}
+      ${member.bio ? `<p class="core-bio">${escapeHTML(member.bio)}</p>` : ""}
+      ${personLinksHTML(member)}
+    </div>`;
+}
+
+function rosterRowHTML(member, index) {
+  const id = `core-row-${index}`;
+  const focus = Array.isArray(member.focus) ? member.focus.slice(0, 2).join(", ") : "";
+  return `
+    <li class="core-row" data-person="${index}">
+      <button type="button" class="core-row-head" aria-expanded="false" aria-controls="${id}">
+        <span class="core-no">${String(index + 1).padStart(2, "0")}</span>
+        ${portraitHTML(member, "portrait-sm")}
+        <span class="core-row-name">${escapeHTML(member.name)}</span>
+        ${roleStamp(member)}
+        <span class="core-row-runs">${escapeHTML(member.group_name || "")}</span>
+        <span class="core-row-focus">${escapeHTML(focus)}</span>
+        ${icon("chevron-down", "core-chevron")}
+      </button>
+      <div class="core-row-body" id="${id}">
+        <div class="core-row-inner">${personFileHTML(member, { withPortrait: false })}</div>
+      </div>
+    </li>`;
+}
+
+function renderCoreMembers(members) {
+  const section = document.getElementById("core");
+  if (!section) return;
+
+  const all = sortMembers(Array.isArray(members) ? members : []);
+  const active = all.filter((m) => m.status !== "alumni");
+  const alumni = all.filter((m) => m.status === "alumni");
+  const leads = active.filter((m) => m.role === "lead");
+  rosterMembers = active.filter((m) => m.role !== "lead");
+
+  const count = document.getElementById("core-count");
+  if (count) count.textContent = active.length ? `${active.length} ${active.length === 1 ? "person" : "people"}` : "";
+
+  const leadsEl = document.getElementById("core-leads");
+  leadsEl.innerHTML = leads
+    .map((m) => `<article class="core-card" data-person-card>${personFileHTML(m)}</article>`)
+    .join("");
+  leadsEl.hidden = !leads.length;
+
+  renderRoster();
+
+  const alumniEl = document.getElementById("core-alumni");
+  alumniEl.hidden = !alumni.length;
+  alumniEl.innerHTML = alumni.length
+    ? `<summary>Past core members (${alumni.length})</summary>
+       <ul>${alumni.map((m) => {
+         const years = [m.joined_on, m.ended_on].filter(Boolean).map((d) => String(d).slice(0, 4)).join(" to ");
+         const link = m.github_username
+           ? `<a href="${safeURL(`https://github.com/${encodeURIComponent(m.github_username)}`)}" target="_blank" rel="noopener">@${escapeHTML(m.github_username)}</a>`
+           : "";
+         return `<li><strong>${escapeHTML(m.name)}</strong> ${roleStamp(m)} <span>${escapeHTML(years)}</span> ${link}</li>`;
+       }).join("")}</ul>`
+    : "";
+
+  if (!active.length && !alumni.length) {
+    leadsEl.hidden = false;
+    leadsEl.innerHTML = `<p class="empty-note">The core member list is being written. Ask in the rooms below who runs what.</p>`;
+  }
+
+  bindCoreMembers();
+}
+
+function renderRoster() {
+  const wrap = document.getElementById("core-roster-wrap");
+  const list = document.getElementById("core-roster");
+  const filters = document.getElementById("core-filters");
+  if (!wrap || !list) return;
+
+  wrap.hidden = !rosterMembers.length;
+  if (!rosterMembers.length) return;
+
+  const groups = [...new Set(rosterMembers.map((m) => m.group_name).filter(Boolean))];
+  const showFilters = rosterMembers.length > ROSTER_FILTER_THRESHOLD && groups.length > 1;
+  filters.hidden = !showFilters;
+  if (showFilters) {
+    filters.innerHTML = ["All", ...groups]
+      .map((g) => `<button type="button" class="chip${g === rosterGroup ? " is-active" : ""}" data-group="${escapeAttr(g)}" aria-pressed="${g === rosterGroup}">${escapeHTML(g)}</button>`)
+      .join("");
+  } else {
+    rosterGroup = "All";
+  }
+
+  const shown = rosterMembers
+    .map((m, i) => [m, i])
+    .filter(([m]) => rosterGroup === "All" || m.group_name === rosterGroup);
+  list.innerHTML = shown.map(([m, i]) => rosterRowHTML(m, i)).join("");
+  previewPerson(shown.length ? shown[0][1] : null);
+}
+
+/* The preview panel shows whichever row was last hovered or focused. */
+function previewPerson(index) {
+  const panel = document.getElementById("core-preview");
+  if (!panel) return;
+  const member = index == null ? null : rosterMembers[index];
+  if (!member) {
+    panel.innerHTML = "";
     return;
   }
+  if (panel.dataset.person === String(index)) return;
+  panel.dataset.person = String(index);
+  panel.innerHTML = `
+    ${portraitHTML(member, "portrait-xl")}
+    <p class="core-preview-name">${escapeHTML(member.name)}</p>
+    ${member.title ? `<p class="core-preview-title">${escapeHTML(member.title)}</p>` : ""}`;
+  developPortraits(panel);
 
-  try {
-    const profiles = await Promise.all(
-      maintainers.map(async (maintainer) => {
-        const profile = await githubJSON(`/users/${encodeURIComponent(maintainer.username)}`);
-        return { ...maintainer, profile };
-      })
-    );
-
-    gridEl.innerHTML = profiles.map(maintainerCardHTML).join("");
-    statusEl.hidden = true;
-    gridEl.hidden = false;
-  } catch (err) {
-    gridEl.innerHTML = maintainers.map(maintainerFallbackCardHTML).join("");
-    statusEl.textContent = "GitHub profiles cannot be read now. Maintainer links remain available.";
-    gridEl.hidden = false;
-    console.error("[FCS] Maintainer profile fetch failed:", err);
-  }
+  // Start the scanline wipe only once the photo is there to reveal.
+  const portrait = panel.querySelector(".portrait");
+  const photo = panel.querySelector(".portrait-photo");
+  if (!portrait || !photo) return;
+  const develop = () => requestAnimationFrame(() => portrait.classList.add("is-developing"));
+  if (photo.complete && photo.naturalWidth) develop();
+  else photo.addEventListener("load", develop, { once: true });
 }
 
-function maintainerCardHTML(maintainer) {
-  const profile = maintainer.profile || {};
-  const displayName = profile.name || maintainer.name;
-  const bio = profile.bio || "No public profile note is present.";
-  const location = profile.location || "Location not listed";
-  const repoCount = Number.isFinite(profile.public_repos) ? profile.public_repos : 0;
-  const followers = Number.isFinite(profile.followers) ? profile.followers : 0;
-  // A GitHub API that returned something other than an image URL would
-  // otherwise produce a broken <img> on every card.
-  const avatar = safeURL(profile.avatar_url);
-
-  return `
-    <article class="maintainer-card">
-      <div class="maintainer-top">
-        ${
-          avatar
-            ? `<img
-          src="${avatar}"
-          alt=""
-          aria-hidden="true"
-          width="96"
-          height="96"
-          loading="lazy"
-        />`
-            : `<span class="maintainer-avatar" aria-hidden="true">${escapeHTML(String(maintainer.name).charAt(0))}</span>`
-        }
-        <div>
-          <h3>${escapeHTML(maintainer.name)}</h3>
-          <a href="${safeURL(maintainer.url)}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
-        </div>
-      </div>
-      <p class="maintainer-bio">${escapeHTML(bio)}</p>
-      <dl class="maintainer-meta">
-        <div>
-          <dt>profile name</dt>
-          <dd>${escapeHTML(displayName)}</dd>
-        </div>
-        <div>
-          <dt>location</dt>
-          <dd>${escapeHTML(location)}</dd>
-        </div>
-        <div>
-          <dt>public repos</dt>
-          <dd>${repoCount}</dd>
-        </div>
-        <div>
-          <dt>followers</dt>
-          <dd>${followers}</dd>
-        </div>
-      </dl>
-    </article>
-  `;
+/* Give a portrait its real photo. Called when someone looks at it. */
+function developPortraits(scope) {
+  scope.querySelectorAll(".portrait-photo[data-src]").forEach((img) => {
+    img.src = img.dataset.src;
+    img.removeAttribute("data-src");
+  });
 }
 
-function maintainerFallbackCardHTML(maintainer) {
-  return `
-    <article class="maintainer-card">
-      <div class="maintainer-top">
-        <span class="maintainer-avatar" aria-hidden="true">${escapeHTML(String(maintainer.name).charAt(0))}</span>
-        <div>
-          <h3>${escapeHTML(maintainer.name)}</h3>
-          <a href="${safeURL(maintainer.url)}" target="_blank" rel="noopener">@${escapeHTML(maintainer.username)}</a>
-        </div>
-      </div>
-      <p class="maintainer-bio">Open the GitHub profile for the current public overview.</p>
-    </article>
-  `;
+let coreBound = false;
+function bindCoreMembers() {
+  if (coreBound) return;
+  coreBound = true;
+  const section = document.getElementById("core");
+
+  // Hover or focus anywhere on a card or row loads its photo.
+  const look = (event) => {
+    const target = event.target.closest("[data-person-card], .core-row");
+    if (target) developPortraits(target);
+    const row = event.target.closest(".core-row");
+    if (row) previewPerson(Number(row.dataset.person));
+  };
+  section.addEventListener("pointerover", look);
+  section.addEventListener("focusin", look);
+
+  section.addEventListener("click", (event) => {
+    const chip = event.target.closest("#core-filters .chip");
+    if (chip) {
+      rosterGroup = chip.dataset.group;
+      renderRoster();
+      return;
+    }
+
+    const head = event.target.closest(".core-row-head");
+    if (!head) return;
+    const open = head.getAttribute("aria-expanded") !== "true";
+    // One open at a time keeps a long roster short.
+    section.querySelectorAll('.core-row-head[aria-expanded="true"]').forEach((other) => {
+      if (other !== head) other.setAttribute("aria-expanded", "false");
+    });
+    head.setAttribute("aria-expanded", String(open));
+  });
 }
 
 /* ------------------------------------------------------------------
@@ -940,6 +1111,8 @@ function setupCopyButtons() {
     const button = event.target.closest(".join-copy");
     if (!button) return;
     const label = button.querySelector(".join-copy-text");
+    // Remember what the button said, so a handle comes back, not "Copy".
+    if (!label.dataset.idle) label.dataset.idle = label.textContent;
     try {
       await navigator.clipboard.writeText(button.dataset.copy);
       label.textContent = "Copied";
@@ -949,7 +1122,7 @@ function setupCopyButtons() {
     button.classList.add("is-done");
     clearTimeout(button.resetTimer);
     button.resetTimer = setTimeout(() => {
-      label.textContent = "Copy";
+      label.textContent = label.dataset.idle;
       button.classList.remove("is-done");
     }, 1600);
   });

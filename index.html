@@ -385,18 +385,24 @@
     <!-- ========================================================
          SECTION 9 — MAINTAINERS
          ======================================================== -->
-    <section class="doc-section" id="maintainers">
-      <h2><span class="sec-num">09</span> Maintainers</h2>
+    <section class="doc-section" id="core">
+      <h2><span class="sec-num">09</span> Core Members <span class="core-count" id="core-count"></span></h2>
       <p class="sec-intro">
-        Maintainers keep the public record usable. They review, repair,
-        answer, and decide when silence would harm the work.
+        Core members keep the public record usable. They run the rooms,
+        mentor newcomers, and decide when silence would harm the work.
       </p>
 
-      <p id="maintainer-status" class="repo-status" role="status" aria-live="polite">
-        Reading maintainer profiles<span class="cursor" aria-hidden="true">_</span>
-      </p>
+      <div id="core-leads" class="core-leads"></div>
 
-      <div id="maintainer-grid" class="maintainer-grid" hidden></div>
+      <div id="core-roster-wrap" class="core-roster-wrap" hidden>
+        <div id="core-filters" class="event-filters core-filters" role="group" aria-label="Filter core members by group" hidden></div>
+        <div class="core-roster-layout">
+          <ol id="core-roster" class="core-roster"></ol>
+          <aside id="core-preview" class="core-preview" aria-hidden="true"></aside>
+        </div>
+      </div>
+
+      <details id="core-alumni" class="core-alumni past-events" hidden></details>
     </section>
 
     <div class="rule"></div>

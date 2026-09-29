@@ -87,6 +87,13 @@ export async function getSocialLinks(fallback) {
   catch { return fallback || []; }
 }
 
+/* Published core members, active and alumni both: the page shows
+ * alumni in their own collapsed list. */
+export async function getCoreMembers(fallback) {
+  try { return ((await readTable("core_members")) || fallback || []).filter((m) => m.is_published !== false); }
+  catch { return fallback || []; }
+}
+
 export async function getRepoKinds() {
   try { return (await readTable("repo_kinds", "repo_name")) || []; }
   catch { return []; }
@@ -208,6 +215,17 @@ export const updateSocialLink = (id, patch) =>
 export const deleteSocialLink = (id) =>
   write((s) => s.from("social_links").delete().eq("id", id).select(WRITE_OPTS))
     .then((rows) => assertChanged(rows, "Deleting the social link"));
+
+export const createCoreMember = (patch) =>
+  write((s) => s.from("core_members").insert(patch).select().single());
+
+export const updateCoreMember = (id, patch) =>
+  write((s) => s.from("core_members").update(patch).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Updating the core member"));
+
+export const deleteCoreMember = (id) =>
+  write((s) => s.from("core_members").delete().eq("id", id).select(WRITE_OPTS))
+    .then((rows) => assertChanged(rows, "Deleting the core member"));
 
 /** repo_kinds is keyed by repo_name, so this upserts rather than inserts. */
 export const saveRepoKind = (repoName, patch) =>
