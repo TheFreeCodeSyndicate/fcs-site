@@ -166,6 +166,7 @@ async function loadContent() {
   renderStudyGroups(studyGroups);
   setMetaGroups(studyGroups);
   renderJoinLinks(socialLinks);
+  setMetaDiscord(socialLinks);
   renderReferences(socialLinks);
   bindIcs();
 }
@@ -180,8 +181,8 @@ async function loadContent() {
  * ---------------------------------------------------------------- */
 const GITHUB_CACHE_MS = 10 * 60 * 1000;
 
-async function githubJSON(path) {
-  const key = `fcs-gh:${path}`;
+async function cachedJSON(url, headers = {}) {
+  const key = `fcs-cache:${url}`;
   let cached = null;
   try {
     cached = JSON.parse(localStorage.getItem(key));
@@ -191,10 +192,8 @@ async function githubJSON(path) {
   if (cached && Date.now() - cached.at < GITHUB_CACHE_MS) return cached.data;
 
   try {
-    const res = await fetch(`https://api.github.com${path}`, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
-    if (!res.ok) throw new Error(`GitHub API responded with ${res.status}`);
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error(`${new URL(url).host} responded with ${res.status}`);
     const data = await res.json();
     try {
       localStorage.setItem(key, JSON.stringify({ at: Date.now(), data }));
@@ -206,6 +205,10 @@ async function githubJSON(path) {
     if (cached) return cached.data; // stale beats empty
     throw err;
   }
+}
+
+function githubJSON(path) {
+  return cachedJSON(`https://api.github.com${path}`, { Accept: "application/vnd.github+json" });
 }
 
 /* ------------------------------------------------------------------
@@ -1077,5 +1080,31 @@ function setMetaStatus(mode, detail) {
   if (slot.textContent !== text) slot.textContent = text;
   slot.dataset.state = mode;
   slot.title = mode === "live" && detail ? `${detail} is live` : "";
+}
+
+/* Discord member and online counts, from the public invite endpoint
+ * (no token, CORS-enabled). The invite code comes from the Discord
+ * row in social links, so changing the invite in the CMS moves this
+ * too. */
+async function setMetaDiscord(links) {
+  const slot = metaSlot("discord");
+  if (!slot) return;
+  const discord = (Array.isArray(links) ? links : []).find(
+    (item) => String(item && item.platform).toLowerCase() === "discord"
+  );
+  const match = discord && /(?:discord\.gg|discord(?:app)?\.com\/invite)\/([\w-]+)/i.exec(discord.url || "");
+  if (!match) return;
+
+  slot.innerHTML = `<a href="${safeURL(discord.url)}" target="_blank" rel="noopener">Join the server</a>`;
+  try {
+    const invite = await cachedJSON(`https://discord.com/api/v9/invites/${encodeURIComponent(match[1])}?with_counts=true`);
+    const members = invite.approximate_member_count;
+    const online = invite.approximate_presence_count;
+    if (!Number.isFinite(members)) return;
+    slot.innerHTML = `<a href="${safeURL(discord.url)}" target="_blank" rel="noopener">${members} members</a>` +
+      (Number.isFinite(online) ? `, <span class="meta-online">${online} online</span>` : "");
+  } catch (err) {
+    console.warn("[FCS] Discord counts could not be read:", err);
+  }
 }
 

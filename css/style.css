@@ -190,8 +190,8 @@ mark {
 
 .doc-meta {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.75rem 1.5rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 0.75rem 2rem;
   font-size: 0.72rem;
 }
 
@@ -2221,6 +2221,30 @@ a.status-active:focus-visible,
 @media (prefers-reduced-motion: reduce) {
   .status-active[data-state="live"]::before {
     animation: none;
+  }
+}
+
+/* The online count gets a small green-free cue: the brand cyan dot. */
+.meta-online::before {
+  content: "";
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: var(--cyan);
+  border: 1px solid var(--ink);
+  vertical-align: 0.05em;
+}
+
+/* Five facts on a phone: two columns, status spans the last row. */
+@media (max-width: 520px) {
+  .doc-meta-col--status {
+    grid-column: 1 / -1;
+  }
+
+  .doc-meta-col--status .status-active {
+    align-self: flex-start;
   }
 }
 
