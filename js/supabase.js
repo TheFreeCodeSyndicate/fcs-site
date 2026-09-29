@@ -260,6 +260,13 @@ export const setProfileRole = (id, role) =>
   write((s) => s.from("profiles").update({ role }).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Changing the role"));
 
+/* Deletes the person's login entirely (migration 009); admins only,
+ * and never yourself. Their profile goes with it. */
+export async function removeMember(id) {
+  const { error } = await getClientOrThrow().rpc("remove_member", { target: id });
+  if (error) throw error;
+}
+
 /* ---- invites (Edge Function supabase/functions/invite-member) -------
  *
  * The function checks the caller is an admin, sends Supabase's invite

@@ -61,6 +61,9 @@ a past event shows FINISHED even if nobody moved its card.
   Team page. Editors add and edit; admins can also delete and manage the team.
 - The database refuses role changes by anyone but an admin, and never lets
   the last admin be removed (`supabase/migrations/003_team_roles.sql`).
+- **Remove** on the Team page deletes someone's login entirely, which ends
+  their sessions; the content they edited stays. Admins only, and never
+  yourself (`009_remove_member.sql`). Invite them again to bring them back.
 - To stop strangers creating accounts at all, turn off **Authentication →
   Sign In / Providers → Allow new users to sign up** in Supabase and invite
   people from **Authentication → Users** instead.

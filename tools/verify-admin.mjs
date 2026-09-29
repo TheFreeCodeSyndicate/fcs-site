@@ -302,6 +302,15 @@ await settle(900);
 check("the Team page sends an invite with the chosen role",
   invites.length === 1 && invites[0].includes('"email":"friend@fcs.test"') && invites[0].includes('"role":"admin"'), invites.join(" | "));
 
+// removing someone: two clicks, never offered for yourself
+check("you cannot remove yourself", !(await page.$('.team-list [data-id="u1"] [data-remove]')));
+await page.click('.team-list [data-id="u2"] [data-remove]');
+check("the first Remove click only arms it", !writes.some((w) => w.table === "remove_member"));
+await page.click('.team-list [data-id="u2"] [data-remove]');
+await settle(500);
+check("the second Remove click deletes that login",
+  writes.some((w) => w.table === "remove_member" && w.body.includes('"target":"u2"')), JSON.stringify(lastWrite()));
+
 // opening the invite link: set and confirm a password to accept
 await page.evaluate(() => sessionStorage.setItem("fcs-test-signed-out", "1"));
 await page.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith("sb-")) localStorage.removeItem(k); });

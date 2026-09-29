@@ -25,7 +25,7 @@ import {
   createSocialLink, updateSocialLink, deleteSocialLink,
   createCoreMember, updateCoreMember, deleteCoreMember,
   saveRepoKind, deleteRepoKind,
-  listProfiles, setProfileRole,
+  listProfiles, setProfileRole, removeMember,
   requestPasswordReset, updatePassword,
   listActivity, lastChange, restoreDeleted, inviteMember,
   uploadMemberPhoto, removeMemberPhotos,
@@ -157,15 +157,16 @@ const deleteDisabled = () => (isAdmin() ? "" : ' disabled title="Only admins can
 /* Arm-then-confirm delete: the first click arms the button for three
  * seconds, the second click deletes. No browser confirm() dialog. */
 function armedDelete(button, run) {
+  const label = button.querySelector("span").textContent;
   button.addEventListener("click", async () => {
     if (button.disabled) return;
     if (button.dataset.armed !== "true") {
       button.dataset.armed = "true";
-      button.querySelector("span").textContent = "Click again to delete";
+      button.querySelector("span").textContent = `Click again to ${label.toLowerCase()}`;
       clearTimeout(button.disarm);
       button.disarm = setTimeout(() => {
         button.dataset.armed = "false";
-        button.querySelector("span").textContent = "Delete";
+        button.querySelector("span").textContent = label;
       }, 3000);
       return;
     }
@@ -1568,6 +1569,8 @@ function renderTeamPage(page) {
       Everyone who has signed in. New accounts start with no access until
       an admin approves them. Editors add and edit content; admins can also
       delete and manage this list. There is always at least one admin.
+      <strong>No access</strong> keeps the account but blocks it; <strong>Remove</strong>
+      deletes their login entirely.
     </p>
     <form class="invite-form" id="invite-form" novalidate>
       <div class="field">
@@ -1602,6 +1605,7 @@ function renderTeamPage(page) {
               <select id="role-${escapeAttr(p.id)}" data-role-select>
                 ${Object.entries(ROLE_LABELS).map(([value, label]) => `<option value="${value}"${p.role === value ? " selected" : ""}>${label}</option>`).join("")}
               </select>
+              ${you ? "" : `<button type="button" class="btn btn-danger" data-remove aria-label="Remove ${escapeAttr(p.email || "this account")} completely">${icon("trash")}<span>Remove</span></button>`}
             </span>
           </li>`;
       }).join("")}
@@ -1651,6 +1655,19 @@ function renderTeamPage(page) {
     const approve = li.querySelector("[data-role]");
     if (approve) approve.addEventListener("click", () => change(approve.dataset.role));
     li.querySelector("[data-role-select]").addEventListener("change", (event) => change(event.target.value));
+    const remove = li.querySelector("[data-remove]");
+    if (remove) armedDelete(remove, async () => {
+      const who = (state.profiles.find((p) => p.id === id) || {}).email || "the account";
+      try {
+        await removeMember(id);
+        state.profiles = await listProfiles();
+        renderSidebar();
+        renderTeamPage(page);
+        toast(`Removed ${who}. Their login is deleted; invite them again to bring them back.`, "delete");
+      } catch (err) {
+        toast(err.message || "Could not remove them.", "error");
+      }
+    });
   });
 }
 
