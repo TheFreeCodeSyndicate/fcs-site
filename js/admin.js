@@ -175,6 +175,13 @@ document.addEventListener("DOMContentLoaded", boot);
 const RECOVERY = /type=recovery/.test(location.hash);
 
 async function boot() {
+  // Clickjacking guard: never run the admin inside another site's frame.
+  // (GitHub Pages cannot send a frame-ancestors header.)
+  if (window.top !== window.self) {
+    document.body.textContent = "The admin panel cannot be shown inside another page.";
+    return;
+  }
+
   document.getElementById("admin-signout").addEventListener("click", () =>
     signOut().then(() => location.reload())
   );

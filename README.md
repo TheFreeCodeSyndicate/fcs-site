@@ -25,8 +25,9 @@ deliberately not a project dependency:
 
 ```bash
 npm install --no-save --no-package-lock playwright
-node tools/verify-page.mjs  http://localhost:8000/
-node tools/verify-admin.mjs http://localhost:8000/
+node tools/verify-page.mjs      http://localhost:8000/
+node tools/verify-admin.mjs     http://localhost:8000/
+node tools/verify-deeplinks.mjs http://localhost:8000/
 ```
 
 ## The admin panel
@@ -89,6 +90,21 @@ not in code.
 5. For each other maintainer, create an account under **Authentication →
    Users**, then approve it on the admin panel's Team page. New accounts have
    no access until approved.
+
+### Security model
+
+- The anon key in `js/config.js` is public by design. Everything it can do
+  is decided by Row Level Security in Postgres:
+  - visitors read only published rows (no drafts, hidden members or
+    inactive sessions; `004_hide_unpublished.sql`);
+  - editors add and edit, admins also delete, and new accounts have no
+    access until approved (`003_team_roles.sql`);
+  - the anon role has no write grants at all.
+- Both pages carry a Content-Security-Policy `<meta>`: scripts from this
+  site only, network calls only to Supabase, GitHub and Discord. If you add
+  another service, add its origin to `connect-src` in both `index.html`
+  and `admin.html`.
+- The admin panel refuses to run inside another site's frame.
 
 The anon key is designed to be public and is safe to commit. All authorisation
 is enforced by Row Level Security in Postgres. **Never put the service-role key
