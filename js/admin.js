@@ -298,13 +298,17 @@ async function busy(button, label, run) {
   }
 }
 
-function renderLogin(message) {
+/* notice: optional { text, tone: "info" | "ok" } shown above the form;
+ * email: prefilled, e.g. right after someone sets their password. */
+function renderLogin(notice, { email: prefillEmail = "" } = {}) {
+  const note = typeof notice === "string" ? { text: notice, tone: "info" } : notice;
   const card = gate(`
     <h1>Sign in to the panel</h1>
     <p class="gate-sub">For editors and admins of The Free Code Syndicate.</p>
+    ${note && note.text ? `<p class="gate-notice gate-notice-${note.tone === "ok" ? "ok" : "info"}" role="status">${icon(note.tone === "ok" ? "check" : "circle-info")}<span>${escapeHTML(note.text)}</span></p>` : ""}
     ${gateField({ id: "login-email", label: "Email", type: "email", icon: "mail", autocomplete: "username" })}
     ${gateField({ id: "login-password", label: "Password", type: "password", icon: "lock", autocomplete: "current-password", reveal: true })}
-    <p class="admin-error" id="login-error" role="alert">${message ? escapeHTML(message) : ""}</p>
+    <p class="admin-error" id="login-error" role="alert"></p>
     <button type="submit" class="btn btn-primary gate-submit">${icon("login")}<span>Sign in</span></button>
     <div class="gate-divider"><span>or</span></div>
     <button type="button" class="btn gate-secondary" id="forgot">${icon("key")}<span>Email me a reset link</span></button>
@@ -313,7 +317,12 @@ function renderLogin(message) {
   bindReveal(card);
   const email = card.querySelector("#login-email");
   const errorEl = card.querySelector("#login-error");
-  email.focus();
+  if (prefillEmail) {
+    email.value = prefillEmail;
+    card.querySelector("#login-password").focus();
+  } else {
+    email.focus();
+  }
 
   card.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -363,6 +372,7 @@ async function renderSetPassword(user) {
   const card = gate(`
     <h1>${heading}</h1>
     <p class="gate-sub">${sub}</p>
+    <input type="email" autocomplete="username" value="${escapeAttr(user.email)}" hidden aria-hidden="true" tabindex="-1" />
     ${gateField({ id: "new-password", label: "Password", type: "password", icon: "lock", autocomplete: "new-password", reveal: true })}
     ${gateField({ id: "confirm-password", label: "Confirm password", type: "password", icon: "lock", autocomplete: "new-password" })}
     <p class="admin-error" id="login-error" role="alert"></p>
@@ -387,9 +397,19 @@ async function renderSetPassword(user) {
       return;
     }
     try {
-      const updated = await busy(card.querySelector(".gate-submit"), "Saving…", () => updatePassword(input.value));
-      toast(INVITE ? `Welcome${roleName ? `, ${roleName.toLowerCase()}` : ""}. Your password is set.` : "Password changed. You are signed in.", "success");
-      await onSignedIn(updated);
+      await busy(card.querySelector(".gate-submit"), "Saving…", () => updatePassword(input.value));
+      // Sign out and come back through the front door: this confirms the
+      // new password works, and lets the browser offer to save it.
+      await signOut().catch(() => {});
+      renderLogin(
+        {
+          text: INVITE
+            ? `You're in${roleName ? ` as ${roleName.toLowerCase()}` : ""}. Sign in with your new password.`
+            : "Password changed. Sign in with your new password.",
+          tone: "ok",
+        },
+        { email: user.email }
+      );
     } catch (err) {
       errorEl.textContent = err.message || "Could not set the password.";
     }

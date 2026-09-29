@@ -86,6 +86,11 @@ await page.route("**/functions/v1/invite-member", (route) => {
 // /auth/v1/user who it belongs to; setting the password is a PUT there.
 const invitee = { id: "u9", email: "friend@fcs.test", aud: "authenticated", role: "authenticated" };
 await page.route("**/auth/v1/user**", (route) => route.fulfill({ json: invitee }));
+// Signing in with a password.
+await page.route("**/auth/v1/token?grant_type=password", (route) => route.fulfill({ json: {
+  access_token: "a.b.c", token_type: "bearer", expires_in: 3600,
+  expires_at: Math.floor(Date.now() / 1000) + 3600, refresh_token: "r", user: invitee,
+} }));
 
 await page.route("**/rest/v1/**", (route) => {
   const req = route.request();
@@ -313,7 +318,13 @@ check("mismatched passwords are refused", (await page.$eval("#login-error", (e) 
 await page.fill("#confirm-password", "correct horse");
 await page.click(".gate-submit");
 await settle(1500);
-check("accepting signs the invitee in", Boolean(await page.$(".sidebar-link")));
+check("accepting returns to sign-in with the email filled in and a success notice",
+  (await page.$eval("#login-email", (e) => e.value).catch(() => "")) === "friend@fcs.test" &&
+  /as admin/i.test(await page.$eval(".gate-notice-ok", (e) => e.textContent).catch(() => "")));
+await page.fill("#login-password", "correct horse");
+await page.click(".gate-submit");
+await settle(1500);
+check("signing in with the new password opens the panel", Boolean(await page.$(".sidebar-link")));
 
 check("no console or page errors", errors.length === 0, errors.join(" | "));
 

@@ -980,3 +980,17 @@ body:has(.drawer.is-open) .toasts {
 @media (max-width: 620px) {
   .invite-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Sign-in notices (after a password is set, or an idle sign-out). */
+.gate-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--ink);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-align: left;
+}
+.gate-notice-ok { background: var(--accent); color: var(--accent-ink); }
+.gate-notice-info { background: var(--paper); color: var(--ink); }

@@ -106,8 +106,21 @@ an SMTP server. Free, with no domain needed, using the club Gmail:
    - Host `smtp.gmail.com`, port `465`
    - Username: the full Gmail address; password: the app password
    - Sender email: the same Gmail address; sender name: `The Free Code Syndicate`
-3. Optional: edit the **Invite user** and **Reset password** templates on
-   the same page.
+3. Install the branded email templates (invite, reset password, password
+   changed, email changed, confirm signup, magic link, change email,
+   verification code). They live in `tools/email-templates.mjs`; the
+   generated HTML is in `supabase/email/`. Either paste each file into
+   **Authentication → Emails → Templates**, or push them all at once with a
+   personal access token from <https://supabase.com/dashboard/account/tokens>:
+   ```bash
+   SUPABASE_ACCESS_TOKEN=sbp_... node tools/email-templates.mjs --push
+   ```
+   Pushing also turns on the "password changed" and "email changed"
+   security notices.
+
+An invited person accepts the invite, chooses a password (typed twice), and
+lands back on the sign-in page with their email filled in. From then on
+they sign in with that email and password, with the role the admin chose.
 
 Gmail allows about 500 emails a day, far more than a club needs. The invite
 and reset links return to `/admin.html`, which must be listed under
