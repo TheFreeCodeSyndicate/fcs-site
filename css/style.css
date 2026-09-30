@@ -2551,3 +2551,6 @@ a.status-active:focus-visible,
 
 /* Event and study-group links carry their site's icon. */
 a.site-link { display: inline-flex; align-items: center; gap: 6px; }
+
+/* A study group's own link, then the repos linked to it in the admin. */
+.group-links { display: flex; flex-wrap: wrap; gap: 10px 18px; }

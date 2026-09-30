@@ -264,7 +264,9 @@ export function resourceCardHTML(resource) {
   `;
 }
 
-export function studyGroupCardHTML(group) {
+/* repos: the GitHub repos linked to this group in the admin's
+ * Repositories page; each gets its own link on the card. */
+export function studyGroupCardHTML(group, repos = []) {
   // Status is a free-text column, so the class is derived defensively:
   // an unknown status falls back to a neutral tag rather than producing
   // a bare class that styles nothing.
@@ -274,9 +276,14 @@ export function studyGroupCardHTML(group) {
   const statusClass = known.includes(slug) ? `tag-${slug}` : "tag-upcoming";
   const href = safeURL(group.link);
 
-  const link = href
-    ? `<a class="site-link" href="${href}" target="_blank" rel="noopener">${linkIcon(href)}<span>${escapeHTML(group.link_text || "Open the group")} &rarr;</span></a>`
-    : "";
+  const trim = (url) => String(url || "").replace(/\/+$/, "").toLowerCase();
+  const repoLinks = repos
+    .filter((r) => safeURL(r.html_url) && trim(r.html_url) !== trim(group.link))
+    .map((r) => `<a class="site-link" href="${safeURL(r.html_url)}" target="_blank" rel="noopener">${icon("github")}<span>${escapeHTML(r.name)} &rarr;</span></a>`);
+  const link = [
+    href ? `<a class="site-link" href="${href}" target="_blank" rel="noopener">${linkIcon(href)}<span>${escapeHTML(group.link_text || "Open the group")} &rarr;</span></a>` : "",
+    ...repoLinks,
+  ].filter(Boolean);
 
   return `
     <article class="group-card">
@@ -285,7 +292,7 @@ export function studyGroupCardHTML(group) {
         ${status ? `<span class="tag ${statusClass}">${escapeHTML(status)}</span>` : ""}
       </div>
       <p>${escapeHTML(group.topic)}</p>
-      ${link}
+      ${link.length ? `<div class="group-links">${link.join("")}</div>` : ""}
     </article>
   `;
 }

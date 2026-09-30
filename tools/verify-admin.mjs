@@ -251,6 +251,19 @@ await page.click('.repo-row[data-repo="fcs-site"] [data-place="hidden"]');
 await settle(500);
 const hideWrite = writes.filter((w) => w.table === "repo_kinds").pop() || {};
 check("choosing Hidden saves it", /"repo_name":"fcs-site"/.test(hideWrite.body) && /"kind":"hidden"/.test(hideWrite.body), hideWrite.body);
+await page.goto("about:blank");
+await page.goto(new URL("admin.html#/repos", base).href);
+await settle(900);
+await page.click('.repo-row[data-repo="fcs-site"] [data-place="project"]');
+await settle(500);
+await page.click('.repo-row[data-repo="fcs-site"] [data-pin]');
+await settle(500);
+const pinWrite = writes.filter((w) => w.table === "repo_kinds").pop() || {};
+check("Pin to top saves the pin", /"pinned":true/.test(pinWrite.body) && /"sort_order"/.test(pinWrite.body), pinWrite.body);
+await page.selectOption('.repo-row[data-repo="anti-aliasing"] [data-repo-group]', "g1");
+await settle(500);
+const groupWrite = writes.filter((w) => w.table === "repo_kinds").pop() || {};
+check("linking a repo to a study group saves it", /"group_id":"g1"/.test(groupWrite.body) && /anti-aliasing/.test(groupWrite.body), groupWrite.body);
 
 // --- team -------------------------------------------------------------------
 await page.goto(new URL("admin.html#/team", base).href);

@@ -32,8 +32,8 @@ try {
   const all = await gh(`/orgs/${encodeURIComponent(org)}/repos?per_page=100&sort=updated&type=public`);
   const repos = all
     .filter((r) => !r.private)
-    .map(({ name, html_url, description, language, stargazers_count, updated_at, pushed_at }) =>
-      ({ name, html_url, description, language, stargazers_count, updated_at, pushed_at }));
+    .map(({ name, html_url, description, language, stargazers_count, updated_at, pushed_at, archived }) =>
+      ({ name, html_url, description, language, stargazers_count, updated_at, pushed_at, archived }));
 
   const latest = [...repos].filter((r) => r.pushed_at).sort((a, b) => new Date(b.pushed_at) - new Date(a.pushed_at))[0];
   let latest_commit = null;

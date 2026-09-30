@@ -300,6 +300,10 @@ export const inviteMember = (email, role, redirectTo) =>
  *
  * subscribe / lookup / confirm / unsubscribe work for anyone; send is
  * admins only. Lists are read and edited directly (migration 011). */
+/* Runs the deploy workflow now (Edge Function refresh-site): editors
+ * and admins, when a new repo should show without waiting. */
+export const refreshSite = () => invokeFunction("refresh-site", {});
+
 export const eventMail = (action, payload = {}) => invokeFunction("event-mail", { action, ...payload });
 
 export async function listSubscriptions() {

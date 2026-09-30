@@ -51,8 +51,8 @@ test("the curated note is carried onto the resource for display", () => {
 });
 
 test("handles null and undefined inputs", () => {
-  assert.deepEqual(splitRepos(null, null), { projects: [], resources: [] });
-  assert.deepEqual(splitRepos(undefined, undefined), { projects: [], resources: [] });
+  assert.deepEqual(splitRepos(null, null), { projects: [], resources: [], byGroup: new Map() });
+  assert.deepEqual(splitRepos(undefined, undefined), { projects: [], resources: [], byGroup: new Map() });
 });
 
 test("an unnamed repo row is skipped rather than rendered blank", () => {
@@ -84,4 +84,31 @@ test("a hidden repo is on neither list", () => {
   ]);
   assert.deepEqual(projects.map((r) => r.name), ["alpha"]);
   assert.deepEqual(resources.map((r) => r.name), ["notes"]);
+});
+
+test("pinned projects come first, in their pin order; the rest keep theirs", () => {
+  const { projects } = splitRepos([repo("a"), repo("b"), repo("c"), repo("d")], [
+    { repo_name: "d", kind: "project", pinned: true, sort_order: 0 },
+    { repo_name: "b", kind: "project", pinned: true, sort_order: 1 },
+  ]);
+  assert.deepEqual(projects.map((r) => r.name), ["d", "b", "a", "c"]);
+});
+
+test("an archived repo is hidden unless someone chose a place for it", () => {
+  const archived = (name) => ({ ...repo(name), archived: true });
+  const { projects, resources } = splitRepos([archived("old"), archived("kept"), archived("notes")], [
+    { repo_name: "kept", kind: "project" },
+    { repo_name: "notes", kind: "resource" },
+  ]);
+  assert.deepEqual(projects.map((r) => r.name), ["kept"]);
+  assert.deepEqual(resources.map((r) => r.name), ["notes"]);
+});
+
+test("repos linked to a study group are grouped by it, hidden ones left out", () => {
+  const { byGroup } = splitRepos([repo("a"), repo("b"), repo("c")], [
+    { repo_name: "a", kind: "project", group_id: "g1" },
+    { repo_name: "b", kind: "resource", group_id: "g1" },
+    { repo_name: "c", kind: "hidden", group_id: "g1" },
+  ]);
+  assert.deepEqual(byGroup.get("g1").map((r) => r.name), ["a", "b"]);
 });

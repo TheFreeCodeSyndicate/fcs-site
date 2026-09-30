@@ -72,6 +72,24 @@ a past event shows FINISHED even if nobody moved its card.
   Sign In / Providers → Allow new users to sign up** in Supabase and invite
   people from **Authentication → Users** instead.
 
+## Repositories page
+
+Admin > **Repositories** lists every public repo in the GitHub
+organisation. For each: show it under Projects, under Resources, or hide
+it; **Pin to top** (pinned projects come first on the site, in the order
+set with the arrows); and link it to a **study group**, which lists it on
+that group's card. New repos show as Projects and archived ones are
+hidden until someone chooses otherwise.
+
+**Refresh now** re-reads GitHub and redeploys the site through the
+`refresh-site` Edge Function, so a new repo shows without waiting for the
+30-minute run. It needs one secret, set once:
+
+1. GitHub > Settings > Developer settings > Fine-grained tokens > Generate:
+   resource owner **TheFreeCodeSyndicate**, only the **fcs-site**
+   repository, permission **Actions: Read and write**, nothing else.
+2. Supabase > Edge Functions > Secrets: `GITHUB_DISPATCH_TOKEN` = the token.
+
 ## Link icons
 
 Every link on the site and in the panel (social links, a core member's

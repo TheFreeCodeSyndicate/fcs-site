@@ -236,7 +236,8 @@ async function loadRepositories() {
 
     const kinds = await getRepoKinds();
     const curated = kinds.length ? kinds : window.SEED_REPO_KINDS || [];
-    const { projects, resources } = splitRepos(repos, curated);
+    const { projects, resources, byGroup } = splitRepos(repos, curated);
+    renderStudyGroups(undefined, byGroup);
 
     githubResources = resources.map((repo) => ({
       title: repo.name,
@@ -520,17 +521,23 @@ function renderResources(fromDatabase) {
 /* ------------------------------------------------------------------
  * Section 6 — Study groups
  * ---------------------------------------------------------------- */
-function renderStudyGroups(groups) {
+/* Called once with the groups, then again with no groups once the
+ * GitHub repos arrive, to add the repos linked to each group. */
+let studyGroupRows = [];
+let reposByGroup = new Map();
+function renderStudyGroups(groups, byGroup) {
   const grid = document.getElementById("study-group-grid");
   if (!grid) return;
+  if (Array.isArray(groups)) studyGroupRows = groups;
+  if (byGroup) reposByGroup = byGroup;
+  if (!Array.isArray(groups) && !studyGroupRows.length) return; // the repos came first
 
-  const list = Array.isArray(groups) ? groups : [];
-  if (!list.length) {
+  if (!studyGroupRows.length) {
     grid.innerHTML = `<p class="empty-note">No study groups are listed yet. Propose one in Discord.</p>`;
     return;
   }
 
-  grid.innerHTML = list.map(studyGroupCardHTML).join("");
+  grid.innerHTML = studyGroupRows.map((g) => studyGroupCardHTML(g, reposByGroup.get(g.id) || [])).join("");
 }
 
 

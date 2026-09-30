@@ -24,7 +24,7 @@ import {
   createStudyGroup, updateStudyGroup, deleteStudyGroup,
   createSocialLink, updateSocialLink, deleteSocialLink,
   createCoreMember, updateCoreMember, deleteCoreMember,
-  saveRepoKind, deleteRepoKind,
+  saveRepoKind, deleteRepoKind, refreshSite,
   listProfiles, setProfileRole, removeMember, watchMyAccess,
   eventMail, listSubscriptions, addSubscribers, removeSubscription, listEmailSends,
   requestPasswordReset, updatePassword,
@@ -1702,14 +1702,18 @@ function renderTeamPage(page) {
 
 /* ==================================================================
  * Repositories: every repo in the GitHub organisation, and where it
- * shows on the site. A repo with no choice saved is a Project, so a
- * newly pushed one appears with nobody touching this page.
+ * shows on the site. A repo with no choice saved is a Project (or
+ * hidden, if it is archived on GitHub), so a newly pushed one appears
+ * with nobody touching this page.
+ *
+ * Also here: pin projects to the top (in an order you set), link a
+ * repo to a study group (it is listed on that group's card), and
+ * "Refresh now", which re-reads GitHub and redeploys the site.
  *
  * The list comes from data/github.json (written by the deploy
- * workflow), or from GitHub's API when that file is empty (locally).
- * Choices are saved to repo_kinds; "project" is saved as a row too,
- * rather than by deleting one, because only admins may delete and
- * editors curate repos as well.
+ * workflow), or from GitHub's API when that file is empty (locally) or
+ * on Refresh. Choices are saved to repo_kinds with upserts, never
+ * deletes: only admins may delete, and editors curate repos as well.
  * ================================================================== */
 
 const REPO_PLACES = [
@@ -1718,18 +1722,21 @@ const REPO_PLACES = [
   ["hidden", "Hidden", "Not shown on the site"],
 ];
 
-async function loadOrgRepos() {
-  if (state.orgRepos) return state.orgRepos;
+async function loadOrgRepos({ fresh = false } = {}) {
+  if (state.orgRepos && !fresh) return state.orgRepos;
   let repos = [];
-  try {
-    const snap = await (await fetch("data/github.json", { cache: "no-cache" })).json();
-    repos = Array.isArray(snap.repos) ? snap.repos : [];
-  } catch {
-    /* no snapshot: ask GitHub below */
+  if (!fresh) {
+    try {
+      const snap = await (await fetch("data/github.json", { cache: "no-cache" })).json();
+      repos = Array.isArray(snap.repos) ? snap.repos : [];
+    } catch {
+      /* no snapshot: ask GitHub below */
+    }
   }
   if (!repos.length) {
     const res = await fetch(`https://api.github.com/orgs/${encodeURIComponent(window.GITHUB_ORG)}/repos?per_page=100&sort=pushed`, {
       headers: { Accept: "application/vnd.github+json" },
+      cache: "no-cache",
     });
     if (!res.ok) throw new Error(res.status === 403 ? "GitHub's hourly limit for this network is used up; try again later." : `GitHub answered ${res.status}.`);
     repos = await res.json();
@@ -1751,10 +1758,16 @@ async function renderReposPage(page) {
   renderSidebar(); // now that the count is known
 
   const saved = new Map(state.data.repo_kinds.map((r) => [r.repo_name, r]));
-  const placeOf = (name) => (saved.get(name) || {}).kind || "project";
+  const entry = (name) => saved.get(name) || {};
+  const placeOf = (r) => entry(r.name).kind || (r.archived ? "hidden" : "project");
+  const isPinned = (r) => placeOf(r) === "project" && entry(r.name).pinned;
+  const pinnedRepos = repos.filter(isPinned).sort((a, b) => (entry(a.name).sort_order || 0) - (entry(b.name).sort_order || 0));
+  // Pinned first, in their order, as on the site; then the rest by last push.
+  const ordered = [...pinnedRepos, ...repos.filter((r) => !isPinned(r))];
   const filter = state.repoFilter || "all";
-  const shown = repos.filter((r) => filter === "all" || placeOf(r.name) === filter);
-  const count = (kind) => repos.filter((r) => placeOf(r.name) === kind).length;
+  const shown = ordered.filter((r) => filter === "all" || placeOf(r) === filter);
+  const count = (kind) => repos.filter((r) => placeOf(r) === kind).length;
+  const groups = state.data.study_groups || [];
   // Choices for repos that were renamed or deleted on GitHub.
   const orphans = state.data.repo_kinds.filter((r) => !repos.some((repo) => repo.name === r.repo_name));
 
@@ -1763,27 +1776,52 @@ async function renderReposPage(page) {
     <p class="page-intro">
       Every public repository in the organisation. Choose where each one shows:
       under <strong>Projects</strong>, under <strong>Resources</strong>, or nowhere.
-      New repositories show as Projects until you choose otherwise.
+      New repositories show as Projects, and archived ones are hidden, until you choose otherwise.
+      Pinned projects come first on the site.
     </p>
-    <div class="page-filters" role="group" aria-label="Show">
-      ${[["all", `All (${repos.length})`], ...REPO_PLACES.map(([k, label]) => [k, `${k === "hidden" ? label : `${label}s`} (${count(k)})`])].map(([value, label]) => `
-        <button type="button" class="chip${filter === value ? " is-active" : ""}" aria-pressed="${filter === value}" data-repo-filter="${value}">${label}</button>`).join("")}
+    <div class="repo-toolbar">
+      <div class="page-filters" role="group" aria-label="Show">
+        ${[["all", `All (${repos.length})`], ...REPO_PLACES.map(([k, label]) => [k, `${k === "hidden" ? label : `${label}s`} (${count(k)})`])].map(([value, label]) => `
+          <button type="button" class="chip${filter === value ? " is-active" : ""}" aria-pressed="${filter === value}" data-repo-filter="${value}">${label}</button>`).join("")}
+      </div>
+      <button type="button" class="btn" id="repo-refresh" title="Re-read the list from GitHub and redeploy the site">${icon("undo")}<span>Refresh now</span></button>
     </div>
     ${shown.length ? `<ol class="list repo-list">${shown.map((r) => {
-      const place = placeOf(r.name);
-      const note = (saved.get(r.name) || {}).note || "";
+      const place = placeOf(r);
+      const choice = entry(r.name);
+      const pinned = isPinned(r);
+      const pinIndex = pinnedRepos.indexOf(r);
       return `
         <li class="list-row repo-row${place === "hidden" ? " is-hidden" : ""}" data-repo="${escapeAttr(r.name)}">
           <span class="list-thumb">${icon("github")}</span>
           <span class="list-open">
-            <strong><a href="${safeURL(r.html_url)}" target="_blank" rel="noopener">${escapeHTML(r.name)}</a></strong>
+            <strong>
+              <a href="${safeURL(r.html_url)}" target="_blank" rel="noopener">${escapeHTML(r.name)}</a>
+              ${pinned ? '<span class="badge">Pinned</span>' : ""}
+              ${r.archived ? '<span class="badge badge-muted" title="Archived on GitHub">Archived</span>' : ""}
+            </strong>
             <span class="sub">${escapeHTML([r.language, r.description].filter(Boolean).join(" · ") || "No description")}</span>
             <span class="sub">Pushed ${escapeHTML(ago(r.pushed_at || r.updated_at))}${r.stargazers_count ? `, ★ ${r.stargazers_count}` : ""}</span>
             ${place === "resource" ? `
               <label class="repo-note">
                 <span class="visually-hidden">Note for ${escapeHTML(r.name)}</span>
-                <input type="text" data-repo-note maxlength="140" value="${escapeAttr(note)}" placeholder="Why it is worth reading (shown when the repo has no description)" />
+                <input type="text" data-repo-note maxlength="140" value="${escapeAttr(choice.note || "")}" placeholder="Why it is worth reading (shown when the repo has no description)" />
               </label>` : ""}
+            ${place !== "hidden" ? `
+              <span class="repo-extras">
+                ${place === "project" ? `
+                  <button type="button" class="btn btn-quiet" data-pin aria-pressed="${pinned}">${icon("bookmark")}<span>${pinned ? "Unpin" : "Pin to top"}</span></button>
+                  ${pinned ? `
+                    <button type="button" class="icon-btn" data-move="-1" aria-label="Move ${escapeAttr(r.name)} up"${pinIndex === 0 ? " disabled" : ""}>${icon("arrow-up")}</button>
+                    <button type="button" class="icon-btn" data-move="1" aria-label="Move ${escapeAttr(r.name)} down"${pinIndex === pinnedRepos.length - 1 ? " disabled" : ""}>${icon("arrow-down")}</button>` : ""}` : ""}
+                <label class="repo-group">
+                  <span>Study group</span>
+                  <select data-repo-group>
+                    <option value="">None</option>
+                    ${groups.map((g) => `<option value="${escapeAttr(g.id)}"${choice.group_id === g.id ? " selected" : ""}>${escapeHTML(g.name)}</option>`).join("")}
+                  </select>
+                </label>
+              </span>` : ""}
           </span>
           <span class="repo-place" role="radiogroup" aria-label="Where ${escapeAttr(r.name)} shows">
             ${REPO_PLACES.map(([kind, label, hint]) => `
@@ -1802,9 +1840,9 @@ async function renderReposPage(page) {
         </li>`).join("")}</ol>` : ""}`;
 
   const again = () => renderReposPage(page);
-  const save = async (name, patch, message) => {
+  const save = async (patches, message) => {
     try {
-      await saveRepoKind(name, patch);
+      await Promise.all(patches.map(([name, patch]) => saveRepoKind(name, patch)));
       await reload("repo_kinds");
       renderSidebar();
       again();
@@ -1820,21 +1858,64 @@ async function renderReposPage(page) {
       again();
     })
   );
+
+  root().querySelector("#repo-refresh").addEventListener("click", async (e) => {
+    const button = e.currentTarget;
+    try {
+      await busy(button, "Refreshing…", async () => {
+        await loadOrgRepos({ fresh: true });
+        await refreshSite();
+      });
+      toast("Re-read from GitHub. The site is redeploying and will match in about two minutes.", "success");
+    } catch (err) {
+      toast(err.message || "Could not refresh.", "error");
+    }
+    again();
+  });
+
   root().querySelectorAll(".repo-row").forEach((row) => {
     const name = row.dataset.repo;
+    const repo = repos.find((r) => r.name === name);
     row.querySelectorAll("[data-place]").forEach((button) =>
       button.addEventListener("click", () => {
         const kind = button.dataset.place;
-        if (kind === placeOf(name)) return;
+        if (kind === placeOf(repo)) return;
         const label = REPO_PLACES.find(([k]) => k === kind)[2].toLowerCase();
-        save(name, { kind, note: (saved.get(name) || {}).note || null }, `${name}: ${label}.`);
+        save([[name, { kind }]], `${name}: ${label}.`);
       })
     );
     const note = row.querySelector("[data-repo-note]");
-    if (note) {
-      note.addEventListener("change", () => save(name, { kind: "resource", note: note.value.trim() || null }, `Saved the note for ${name}.`));
+    if (note) note.addEventListener("change", () => save([[name, { kind: "resource", note: note.value.trim() || null }]], `Saved the note for ${name}.`));
+
+    const pin = row.querySelector("[data-pin]");
+    if (pin) {
+      pin.addEventListener("click", () => {
+        const nowPinned = !isPinned(repo);
+        const last = pinnedRepos.reduce((max, r) => Math.max(max, entry(r.name).sort_order || 0), -1);
+        save([[name, nowPinned ? { kind: "project", pinned: true, sort_order: last + 1 } : { pinned: false }]],
+          nowPinned ? `Pinned ${name} to the top of Projects.` : `Unpinned ${name}.`);
+      });
+    }
+    row.querySelectorAll("[data-move]").forEach((button) =>
+      button.addEventListener("click", () => {
+        // Renumber the pins in their new order, so ties can never stick.
+        const list = [...pinnedRepos];
+        const i = list.indexOf(repo);
+        const j = i + Number(button.dataset.move);
+        [list[i], list[j]] = [list[j], list[i]];
+        save(list.map((r, k) => [r.name, { sort_order: k }]));
+      })
+    );
+    const group = row.querySelector("[data-repo-group]");
+    if (group) {
+      group.addEventListener("change", () => {
+        const g = groups.find((x) => x.id === group.value);
+        save([[name, { kind: placeOf(repo), group_id: group.value || null }]],
+          g ? `${name} is now listed on ${g.name}.` : `${name} is no longer linked to a study group.`);
+      });
     }
   });
+
   root().querySelectorAll("[data-orphan]").forEach((row) => {
     armedDelete(row.querySelector("[data-remove]"), async () => {
       try {

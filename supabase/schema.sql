@@ -124,6 +124,9 @@ create table if not exists public.repo_kinds (
   repo_name  text primary key,
   kind       text not null default 'project' check (kind in ('project','resource','hidden')),
   note       text,
+  pinned     boolean not null default false,
+  sort_order integer not null default 0,
+  group_id   uuid references public.study_groups(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

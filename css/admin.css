@@ -1047,3 +1047,20 @@ body:has(.drawer.is-open) .toasts {
   .repo-place { width: 100%; }
   .repo-place button { flex: 1; }
 }
+
+.repo-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.repo-toolbar .page-filters { margin: 0; }
+.repo-row .list-open strong { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.repo-extras { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.repo-extras .btn { min-height: 32px; padding: 4px 10px; font-size: 0.75rem; }
+.repo-group { display: inline-flex; gap: 6px; align-items: center; font-size: 0.75rem; font-weight: 700; }
+.repo-group select {
+  max-width: 280px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 2px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
