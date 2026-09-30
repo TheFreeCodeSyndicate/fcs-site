@@ -237,14 +237,20 @@ await settle(700);
 check("move down writes sort_order", writes.slice(orderBefore).some((w) => w.table === "core_members" && w.body.includes("sort_order")));
 
 // --- repo curation --------------------------------------------------------
+// Every org repo is listed, whether or not a choice was ever saved.
+await page.route("**/data/github.json", (route) => route.fulfill({ json: { fetched_at: null, repos: [
+  { name: "fcs-site", html_url: "https://github.com/x/fcs-site", description: "website", language: "JavaScript", pushed_at: "2026-09-29T00:00:00Z" },
+  { name: "anti-aliasing", html_url: "https://github.com/x/anti-aliasing", description: "graphics", language: "C++", pushed_at: "2026-08-01T00:00:00Z" },
+] } }));
+await page.goto("about:blank");
 await page.goto(new URL("admin.html#/repos", base).href);
-await settle(800);
-await page.click(".list-row .list-open");
-await settle();
-check("repo curation keeps the key locked when editing",
-  await page.$eval("#drawer-form input[name=repo_name]", (i) => i.readOnly && i.value === "anti-aliasing"));
-await page.keyboard.press("Escape");
-await settle();
+await settle(900);
+const repoRows = await page.$$eval(".repo-row", (rows) => rows.map((r) => `${r.dataset.repo}:${r.querySelector('[aria-checked="true"]').dataset.place}`));
+check("Repositories lists every org repo with where it shows", repoRows.join() === "fcs-site:project,anti-aliasing:resource", repoRows.join());
+await page.click('.repo-row[data-repo="fcs-site"] [data-place="hidden"]');
+await settle(500);
+const hideWrite = writes.filter((w) => w.table === "repo_kinds").pop() || {};
+check("choosing Hidden saves it", /"repo_name":"fcs-site"/.test(hideWrite.body) && /"kind":"hidden"/.test(hideWrite.body), hideWrite.body);
 
 // --- team -------------------------------------------------------------------
 await page.goto(new URL("admin.html#/team", base).href);

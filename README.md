@@ -44,7 +44,7 @@ A sidebar lists one page per kind of content, each at its own address
 | Class schedule | Weekly recurring sessions (the countdown and week strip) |
 | Core members | Leads and mentors, including Move to alumni |
 | Study groups, Resources, Social links | The matching public sections |
-| Repo curation | Which GitHub repos show under Resources instead of Projects |
+| Repositories | Every repo in the GitHub organisation: show it under Projects, under Resources, or hide it |
 | Subscribers (admins only) | Email lists per event and for all events; send updates |
 | Team (admins only) | Who has access, and approving new accounts |
 

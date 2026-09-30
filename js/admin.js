@@ -605,7 +605,7 @@ const PAGES = [
   { id: "groups", label: "Study groups", icon: "book-open", site: "#study-groups" },
   { id: "resources", label: "Resources", icon: "bookmark", site: "#resources" },
   { id: "social", label: "Social links", icon: "link", site: "#join" },
-  { id: "repos", label: "Repo curation", icon: "github", site: "#projects" },
+  { id: "repos", label: "Repositories", icon: "github", site: "#projects" },
   { id: "activity", label: "Activity", icon: "list-box" },
   { id: "subscribers", label: "Subscribers", icon: "mail", adminOnly: true },
   { id: "team", label: "Team", icon: "shield", adminOnly: true },
@@ -650,6 +650,7 @@ function pageCount(id) {
   const editor = EDITORS[id];
   if (id === "events") return state.data.events.length;
   if (id === "team") return state.profiles.filter((p) => p.role === "pending").length || "";
+  if (id === "repos") return state.orgRepos ? state.orgRepos.length : "";
   return editor ? state.data[editor.table].length : "";
 }
 
@@ -676,6 +677,7 @@ function renderPage() {
   else if (state.route === "team") renderTeamPage(page);
   else if (state.route === "activity") renderActivityPage(page);
   else if (state.route === "subscribers") renderSubscribersPage(page);
+  else if (state.route === "repos") renderReposPage(page);
   else renderListPage(page);
 }
 
@@ -1693,6 +1695,156 @@ function renderTeamPage(page) {
         toast(`Removed ${who}. Their login is deleted; invite them again to bring them back.`, "delete");
       } catch (err) {
         toast(err.message || "Could not remove them.", "error");
+      }
+    });
+  });
+}
+
+/* ==================================================================
+ * Repositories: every repo in the GitHub organisation, and where it
+ * shows on the site. A repo with no choice saved is a Project, so a
+ * newly pushed one appears with nobody touching this page.
+ *
+ * The list comes from data/github.json (written by the deploy
+ * workflow), or from GitHub's API when that file is empty (locally).
+ * Choices are saved to repo_kinds; "project" is saved as a row too,
+ * rather than by deleting one, because only admins may delete and
+ * editors curate repos as well.
+ * ================================================================== */
+
+const REPO_PLACES = [
+  ["project", "Project", "Listed under Projects"],
+  ["resource", "Resource", "Listed under Resources"],
+  ["hidden", "Hidden", "Not shown on the site"],
+];
+
+async function loadOrgRepos() {
+  if (state.orgRepos) return state.orgRepos;
+  let repos = [];
+  try {
+    const snap = await (await fetch("data/github.json", { cache: "no-cache" })).json();
+    repos = Array.isArray(snap.repos) ? snap.repos : [];
+  } catch {
+    /* no snapshot: ask GitHub below */
+  }
+  if (!repos.length) {
+    const res = await fetch(`https://api.github.com/orgs/${encodeURIComponent(window.GITHUB_ORG)}/repos?per_page=100&sort=pushed`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) throw new Error(res.status === 403 ? "GitHub's hourly limit for this network is used up; try again later." : `GitHub answered ${res.status}.`);
+    repos = await res.json();
+  }
+  state.orgRepos = repos.sort((a, b) => new Date(b.pushed_at || b.updated_at) - new Date(a.pushed_at || a.updated_at));
+  return state.orgRepos;
+}
+
+async function renderReposPage(page) {
+  root().innerHTML = `${pageHead(page, { search: false })}<p class="empty-note">Loading the organisation's repositories&hellip;</p>`;
+  let repos;
+  try {
+    repos = await loadOrgRepos();
+  } catch (err) {
+    root().innerHTML = `${pageHead(page, { search: false })}<div class="empty-state"><p>Could not list the repositories: ${escapeHTML(err.message || "unknown error")}</p></div>`;
+    return;
+  }
+  if (state.route !== "repos") return;
+  renderSidebar(); // now that the count is known
+
+  const saved = new Map(state.data.repo_kinds.map((r) => [r.repo_name, r]));
+  const placeOf = (name) => (saved.get(name) || {}).kind || "project";
+  const filter = state.repoFilter || "all";
+  const shown = repos.filter((r) => filter === "all" || placeOf(r.name) === filter);
+  const count = (kind) => repos.filter((r) => placeOf(r.name) === kind).length;
+  // Choices for repos that were renamed or deleted on GitHub.
+  const orphans = state.data.repo_kinds.filter((r) => !repos.some((repo) => repo.name === r.repo_name));
+
+  root().innerHTML = `
+    ${pageHead(page, { count: repos.length, search: false })}
+    <p class="page-intro">
+      Every public repository in the organisation. Choose where each one shows:
+      under <strong>Projects</strong>, under <strong>Resources</strong>, or nowhere.
+      New repositories show as Projects until you choose otherwise.
+    </p>
+    <div class="page-filters" role="group" aria-label="Show">
+      ${[["all", `All (${repos.length})`], ...REPO_PLACES.map(([k, label]) => [k, `${k === "hidden" ? label : `${label}s`} (${count(k)})`])].map(([value, label]) => `
+        <button type="button" class="chip${filter === value ? " is-active" : ""}" aria-pressed="${filter === value}" data-repo-filter="${value}">${label}</button>`).join("")}
+    </div>
+    ${shown.length ? `<ol class="list repo-list">${shown.map((r) => {
+      const place = placeOf(r.name);
+      const note = (saved.get(r.name) || {}).note || "";
+      return `
+        <li class="list-row repo-row${place === "hidden" ? " is-hidden" : ""}" data-repo="${escapeAttr(r.name)}">
+          <span class="list-thumb">${icon("github")}</span>
+          <span class="list-open">
+            <strong><a href="${safeURL(r.html_url)}" target="_blank" rel="noopener">${escapeHTML(r.name)}</a></strong>
+            <span class="sub">${escapeHTML([r.language, r.description].filter(Boolean).join(" · ") || "No description")}</span>
+            <span class="sub">Pushed ${escapeHTML(ago(r.pushed_at || r.updated_at))}${r.stargazers_count ? `, ★ ${r.stargazers_count}` : ""}</span>
+            ${place === "resource" ? `
+              <label class="repo-note">
+                <span class="visually-hidden">Note for ${escapeHTML(r.name)}</span>
+                <input type="text" data-repo-note maxlength="140" value="${escapeAttr(note)}" placeholder="Why it is worth reading (shown when the repo has no description)" />
+              </label>` : ""}
+          </span>
+          <span class="repo-place" role="radiogroup" aria-label="Where ${escapeAttr(r.name)} shows">
+            ${REPO_PLACES.map(([kind, label, hint]) => `
+              <button type="button" role="radio" aria-checked="${place === kind}" title="${hint}" data-place="${kind}">${label}</button>`).join("")}
+          </span>
+        </li>`;
+    }).join("")}</ol>` : '<div class="empty-state"><p>No repositories here.</p></div>'}
+    ${orphans.length ? `
+      <h2 class="page-subhead">No longer on GitHub</h2>
+      <p class="field-help">These were renamed or deleted on GitHub, so the choice saved for them does nothing.</p>
+      <ol class="list">${orphans.map((r) => `
+        <li class="list-row" data-orphan="${escapeAttr(r.repo_name)}">
+          <span class="list-thumb">${icon("archive")}</span>
+          <span class="list-open"><strong>${escapeHTML(r.repo_name)}</strong><span class="sub">Saved as ${escapeHTML(r.kind)}</span></span>
+          <button type="button" class="btn btn-danger" data-remove${isAdmin() ? "" : ' disabled title="Only admins can delete"'}>${icon("trash")}<span>Remove</span></button>
+        </li>`).join("")}</ol>` : ""}`;
+
+  const again = () => renderReposPage(page);
+  const save = async (name, patch, message) => {
+    try {
+      await saveRepoKind(name, patch);
+      await reload("repo_kinds");
+      renderSidebar();
+      again();
+      if (message) toast(message, "success");
+    } catch (err) {
+      toast(err.message || "Could not save that.", "error");
+    }
+  };
+
+  root().querySelectorAll("[data-repo-filter]").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      state.repoFilter = chip.dataset.repoFilter;
+      again();
+    })
+  );
+  root().querySelectorAll(".repo-row").forEach((row) => {
+    const name = row.dataset.repo;
+    row.querySelectorAll("[data-place]").forEach((button) =>
+      button.addEventListener("click", () => {
+        const kind = button.dataset.place;
+        if (kind === placeOf(name)) return;
+        const label = REPO_PLACES.find(([k]) => k === kind)[2].toLowerCase();
+        save(name, { kind, note: (saved.get(name) || {}).note || null }, `${name}: ${label}.`);
+      })
+    );
+    const note = row.querySelector("[data-repo-note]");
+    if (note) {
+      note.addEventListener("change", () => save(name, { kind: "resource", note: note.value.trim() || null }, `Saved the note for ${name}.`));
+    }
+  });
+  root().querySelectorAll("[data-orphan]").forEach((row) => {
+    armedDelete(row.querySelector("[data-remove]"), async () => {
+      try {
+        await deleteRepoKind(row.dataset.orphan);
+        await reload("repo_kinds");
+        renderSidebar();
+        again();
+        toast(`Removed the saved choice for ${row.dataset.orphan}.`, "delete");
+      } catch (err) {
+        toast(err.message || "Could not remove it.", "error");
       }
     });
   });

@@ -76,3 +76,12 @@ test("neither output array shares objects with the input", () => {
   assert.equal(input[0].description, "");
   assert.equal(input[1].description, "");
 });
+
+test("a hidden repo is on neither list", () => {
+  const { projects, resources } = splitRepos([repo("alpha"), repo("old-fork"), repo("notes")], [
+    { repo_name: "old-fork", kind: "hidden" },
+    { repo_name: "notes", kind: "resource" },
+  ]);
+  assert.deepEqual(projects.map((r) => r.name), ["alpha"]);
+  assert.deepEqual(resources.map((r) => r.name), ["notes"]);
+});

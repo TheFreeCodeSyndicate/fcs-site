@@ -1277,35 +1277,6 @@ mark {
   font-weight: 700;
 }
 
-/* ---------- References (Section 10) ---------- */
-.ref-list li {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid var(--ink);
-  font-size: 0.88rem;
-  flex-wrap: wrap;
-}
-
-.ref-list li:first-child {
-  border-top: 1px solid var(--ink);
-}
-
-.ref-tag {
-  flex: 0 0 auto;
-  color: var(--accent-text);
-  font-weight: 700;
-}
-
-.ref-list a {
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-}
-
-.ref-list a:hover {
-  border-bottom-color: var(--ink);
-}
-
 /* ---------- Footer ---------- */
 .doc-footer {
   border-top: var(--border-w) solid var(--ink);
@@ -2579,4 +2550,4 @@ a.status-active:focus-visible,
 .icon-favicon { object-fit: contain; border-radius: 4px; }
 
 /* Event and study-group links carry their site's icon. */
-.site-link { display: inline-flex; align-items: center; gap: 6px; }
+a.site-link { display: inline-flex; align-items: center; gap: 6px; }

@@ -49,7 +49,6 @@ const counts = await page.evaluate(() => ({
   repos: document.querySelectorAll(".repo-card").length,
   coreMembers: document.querySelectorAll(".core-card").length,
   join: document.querySelectorAll(".join-card").length,
-  refs: document.querySelectorAll("#ref-list li").length,
   nav: document.querySelectorAll(".nav-links a").length,
 }));
 check("no uncaught page errors", pageErrors.length === 0, pageErrors.join(" | "));
@@ -59,7 +58,6 @@ check("lanes rendered", counts.lanes > 0, `${counts.lanes}`);
 check("groups rendered", counts.groups > 0, `${counts.groups}`);
 check("core members rendered", counts.coreMembers > 0, `${counts.coreMembers}`);
 check("join links rendered", counts.join >= 4, `${counts.join}`);
-check("references list every join link", counts.refs === counts.join, `${counts.refs} vs ${counts.join}`);
 check("nav has links", counts.nav === 6, `${counts.nav}`);
 check("projects loaded from GitHub", counts.repos > 0, `${counts.repos}`);
 
@@ -104,13 +102,13 @@ const cardBoxes = await page.evaluate(() =>
   [...document.querySelectorAll("#core .core-card")].map((c) => {
     // offset* is the layout size, before each card's small idle tilt.
     const file = c.querySelector(".core-file");
-    return { top: c.offsetTop, w: c.offsetWidth, h: c.offsetHeight, clipped: file.scrollHeight > file.clientHeight + 1 };
+    return { top: `${c.parentElement.id}:${c.offsetTop}`, w: c.offsetWidth, h: c.offsetHeight, clipped: file.scrollHeight > file.clientHeight + 1 };
   })
 );
 const ws = cardBoxes.map((b) => b.w);
 check("core member cards share one width", Math.max(...ws) - Math.min(...ws) <= 4, `${Math.min(...ws)}-${Math.max(...ws)}`);
 const rows = {};
-for (const b of cardBoxes) (rows[Math.round(b.top / 40)] ||= []).push(b.h);
+for (const b of cardBoxes) (rows[b.top] ||= []).push(b.h); // one grid row: same grid, same top
 const ragged = Object.values(rows).filter((hs) => Math.max(...hs) - Math.min(...hs) > 4);
 check("cards in the same row share a height", ragged.length === 0, JSON.stringify(Object.values(rows)));
 check("no card cuts off or scrolls its content", cardBoxes.every((b) => !b.clipped));

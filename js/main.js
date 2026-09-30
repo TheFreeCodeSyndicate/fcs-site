@@ -150,7 +150,7 @@ async function loadContent() {
   renderJoinLinks(socialLinks);
   setMetaDiscord(socialLinks);
   renderCoreMembers(coreMembers);
-  renderReferences(socialLinks);
+  renderFooterSocials(socialLinks);
   bindIcs();
 }
 
@@ -841,30 +841,6 @@ function renderJoinLinks(links) {
       </div>
     `;
   }).join("");
-}
-
-/* ------------------------------------------------------------------
- * Section 11 — References
- * ---------------------------------------------------------------- */
-function renderReferences(links) {
-  renderFooterSocials(links);
-  const list = document.getElementById("ref-list");
-  if (!list) return;
-
-  const items = (Array.isArray(links) ? links : []).filter((item) => item && safeURL(item.url));
-  if (!items.length) {
-    list.innerHTML = `<li class="empty-note">No references are listed yet.</li>`;
-    return;
-  }
-
-  list.innerHTML = items.map(
-    (item) => `
-      <li>
-        <span class="ref-tag">[${escapeHTML(String(item.platform || "link").toUpperCase())}]</span>
-        <a href="${safeURL(item.url)}" target="_blank" rel="noopener">${escapeHTML(item.label || item.platform || "Link")}</a>
-      </li>
-    `
-  ).join("");
 }
 
 /* ------------------------------------------------------------------

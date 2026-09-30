@@ -18,7 +18,7 @@ const repos = Array.from({ length: 8 }, (_, i) => ({
 
 const browser = await chromium.launch({ channel: "msedge" });
 let failures = 0;
-const ids = ["abstract", "projects", "resources", "study-groups", "events", "core", "join", "references"];
+const ids = ["abstract", "projects", "resources", "study-groups", "events", "core", "join"];
 for (const id of ids) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.route("**/api.github.com/**", async (route) => {

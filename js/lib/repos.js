@@ -3,8 +3,8 @@
  * ------------------------------------------------------------------
  * Separates the live GitHub repository list into Projects and
  * Resources. A repo is a Project unless a maintainer has explicitly
- * curated it as a Resource, so a newly pushed repo appears on its own
- * with no CMS involvement.
+ * curated it as a Resource, or hidden it; a newly pushed repo appears on
+ * its own with no CMS involvement.
  * ------------------------------------------------------------------
  */
 
@@ -26,6 +26,7 @@ export function splitRepos(repos = [], kinds = []) {
   for (const repo of repos || []) {
     if (!repo || !repo.name) continue;
     const entry = curated.get(repo.name);
+    if (entry && entry.kind === "hidden") continue;
     // Both branches copy: the caller gets rows it may sort or annotate
     // without mutating the GitHub response it passed in.
     if (entry && entry.kind === "resource") {

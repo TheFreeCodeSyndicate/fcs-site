@@ -122,7 +122,7 @@ create table if not exists public.social_links (
 -- List a repo here with kind = 'resource' to move it into Resources.
 create table if not exists public.repo_kinds (
   repo_name  text primary key,
-  kind       text not null default 'project' check (kind in ('project','resource')),
+  kind       text not null default 'project' check (kind in ('project','resource','hidden')),
   note       text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
