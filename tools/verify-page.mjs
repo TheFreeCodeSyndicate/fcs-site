@@ -117,9 +117,11 @@ check("no card cuts off or scrolls its content", cardBoxes.every((b) => !b.clipp
 const badHrefs = await page.evaluate(() =>
   [...document.querySelectorAll("a[href]")]
     .map((a) => a.getAttribute("href"))
-    .filter((h) => !/^(https?:|#|mailto:|webcal:)/i.test(h))
+    // Same-site links (privacy.html, #events) are fine; any other scheme
+    // (javascript:, data:) is not.
+    .filter((h) => /^[a-z][a-z0-9+.-]*:/i.test(h) && !/^(https?:|mailto:|webcal:)/i.test(h))
 );
-check("every href is http(s), #, mailto or webcal", badHrefs.length === 0, badHrefs.join(" | "));
+check("no link uses a scheme other than http(s), mailto or webcal", badHrefs.length === 0, badHrefs.join(" | "));
 
 // --- dark mode: no flash, and the toggle works ----------------------
 await page.evaluate(() => localStorage.clear());
