@@ -206,6 +206,7 @@ const SIGNOUT_NOTICES = {
 };
 
 async function signOutBecause(reason) {
+  stopAnalyticsRealtime();
   try {
     sessionStorage.setItem(SIGNOUT_REASON, reason);
   } catch {
@@ -224,9 +225,10 @@ async function boot() {
     return;
   }
 
-  document.getElementById("admin-signout").addEventListener("click", () =>
-    signOut().then(() => location.reload())
-  );
+  document.getElementById("admin-signout").addEventListener("click", () => {
+    stopAnalyticsRealtime();
+    signOut().then(() => location.reload());
+  });
   bindDrawer();
   startPixelField();
 
@@ -636,6 +638,9 @@ function onHashChange() {
 }
 
 function go(id) {
+  if (state.route === "analytics" && id !== "analytics") {
+    stopAnalyticsRealtime();
+  }
   state.route = id;
   state.search = "";
   if (location.hash !== `#/${id}`) history.replaceState(null, "", `#/${id}`);
@@ -1750,16 +1755,83 @@ const fmtSeconds = (s) => {
 };
 const num = (v) => Number(v) || 0;
 
-/* "▲ 50%" style change against the previous period. */
-function change(now, before, { lowerIsBetter = false } = {}) {
+/* "▲ 50%" style change against the admin's baseline from when they opened the panel.
+ * Shows green up arrow (is-good) on increase and red down arrow (is-bad) on decrease.
+ * Never outputs "nothing earlier to compare". */
+function change(now, before, { lowerIsBetter = false, isDuration = false } = {}) {
   const a = num(now);
   const b = num(before);
-  if (!b) return { text: a ? "nothing earlier to compare" : "", tone: "", none: true };
+  if (b === 0) {
+    if (a > 0) {
+      const good = !lowerIsBetter;
+      const formatted = isDuration
+        ? fmtSeconds(a)
+        : Number.isInteger(a)
+          ? a
+          : Math.round(a * 10) / 10;
+      return { text: `▲ +${formatted}`, tone: good ? "is-good" : "is-bad", pct: 100 };
+    }
+    return { text: "same as before", tone: "", none: true };
+  }
+  if (a === 0 && b > 0) {
+    const good = lowerIsBetter;
+    const formatted = isDuration
+      ? fmtSeconds(b)
+      : Number.isInteger(b)
+        ? b
+        : Math.round(b * 10) / 10;
+    return { text: `▼ -${formatted}`, tone: good ? "is-good" : "is-bad", pct: -100 };
+  }
   const pct = Math.round(((a - b) / b) * 100);
   if (!pct) return { text: "same as before", tone: "", none: true };
   // Green is up and red is down, except where down is the good news.
   const good = lowerIsBetter ? pct < 0 : pct > 0;
   return { text: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tone: good ? "is-good" : "is-bad", pct };
+}
+
+/* Tracks the admin's baseline metrics from when this individual admin opened the panel.
+ * Stored in localStorage keyed per admin (state.user.id or state.user.email).
+ * In sessionStorage, we freeze the baseline for the current session so real-time increases
+ * are measured against when the admin opened the panel. */
+function getAdminBaseline(userId, rangeKey) {
+  if (!userId) return null;
+  const sessKey = `fcs_admin_analytics_baseline_${userId}`;
+  const localKey = `fcs_admin_analytics_last_${userId}`;
+  try {
+    let raw = sessionStorage.getItem(sessKey);
+    let baselineData = null;
+    if (raw) {
+      baselineData = JSON.parse(raw);
+    } else {
+      const prev = localStorage.getItem(localKey);
+      if (prev) {
+        baselineData = JSON.parse(prev);
+        sessionStorage.setItem(sessKey, prev);
+      }
+    }
+    if (baselineData && typeof baselineData === "object") {
+      return baselineData[rangeKey] || (baselineData.visitors !== undefined ? baselineData : null);
+    }
+  } catch (err) {}
+  return null;
+}
+
+function saveAdminSnapshot(userId, rangeKey, currentCounts) {
+  if (!userId || !currentCounts) return;
+  const sessKey = `fcs_admin_analytics_baseline_${userId}`;
+  const localKey = `fcs_admin_analytics_last_${userId}`;
+  try {
+    if (!sessionStorage.getItem(sessKey)) {
+      const prev = localStorage.getItem(localKey);
+      sessionStorage.setItem(sessKey, prev || JSON.stringify({ [rangeKey]: currentCounts }));
+    }
+    let localData = {};
+    try {
+      localData = JSON.parse(localStorage.getItem(localKey) || "{}");
+    } catch (e) {}
+    localData[rangeKey] = { ...currentCounts, savedAt: Date.now() };
+    localStorage.setItem(localKey, JSON.stringify(localData));
+  } catch (err) {}
 }
 
 /* Every hour or day in the range, including empty ones, in local time
@@ -1995,173 +2067,426 @@ function chartCard({ title, description = "", body, footer = "", wide = false, a
     </section>`;
 }
 
-async function renderAnalyticsPage(page, { reuse = false } = {}) {
+let analyticsRequestId = 0;
+let analyticsChannel = null;
+let analyticsTimer = null;
+let analyticsDebounceTimer = null;
+
+function stopAnalyticsRealtime() {
+  if (analyticsChannel) {
+    try {
+      const client = getClientOrThrow();
+      client.removeChannel(analyticsChannel);
+    } catch (e) {}
+    analyticsChannel = null;
+  }
+  if (analyticsTimer) {
+    clearInterval(analyticsTimer);
+    analyticsTimer = null;
+  }
+  if (analyticsDebounceTimer) {
+    clearTimeout(analyticsDebounceTimer);
+    analyticsDebounceTimer = null;
+  }
+}
+
+function startAnalyticsRealtime(page) {
+  stopAnalyticsRealtime();
+  try {
+    const client = getClientOrThrow();
+    analyticsChannel = client
+      .channel("public:analytics-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "analytics_pageviews" }, () => {
+        queueAnalyticsRefresh(page);
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "analytics_events" }, () => {
+        queueAnalyticsRefresh(page);
+      })
+      .subscribe();
+  } catch (err) {}
+
+  // Periodic fallback refresh (every 10s if visible)
+  analyticsTimer = setInterval(() => {
+    if (state.route === "analytics" && !document.hidden) {
+      queueAnalyticsRefresh(page, { silent: true });
+    }
+  }, 10000);
+}
+
+function queueAnalyticsRefresh(page, { silent = true } = {}) {
+  if (analyticsDebounceTimer) clearTimeout(analyticsDebounceTimer);
+  analyticsDebounceTimer = setTimeout(() => {
+    if (state.route === "analytics") {
+      renderAnalyticsPage(page, { silent });
+    }
+  }, 300);
+}
+
+function switchAnalyticsSeries(seriesKey) {
+  state.analyticsSeries = seriesKey;
+  const card = root().querySelector("#card-volume");
+  if (!card) return;
+  const report = state.analyticsLastReport;
+  const points = state.analyticsLastPoints;
+  const span = state.analyticsLastSpan || "";
+  if (!report || !points) return;
+  const c = report.current || {};
+  const p = report.previous || {};
+  const adminId = (state.user && (state.user.id || state.user.email)) || "admin";
+  const prev = getAdminBaseline(adminId, state.analyticsRange || "7d") || p;
+  const VOLUME = {
+    pageviews: { key: "pageviews", label: "Page views", color: "var(--chart-2)", total: c.pageviews, before: prev.pageviews ?? p.pageviews },
+    sessions: { key: "sessions", label: "Visits", color: "var(--chart-4)", total: c.sessions, before: prev.sessions ?? p.sessions },
+  };
+  const volume = VOLUME[seriesKey] || VOLUME.pageviews;
+  card.querySelectorAll("[data-series]").forEach((btn) => {
+    btn.setAttribute("aria-pressed", String(btn.dataset.series === seriesKey));
+  });
+  const h2 = card.querySelector("h2");
+  if (h2) h2.textContent = volume.label;
+  const pDesc = card.querySelector(".nb-card-head p");
+  if (pDesc) pDesc.textContent = `${volume.key === "pageviews" ? "Pages opened" : "Browser tab sessions"} ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`;
+  const volDiv = card.querySelector("[data-volume]");
+  if (volDiv) volDiv.innerHTML = volumeBarsHTML(points, report.bucket, volume);
+  const foot = card.querySelector(".nb-card-foot");
+  if (foot) {
+    const t = change(volume.total, volume.before);
+    const range = ANALYTICS_RANGES.find(([k]) => k === state.analyticsRange) || ANALYTICS_RANGES[1];
+    foot.innerHTML = `<p>${t.pct
+      ? `<strong class="${t.tone}">Trending ${t.pct > 0 ? "up" : "down"} by ${Math.abs(t.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
+      : "Same as the period before"}</p>
+      <p class="nb-card-range">${card.querySelector(".nb-card-range")?.textContent || ""}</p>`;
+  }
+  bindChart(card.querySelector("[data-volume] [data-chart]"), points, report.bucket, [volume]);
+}
+
+async function renderAnalyticsPage(page, { reuse = false, silent = false } = {}) {
   const range = ANALYTICS_RANGES.find(([k]) => k === state.analyticsRange) || ANALYTICS_RANGES[1];
+  const span = `the last ${range[1]}`;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const cached = reuse && state.analyticsLast && state.analyticsLast.range === range[0] ? state.analyticsLast : null;
   const until = cached ? cached.until : new Date();
   const since = new Date(until.getTime() - range[2] * 864e5);
-  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  const chips = `
-    <div class="page-filters" role="group" aria-label="Period">
-      ${ANALYTICS_RANGES.map(([key, label]) => `
-        <button type="button" class="chip${key === range[0] ? " is-active" : ""}" aria-pressed="${key === range[0]}" data-range="${key}">${label}</button>`).join("")}
-    </div>`;
-  const bindChips = () => root().querySelectorAll("[data-range]").forEach((chip) =>
-    chip.addEventListener("click", () => {
-      state.analyticsRange = chip.dataset.range;
-      renderAnalyticsPage(page);
-    }));
-  let report = cached && cached.report;
-  if (!report) {
-    root().innerHTML = `${pageHead(page, { search: false })}${chips}<p class="empty-note">Counting&hellip;</p>`;
-    bindChips();
+
+  let view = root().querySelector("#analytics-view");
+
+  // Initial mount: render the page scaffold once
+  if (!view) {
+    const chipsHTML = `
+      <div class="page-filters" role="group" aria-label="Period">
+        ${ANALYTICS_RANGES.map(([key, label]) => `
+          <button type="button" class="chip${key === range[0] ? " is-active" : ""}" aria-pressed="${key === range[0]}" data-range="${key}">${label}</button>`).join("")}
+      </div>`;
+    root().innerHTML = `
+      <div id="analytics-view">
+        ${pageHead(page, { search: false })}
+        <p class="page-intro" id="analytics-intro">
+          Visits to the public site over ${escapeHTML(span)}, compared with the last time you opened the panel.
+          No cookies and no IP addresses are stored, so every visitor is counted, including browsers that send a "do not track" signal.
+        </p>
+        ${chipsHTML}
+        <div id="analytics-empty"></div>
+        <div class="kpi-grid" id="analytics-kpis">
+          <p class="empty-note">Counting&hellip;</p>
+        </div>
+        <div class="nb-grid" id="analytics-charts"></div>
+      </div>`;
+    view = root().querySelector("#analytics-view");
+
+    // Event delegation on #analytics-view
+    view.addEventListener("click", (e) => {
+      const chip = e.target.closest("[data-range]");
+      if (chip && chip.dataset.range !== state.analyticsRange) {
+        state.analyticsRange = chip.dataset.range;
+        renderAnalyticsPage(page);
+        return;
+      }
+      const seriesBtn = e.target.closest("[data-series]");
+      if (seriesBtn && seriesBtn.dataset.series !== state.analyticsSeries) {
+        switchAnalyticsSeries(seriesBtn.dataset.series);
+        return;
+      }
+    });
+    view.addEventListener("change", (e) => {
+      const sel = e.target.closest("[data-range-select]");
+      if (sel && sel.value !== state.analyticsRange) {
+        state.analyticsRange = sel.value;
+        renderAnalyticsPage(page);
+      }
+    });
+
+    startAnalyticsRealtime(page);
+  } else {
+    // Update chips & select dropdown in place immediately without full page re-render
+    view.querySelectorAll("[data-range]").forEach((chip) => {
+      const active = chip.dataset.range === range[0];
+      chip.classList.toggle("is-active", active);
+      chip.setAttribute("aria-pressed", String(active));
+    });
+    const sel = view.querySelector("[data-range-select]");
+    if (sel && sel.value !== range[0]) sel.value = range[0];
+    const intro = view.querySelector("#analytics-intro");
+    if (intro) {
+      intro.textContent = `Visits to the public site over ${span}, compared with the last time you opened the panel. No cookies and no IP addresses are stored, so every visitor is counted, including browsers that send a "do not track" signal.`;
+    }
   }
+
+  const kpisEl = view.querySelector("#analytics-kpis");
+  const chartsEl = view.querySelector("#analytics-charts");
+
+  if (!silent && chartsEl && chartsEl.children.length > 0) {
+    kpisEl?.classList.add("analytics-updating");
+    chartsEl?.classList.add("analytics-updating");
+  }
+
+  const currentRequestId = ++analyticsRequestId;
+  let report = cached && cached.report;
   try {
     report = report || await analyticsReport(since.toISOString(), until.toISOString(), tz);
     state.analyticsLast = { range: range[0], until, report };
   } catch (err) {
-    root().innerHTML = `${pageHead(page, { search: false })}<div class="empty-state"><p>Could not load analytics: ${escapeHTML(err.message || "unknown error")}</p></div>`;
+    if (currentRequestId !== analyticsRequestId || state.route !== "analytics") return;
+    kpisEl?.classList.remove("analytics-updating");
+    chartsEl?.classList.remove("analytics-updating");
+    const emptyEl = view.querySelector("#analytics-empty");
+    if (emptyEl) {
+      emptyEl.innerHTML = `<div class="empty-state"><p>Could not load analytics: ${escapeHTML(err.message || "unknown error")}</p></div>`;
+    }
     return;
   }
-  if (state.route !== "analytics") return;
+
+  if (currentRequestId !== analyticsRequestId || state.route !== "analytics") return;
 
   const c = report.current || {};
   const p = report.previous || {};
-  const span = `the last ${range[1]}`;
+  const adminId = (state.user && (state.user.id || state.user.email)) || "admin";
+  const adminBaseline = getAdminBaseline(adminId, range[0]);
+  const prev = adminBaseline || p;
+  saveAdminSnapshot(adminId, range[0], c);
+
   const kpis = [
-    ["Visitors", c.visitors, change(c.visitors, p.visitors), "Different people each day, added up over the period"],
-    ["New visitors", c.new_sessions, change(c.new_sessions, p.new_sessions), "Visits from a browser that had never been here before"],
-    ["Visits", c.sessions, change(c.sessions, p.sessions), "One per browser tab session"],
-    ["Page views", c.pageviews, change(c.pageviews, p.pageviews), ""],
-    ["Bounce rate", c.bounce_rate != null ? `${c.bounce_rate}%` : "—", change(c.bounce_rate, p.bounce_rate, { lowerIsBetter: true }), "Visits that saw one page for under 10 seconds"],
-    ["Time in view", c.avg_engaged_s != null ? fmtSeconds(c.avg_engaged_s) : "—", change(c.avg_engaged_s, p.avg_engaged_s), "Average per visit, only while the tab was visible"],
-    ["Pages per visit", c.pages_per_session ?? "—", change(c.pages_per_session, p.pages_per_session), ""],
+    ["Visitors", c.visitors, change(c.visitors, prev.visitors), "Different people each day, added up over the period"],
+    ["New visitors", c.new_sessions, change(c.new_sessions, prev.new_sessions), "Visits from a browser that had never been here before"],
+    ["Visits", c.sessions, change(c.sessions, prev.sessions), "One per browser tab session"],
+    ["Page views", c.pageviews, change(c.pageviews, prev.pageviews), ""],
+    ["Bounce rate", c.bounce_rate != null ? `${c.bounce_rate}%` : "—", change(c.bounce_rate, prev.bounce_rate, { lowerIsBetter: true }), "Visits that saw one page for under 10 seconds"],
+    ["Time in view", c.avg_engaged_s != null ? fmtSeconds(c.avg_engaged_s) : "—", change(c.avg_engaged_s, prev.avg_engaged_s, { isDuration: true }), "Average per visit, only while the tab was visible"],
+    ["Pages per visit", c.pages_per_session ?? "—", change(c.pages_per_session, prev.pages_per_session), ""],
   ];
+
   const points = analyticsBuckets(since, until, report.bucket, report.series || []);
-  // Page views card: page views or visits, switched from its header.
   const VOLUME = {
-    pageviews: { key: "pageviews", label: "Page views", color: "var(--chart-2)", total: c.pageviews, before: p.pageviews },
-    sessions: { key: "sessions", label: "Visits", color: "var(--chart-4)", total: c.sessions, before: p.sessions },
+    pageviews: { key: "pageviews", label: "Page views", color: "var(--chart-2)", total: c.pageviews, before: prev.pageviews ?? p.pageviews },
+    sessions: { key: "sessions", label: "Visits", color: "var(--chart-4)", total: c.sessions, before: prev.sessions ?? p.sessions },
   };
   const volume = VOLUME[state.analyticsSeries] || VOLUME.pageviews;
   const trendLine = (now, before) => {
     const t = change(now, before);
     return `<p>${t.pct
       ? `<strong class="${t.tone}">Trending ${t.pct > 0 ? "up" : "down"} by ${Math.abs(t.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
-      : t.none && t.text.startsWith("nothing") ? `Nothing in the ${escapeHTML(range[1])} before to compare with` : "Same as the period before"}</p>
+      : "Same as the period before"}</p>
       <p class="nb-card-range">${escapeHTML(since.toLocaleDateString("en-GB", { day: "numeric", month: "short" }))} – ${escapeHTML(until.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }))}, times in ${escapeHTML(tz)}</p>`;
   };
   const returning = Math.max(0, num(c.sessions) - num(c.new_sessions));
   const empty = !num(c.pageviews);
 
-  root().innerHTML = `
-    ${pageHead(page, { search: false })}
-    <p class="page-intro">
-      Visits to the public site over ${escapeHTML(span)}, compared with the ${escapeHTML(range[1])} before.
-      No cookies and no IP addresses are stored, so every visitor is counted, including browsers that send a "do not track" signal.
-    </p>
-    ${chips}
-    ${empty ? `<div class="empty-state"><p>No visits recorded in this period yet. Numbers appear as people visit the live site (visits from your own computer on localhost are not counted).</p></div>` : ""}
-    <div class="kpi-grid">
-      ${kpis.map(([label, value, delta, hint]) => `
-        <div class="kpi ${delta.tone}"${hint ? ` title="${escapeAttr(hint)}"` : ""}>
-          <span class="kpi-label">${label}</span>
-          <strong class="kpi-value">${escapeHTML(String(value ?? 0))}</strong>
-          ${delta.text ? `<span class="kpi-delta ${delta.none ? "is-none" : delta.tone}">${delta.text}</span>` : ""}
-        </div>`).join("")}
-    </div>
-    <div class="nb-grid">
-      ${chartCard({
-        wide: true,
-        title: "Visitors",
-        description: `Showing visitors by device ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`,
-        actions: `
+  state.analyticsLastReport = report;
+  state.analyticsLastPoints = points;
+  state.analyticsLastSpan = span;
+
+  // 1. Update Empty state banner
+  const emptyEl = view.querySelector("#analytics-empty");
+  if (emptyEl) {
+    emptyEl.innerHTML = empty ? `<div class="empty-state"><p>No visits recorded in this period yet. Numbers appear as people visit the live site (visits from your own computer on localhost are not counted).</p></div>` : "";
+  }
+
+  // 2. Update KPI Cards in place
+  if (kpisEl) {
+    kpisEl.innerHTML = kpis.map(([label, value, delta, hint]) => `
+      <div class="kpi ${delta.tone}"${hint ? ` title="${escapeAttr(hint)}"` : ""}>
+        <span class="kpi-label">${label}</span>
+        <strong class="kpi-value">${escapeHTML(String(value ?? 0))}</strong>
+        ${delta.text ? `<span class="kpi-delta ${delta.none ? "is-none" : delta.tone}">${delta.text}</span>` : ""}
+      </div>`).join("");
+    kpisEl.classList.remove("analytics-updating");
+  }
+
+  // 3. Render or Update Charts Grid
+  if (!chartsEl || chartsEl.children.length === 0) {
+    // Initial populate of charts grid
+    chartsEl.innerHTML = `
+      <section class="nb-card nb-card-wide" id="card-visitors">
+        <header class="nb-card-head">
+          <div><h2>Visitors</h2><p>Showing visitors by device ${report.bucket === "hour" ? "per hour" : "per day"} for ${escapeHTML(span)}</p></div>
           <label class="nb-select">
             <span class="visually-hidden">Period</span>
             <select data-range-select>
               ${ANALYTICS_RANGES.map(([k, label]) => `<option value="${k}"${k === range[0] ? " selected" : ""}>Last ${label}</option>`).join("")}
             </select>
-          </label>`,
-        body: `<div data-visitors>${visitorsAreaHTML(points, report.bucket)}</div>${legendHTML(DEVICE_LAYERS)}`,
-        footer: trendLine(c.visitors, p.visitors),
-      })}
-      ${chartCard({
-        wide: true,
-        title: volume.label,
-        description: `${volume.key === "pageviews" ? "Pages opened" : "Browser tab sessions"} ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`,
-        actions: `
+          </label>
+        </header>
+        <div class="nb-card-body"><div data-visitors>${visitorsAreaHTML(points, report.bucket)}</div>${legendHTML(DEVICE_LAYERS)}</div>
+        <footer class="nb-card-foot">${trendLine(c.visitors, prev.visitors)}</footer>
+      </section>
+
+      <section class="nb-card nb-card-wide" id="card-volume">
+        <header class="nb-card-head">
+          <div><h2>${escapeHTML(volume.label)}</h2><p>${volume.key === "pageviews" ? "Pages opened" : "Browser tab sessions"} ${report.bucket === "hour" ? "per hour" : "per day"} for ${escapeHTML(span)}</p></div>
           <div class="nb-switch" role="group" aria-label="Show">
             ${Object.values(VOLUME).map((v) => `
               <button type="button" data-series="${v.key}" aria-pressed="${v.key === volume.key}">
                 <span>${v.label}</span><strong>${num(v.total)}</strong>
               </button>`).join("")}
-          </div>`,
-        body: `<div data-volume>${volumeBarsHTML(points, report.bucket, volume)}</div>`,
-        footer: trendLine(volume.total, volume.before),
-      })}
-      ${chartCard({
-        title: "New and returning",
-        description: "Visits from browsers seen here before, or not.",
-        body: donutHTML([
+          </div>
+        </header>
+        <div class="nb-card-body"><div data-volume>${volumeBarsHTML(points, report.bucket, volume)}</div></div>
+        <footer class="nb-card-foot">${trendLine(volume.total, volume.before)}</footer>
+      </section>
+
+      <section class="nb-card" id="card-returning">
+        <header class="nb-card-head">
+          <div><h2>New and returning</h2><p>Visits from browsers seen here before, or not.</p></div>
+        </header>
+        <div class="nb-card-body">${donutHTML([
           { name: "New", value: c.new_sessions, color: "var(--chart-1)" },
           { name: "Returning", value: returning, color: "var(--chart-2)" },
-        ], { centre: num(c.sessions) ? `${Math.round((num(c.new_sessions) / num(c.sessions)) * 100)}%` : "—", caption: "new" }),
-      })}
-      ${chartCard({
-        title: "Devices",
-        description: "By screen width.",
-        body: donutHTML((report.devices || []).map((d) => ({ name: d.name, value: d.sessions })), { centre: num(c.sessions), caption: "visits" }),
-      })}
-      ${chartCard({
-        title: "Actions",
-        description: "What visitors did, by number of times.",
-        body: hbarsHTML(report.events || [], { valueKey: "count", nameOf: (r) => EVENT_NAMES[r.name] || r.name, color: "var(--chart-3)" }),
-      })}
-      ${chartCard({
-        title: "Sections read",
-        description: "Visits that stopped on each section for a second or more.",
-        body: hbarsHTML(report.sections || [], { nameOf: (r) => SECTION_NAMES[r.name] || r.name, color: "var(--chart-1)" }),
-      })}
-      ${chartCard({
-        title: "Referrers",
-        description: "Where visits came from.",
-        body: hbarsHTML(report.referrers || [], { color: "var(--chart-2)" }),
-      })}
-      ${chartCard({
-        title: "Campaigns",
-        description: "Visits that came through a tagged link (see Make a tagged link, below).",
-        body: hbarsHTML(report.campaigns || [], { color: "var(--chart-4)" }),
-      })}
-      ${chartCard({
-        title: "Pages",
-        description: "Page views per page.",
-        body: hbarsHTML(report.pages || [], { valueKey: "views", color: "var(--chart-5)" }),
-      })}
-      ${chartCard({
-        wide: true,
-        title: "Make a tagged link",
-        description: "Share one link per place, and see which places bring people in.",
-        body: linkMakerHTML(),
-      })}
-      ${chartCard({
-        title: "Regions",
-        description: "From the visitor's timezone, so a rough guide.",
-        body: hbarsHTML(report.regions || [], { color: "var(--chart-2)" }),
-      })}
-    </div>`;
-  bindChips();
-  bindLinkMaker(root());
-  bindChart(root().querySelector("[data-visitors] [data-chart]"), points, report.bucket, DEVICE_LAYERS);
-  bindChart(root().querySelector("[data-volume] [data-chart]"), points, report.bucket, [volume]);
-  root().querySelector("[data-range-select]").addEventListener("change", (e) => {
-    state.analyticsRange = e.target.value;
-    renderAnalyticsPage(page);
-  });
-  root().querySelectorAll("[data-series]").forEach((button) =>
-    button.addEventListener("click", () => {
-      state.analyticsSeries = button.dataset.series;
-      renderAnalyticsPage(page, { reuse: true });
-    }));
+        ], { centre: num(c.sessions) ? `${Math.round((num(c.new_sessions) / num(c.sessions)) * 100)}%` : "—", caption: "new" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-devices">
+        <header class="nb-card-head">
+          <div><h2>Devices</h2><p>By screen width.</p></div>
+        </header>
+        <div class="nb-card-body">${donutHTML((report.devices || []).map((d) => ({ name: d.name, value: d.sessions })), { centre: num(c.sessions), caption: "visits" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-actions">
+        <header class="nb-card-head">
+          <div><h2>Actions</h2><p>What visitors did, by number of times.</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.events || [], { valueKey: "count", nameOf: (r) => EVENT_NAMES[r.name] || r.name, color: "var(--chart-3)" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-sections">
+        <header class="nb-card-head">
+          <div><h2>Sections read</h2><p>Visits that stopped on each section for a second or more.</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.sections || [], { nameOf: (r) => SECTION_NAMES[r.name] || r.name, color: "var(--chart-1)" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-referrers">
+        <header class="nb-card-head">
+          <div><h2>Referrers</h2><p>Where visits came from.</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.referrers || [], { color: "var(--chart-2)" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-campaigns">
+        <header class="nb-card-head">
+          <div><h2>Campaigns</h2><p>Visits that came through a tagged link (see Make a tagged link, below).</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.campaigns || [], { color: "var(--chart-4)" })}</div>
+      </section>
+
+      <section class="nb-card" id="card-pages">
+        <header class="nb-card-head">
+          <div><h2>Pages</h2><p>Page views per page.</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.pages || [], { valueKey: "views", color: "var(--chart-5)" })}</div>
+      </section>
+
+      <section class="nb-card nb-card-wide" id="card-link-maker">
+        <header class="nb-card-head">
+          <div><h2>Make a tagged link</h2><p>Share one link per place, and see which places bring people in.</p></div>
+        </header>
+        <div class="nb-card-body">${linkMakerHTML()}</div>
+      </section>
+
+      <section class="nb-card" id="card-regions">
+        <header class="nb-card-head">
+          <div><h2>Regions</h2><p>From the visitor's timezone, so a rough guide.</p></div>
+        </header>
+        <div class="nb-card-body">${hbarsHTML(report.regions || [], { color: "var(--chart-2)" })}</div>
+      </section>
+    `;
+    bindLinkMaker(chartsEl);
+  } else {
+    // In-place chart update! Zero layout shift!
+    const vCard = chartsEl.querySelector("#card-visitors");
+    if (vCard) {
+      const desc = vCard.querySelector(".nb-card-head p");
+      if (desc) desc.textContent = `Showing visitors by device ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`;
+      const vDiv = vCard.querySelector("[data-visitors]");
+      if (vDiv) vDiv.innerHTML = visitorsAreaHTML(points, report.bucket);
+      const foot = vCard.querySelector(".nb-card-foot");
+      if (foot) foot.innerHTML = trendLine(c.visitors, prev.visitors);
+    }
+
+    const volCard = chartsEl.querySelector("#card-volume");
+    if (volCard) {
+      const h2 = volCard.querySelector("h2");
+      if (h2) h2.textContent = volume.label;
+      const desc = volCard.querySelector(".nb-card-head p");
+      if (desc) desc.textContent = `${volume.key === "pageviews" ? "Pages opened" : "Browser tab sessions"} ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`;
+      const pvStrong = volCard.querySelector('[data-series="pageviews"] strong');
+      if (pvStrong) pvStrong.textContent = num(c.pageviews);
+      const sessStrong = volCard.querySelector('[data-series="sessions"] strong');
+      if (sessStrong) sessStrong.textContent = num(c.sessions);
+      const volDiv = volCard.querySelector("[data-volume]");
+      if (volDiv) volDiv.innerHTML = volumeBarsHTML(points, report.bucket, volume);
+      const foot = volCard.querySelector(".nb-card-foot");
+      if (foot) foot.innerHTML = trendLine(volume.total, volume.before);
+    }
+
+    const retBody = chartsEl.querySelector("#card-returning .nb-card-body");
+    if (retBody) {
+      retBody.innerHTML = donutHTML([
+        { name: "New", value: c.new_sessions, color: "var(--chart-1)" },
+        { name: "Returning", value: returning, color: "var(--chart-2)" },
+      ], { centre: num(c.sessions) ? `${Math.round((num(c.new_sessions) / num(c.sessions)) * 100)}%` : "—", caption: "new" });
+    }
+
+    const devBody = chartsEl.querySelector("#card-devices .nb-card-body");
+    if (devBody) {
+      devBody.innerHTML = donutHTML((report.devices || []).map((d) => ({ name: d.name, value: d.sessions })), { centre: num(c.sessions), caption: "visits" });
+    }
+
+    const actBody = chartsEl.querySelector("#card-actions .nb-card-body");
+    if (actBody) {
+      actBody.innerHTML = hbarsHTML(report.events || [], { valueKey: "count", nameOf: (r) => EVENT_NAMES[r.name] || r.name, color: "var(--chart-3)" });
+    }
+
+    const secBody = chartsEl.querySelector("#card-sections .nb-card-body");
+    if (secBody) {
+      secBody.innerHTML = hbarsHTML(report.sections || [], { nameOf: (r) => SECTION_NAMES[r.name] || r.name, color: "var(--chart-1)" });
+    }
+
+    const refBody = chartsEl.querySelector("#card-referrers .nb-card-body");
+    if (refBody) {
+      refBody.innerHTML = hbarsHTML(report.referrers || [], { color: "var(--chart-2)" });
+    }
+
+    const camBody = chartsEl.querySelector("#card-campaigns .nb-card-body");
+    if (camBody) {
+      camBody.innerHTML = hbarsHTML(report.campaigns || [], { color: "var(--chart-4)" });
+    }
+
+    const pagBody = chartsEl.querySelector("#card-pages .nb-card-body");
+    if (pagBody) {
+      pagBody.innerHTML = hbarsHTML(report.pages || [], { valueKey: "views", color: "var(--chart-5)" });
+    }
+
+    const regBody = chartsEl.querySelector("#card-regions .nb-card-body");
+    if (regBody) {
+      regBody.innerHTML = hbarsHTML(report.regions || [], { color: "var(--chart-2)" });
+    }
+  }
+
+  chartsEl?.classList.remove("analytics-updating");
+
+  // Re-bind hover listeners on the SVGs
+  bindChart(view.querySelector("[data-visitors] [data-chart]"), points, report.bucket, DEVICE_LAYERS);
+  bindChart(view.querySelector("[data-volume] [data-chart]"), points, report.bucket, [volume]);
 }
 
 /* ------------------------------------------------------------------
