@@ -18,9 +18,27 @@
  */
 (function () {
   const config = window.FCS_CONFIG || {};
-  if (!config.supabaseUrl) return;
-  if (navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) return;
-  if (/^(localhost|127\.)/.test(location.hostname) && !/[?&]track=1\b/.test(location.search)) return;
+  // ?trackdebug=1 shows a small badge saying whether this visit is being
+  // counted, and if not, why. For testing from a phone.
+  const debug = /[?&]trackdebug=1\b/.test(location.search);
+  const note = (text, ok) => {
+    if (!debug) return;
+    let el = document.getElementById("track-debug");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "track-debug";
+      el.setAttribute("role", "status");
+      el.style.cssText = "position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;padding:10px 12px;border:2px solid #000;font:600 13px/1.4 monospace;color:#000;";
+      (document.body || document.documentElement).appendChild(el);
+    }
+    el.style.background = ok ? "#7be07b" : "#ff8c8c";
+    el.textContent = `Analytics: ${text}`;
+  };
+  if (!config.supabaseUrl) return note("not configured", false);
+  if (navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) {
+    return note("NOT counted: your browser sends Do Not Track / Global Privacy Control (Brave and Firefox do this by default)", false);
+  }
+  if (/^(localhost|127\.)/.test(location.hostname) && !/[?&]track=1\b/.test(location.search)) return note("not counted on localhost", false);
 
   const endpoint = `${config.supabaseUrl}/functions/v1/collect`;
   const store = (area, key, make) => {
@@ -45,6 +63,13 @@
   // sendBeacon still delivers it while the page is closing.
   const send = (data) => {
     const body = new Blob([JSON.stringify({ ...data, session })], { type: "text/plain" });
+    if (debug) {
+      // Debug visits use fetch, so the answer (or the block) can be shown.
+      fetch(endpoint, { method: "POST", body, keepalive: true, mode: "cors" })
+        .then((r) => note(r.status === 204 ? `counting this visit (last: ${data.type}, ${new Date().toLocaleTimeString()})` : `the collector answered ${r.status}`, r.status === 204))
+        .catch(() => note("BLOCKED: something on this phone (an ad or tracker blocker, a VPN filter, or the browser's shields) stopped the request", false));
+      return;
+    }
     if (!(navigator.sendBeacon && navigator.sendBeacon(endpoint, body))) {
       fetch(endpoint, { method: "POST", body, keepalive: true, mode: "cors" }).catch(() => {});
     }
