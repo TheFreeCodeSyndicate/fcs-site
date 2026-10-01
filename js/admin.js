@@ -2129,7 +2129,7 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
       })}
       ${chartCard({
         title: "Campaigns",
-        description: "Links tagged with ?utm_source=…, for example ?utm_source=instagram.",
+        description: "Visits that came through a tagged link (see Make a tagged link, below).",
         body: hbarsHTML(report.campaigns || [], { color: "var(--chart-4)" }),
       })}
       ${chartCard({
@@ -2138,12 +2138,19 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
         body: hbarsHTML(report.pages || [], { valueKey: "views", color: "var(--chart-5)" }),
       })}
       ${chartCard({
+        wide: true,
+        title: "Make a tagged link",
+        description: "Share one link per place, and see which places bring people in.",
+        body: linkMakerHTML(),
+      })}
+      ${chartCard({
         title: "Regions",
         description: "From the visitor's timezone, so a rough guide.",
         body: hbarsHTML(report.regions || [], { color: "var(--chart-2)" }),
       })}
     </div>`;
   bindChips();
+  bindLinkMaker(root());
   bindChart(root().querySelector("[data-visitors] [data-chart]"), points, report.bucket, DEVICE_LAYERS);
   bindChart(root().querySelector("[data-volume] [data-chart]"), points, report.bucket, [volume]);
   root().querySelector("[data-range-select]").addEventListener("change", (e) => {
@@ -2155,6 +2162,111 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
       state.analyticsSeries = button.dataset.series;
       renderAnalyticsPage(page, { reuse: true });
     }));
+}
+
+/* ------------------------------------------------------------------
+ * "Make a tagged link": pick where the link will be posted, and get the
+ * site address with the campaign tags added (and copied). Visits that
+ * arrive through it are counted under Campaigns. Names are lowercased
+ * and hyphenated, so "Instagram" and "instagram" cannot split in two.
+ * ---------------------------------------------------------------- */
+const LINK_PLATFORMS = [
+  ["instagram", "Instagram", ["bio", "story", "post", "reel", "dm"]],
+  ["whatsapp", "WhatsApp", ["message", "status", "group", "channel"]],
+  ["discord", "Discord", ["server", "message"]],
+  ["youtube", "YouTube", ["description", "comment", "video"]],
+  ["linkedin", "LinkedIn", ["post", "profile", "message"]],
+  ["x", "X (Twitter)", ["post", "bio", "dm"]],
+  ["facebook", "Facebook", ["post", "group", "page"]],
+  ["telegram", "Telegram", ["channel", "message"]],
+  ["reddit", "Reddit", ["post", "comment"]],
+  ["threads", "Threads", ["post", "bio"]],
+  ["snapchat", "Snapchat", ["story", "message"]],
+  ["pinterest", "Pinterest", ["pin"]],
+  ["tiktok", "TikTok", ["bio", "video"]],
+  ["email", "Email", ["newsletter", "signature"]],
+  ["qr", "QR code or print", ["poster", "flyer", "sticker"]],
+  ["other", "Somewhere else", ["link"]],
+];
+
+const tagName = (text) => String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+
+/* Visits through localhost are never counted, so a link made there
+ * points at the live site instead. */
+function liveSiteURL() {
+  const here = new URL("./", location.href);
+  return /^(localhost|127\.)/.test(here.hostname) ? "https://thefreecodesyndicate.github.io/fcs-site/" : here.href;
+}
+
+function taggedLink({ source, medium, campaign }) {
+  const url = new URL(liveSiteURL());
+  if (source) url.searchParams.set("utm_source", source);
+  if (source && medium) url.searchParams.set("utm_medium", medium);
+  if (source && campaign) url.searchParams.set("utm_campaign", campaign);
+  return url.href;
+}
+
+function linkMakerHTML() {
+  const [first] = LINK_PLATFORMS;
+  return `
+    <form class="link-maker" id="link-maker" novalidate>
+      <p class="field-help">Pick where you will post the link. Use the finished link there, and the visits it brings are counted under Campaigns.</p>
+      <div class="field">
+        <label for="lm-source">Where will you post it?</label>
+        <select id="lm-source">${LINK_PLATFORMS.map(([id, label]) => `<option value="${id}">${escapeHTML(label)}</option>`).join("")}</select>
+      </div>
+      <div class="field" id="lm-other" hidden>
+        <label for="lm-other-name">Name it</label>
+        <input id="lm-other-name" maxlength="40" placeholder="college-notice-board" />
+      </div>
+      <div class="field">
+        <label for="lm-medium">What kind of place?</label>
+        <select id="lm-medium">${first[2].map((m) => `<option>${escapeHTML(m)}</option>`).join("")}</select>
+      </div>
+      <div class="field">
+        <label for="lm-campaign">Campaign name <span class="optional">(optional)</span></label>
+        <input id="lm-campaign" maxlength="40" placeholder="join-drive" />
+        <p class="field-help">Tell different pushes apart, for example <code>october-join-drive</code>.</p>
+      </div>
+      <div class="field field-wide">
+        <label for="lm-result">Your link</label>
+        <div class="lm-result">
+          <input id="lm-result" readonly />
+          <button type="button" class="btn btn-primary" id="lm-copy">${icon("copy")}<span>Copy link</span></button>
+        </div>
+      </div>
+    </form>`;
+}
+
+function bindLinkMaker(scope) {
+  const form = scope.querySelector("#link-maker");
+  if (!form) return;
+  const $ = (id) => form.querySelector(id);
+  const refresh = () => {
+    const platform = LINK_PLATFORMS.find(([id]) => id === $("#lm-source").value);
+    $("#lm-other").hidden = platform[0] !== "other";
+    const source = platform[0] === "other" ? tagName($("#lm-other-name").value) : platform[0];
+    $("#lm-result").value = source ? taggedLink({ source, medium: tagName($("#lm-medium").value), campaign: tagName($("#lm-campaign").value) }) : "";
+  };
+  $("#lm-source").addEventListener("change", () => {
+    const platform = LINK_PLATFORMS.find(([id]) => id === $("#lm-source").value);
+    $("#lm-medium").innerHTML = platform[2].map((m) => `<option>${escapeHTML(m)}</option>`).join("");
+    refresh();
+  });
+  form.addEventListener("input", refresh);
+  form.addEventListener("submit", (e) => e.preventDefault());
+  $("#lm-copy").addEventListener("click", async () => {
+    const field = $("#lm-result");
+    if (!field.value) return toast("Name the place first.", "error");
+    try {
+      await navigator.clipboard.writeText(field.value);
+    } catch {
+      field.select();
+      document.execCommand("copy");
+    }
+    toast("Link copied. Use it where you post.", "success");
+  });
+  refresh();
 }
 
 /* ==================================================================

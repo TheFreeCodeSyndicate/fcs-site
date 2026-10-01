@@ -1203,3 +1203,11 @@ body:has(.drawer.is-open) .toasts {
   cursor: pointer;
 }
 .nb-select select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* Make a tagged link */
+.link-maker { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 14px 18px; align-items: start; }
+.link-maker .field-help { grid-column: 1 / -1; margin: 0; }
+.link-maker .field-wide { grid-column: 1 / -1; }
+.link-maker .optional { font-weight: 400; color: var(--ink-muted); }
+.lm-result { display: flex; flex-wrap: wrap; gap: 10px; }
+.lm-result input { flex: 1 1 260px; min-width: 0; font-size: 0.8rem; }

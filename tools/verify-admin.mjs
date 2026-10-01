@@ -302,6 +302,14 @@ const areaHit = page.locator("[data-visitors] .nb-hit").nth(5);
 await areaHit.scrollIntoViewIfNeeded();
 await areaHit.hover();
 await settle(200);
+await page.selectOption("#lm-source", "instagram");
+await page.selectOption("#lm-medium", "story");
+await page.fill("#lm-campaign", "October Join Drive!");
+check("the link maker builds a tagged link with clean names",
+  /\/fcs-site\/\?utm_source=instagram&utm_medium=story&utm_campaign=october-join-drive$/.test(await page.inputValue("#lm-result")), await page.inputValue("#lm-result"));
+await page.selectOption("#lm-source", "other");
+await page.fill("#lm-other-name", "College Notice Board");
+check("'Somewhere else' uses the name you give it", /utm_source=college-notice-board/.test(await page.inputValue("#lm-result")), await page.inputValue("#lm-result"));
 check("the Visitors tooltip lists each device drawn", (await page.$$eval("[data-visitors] .nb-tooltip p i", (i) => i.length)) === 3);
 
 // --- team -------------------------------------------------------------------

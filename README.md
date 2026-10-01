@@ -118,7 +118,14 @@ How it works, all first-party and free:
   on/off"). Rows older than 13 months are deleted nightly (`pg_cron`).
 - Charts follow the look of neobrutalism.dev/charts, drawn in plain SVG.
 
-Migrations `016`-`018`; Edge Function `supabase/functions/collect`.
+**Campaigns:** Analytics > *Make a tagged link* builds the address to
+share for each place (Instagram, WhatsApp, Discord, YouTube, LinkedIn, X,
+Facebook, Telegram, Reddit, Threads, Snapchat, Pinterest, TikTok, email,
+QR codes and print, or any name): it adds `utm_source`, `utm_medium` and
+an optional `utm_campaign`, lowercased and hyphenated, and copies it.
+Visits through it appear under Campaigns.
+
+Migrations `016`-`019`; Edge Function `supabase/functions/collect`.
 
 ## Link icons
 
