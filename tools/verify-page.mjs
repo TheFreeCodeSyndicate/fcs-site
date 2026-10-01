@@ -181,6 +181,11 @@ check("the dialog says to check the inbox", /Check visitor@example\.com/.test(aw
 await page.click("#notify-cancel");
 check("the dialog closes", !(await page.$eval("#notify-dialog", (d) => d.open)));
 
+// --- the footer says what is counted, and links to the privacy page ----
+const privacyHref = await page.getAttribute(".privacy-line a", "href");
+const privacyPage = await page.request.get(new URL(privacyHref, base).href);
+check("the footer links to a privacy page that loads", privacyHref === "privacy.html" && privacyPage.ok() && /Your IP address is never stored/.test(await privacyPage.text()), `${privacyHref} ${privacyPage.status()}`);
+
 // --- phone widths: nothing may stick out past the screen -------------------
 for (const width of [320, 390]) {
   await page.setViewportSize({ width, height: 800 });
