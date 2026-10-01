@@ -268,7 +268,7 @@ export const deleteCoreMember = (id) =>
 export async function listProfiles() {
   const { data, error } = await getClientOrThrow()
     .from("profiles")
-    .select("id, email, display_name, role, created_at")
+    .select("id, email, display_name, role, can_view_analytics, created_at")
     .order("created_at");
   if (error) throw error;
   return data || [];
@@ -277,6 +277,25 @@ export async function listProfiles() {
 /* The guard_profile_update trigger (migration 003) refuses role
  * changes by non-admins and removing the last admin; its message comes
  * back as the error. */
+/* ---- analytics (migrations 016-018) ------------------------------
+ * The report is a database function that checks access itself; raw
+ * visit rows are never readable over the API. */
+export async function analyticsReport(since, until, tz) {
+  const { data, error } = await getClientOrThrow().rpc("analytics_report", { since, until, tz });
+  if (error) throw error;
+  return data;
+}
+
+export async function getAnalyticsAccess(userId) {
+  const { data } = await getClientOrThrow().from("profiles").select("can_view_analytics").eq("id", userId).maybeSingle();
+  return Boolean(data && data.can_view_analytics);
+}
+
+/* Admins only (the role guard refuses anyone else). */
+export const setAnalyticsAccess = (id, allowed) =>
+  write((s) => s.from("profiles").update({ can_view_analytics: allowed }).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Changing analytics access"));
+
 export const setProfileRole = (id, role) =>
   write((s) => s.from("profiles").update({ role }).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Changing the role"));

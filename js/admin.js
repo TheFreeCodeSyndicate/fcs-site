@@ -25,6 +25,7 @@ import {
   createSocialLink, updateSocialLink, deleteSocialLink,
   createCoreMember, updateCoreMember, deleteCoreMember,
   saveRepoKind, deleteRepoKind, refreshSite,
+  analyticsReport, getAnalyticsAccess, setAnalyticsAccess,
   listProfiles, setProfileRole, removeMember, watchMyAccess,
   eventMail, listSubscriptions, addSubscribers, removeSubscription, listEmailSends,
   requestPasswordReset, updatePassword,
@@ -545,6 +546,8 @@ async function onSignedIn(user) {
 
   state.user = user;
   state.role = role;
+  // Admins always see Analytics; editors only once an admin grants it.
+  state.canAnalytics = role === "admin" || (role === "editor" && (await getAnalyticsAccess(user.id).catch(() => false)));
   document.body.classList.remove("is-gate");
   document.getElementById("admin-identity").textContent = `${user.email} · ${role}`;
   document.getElementById("admin-signout").hidden = false;
@@ -607,11 +610,12 @@ const PAGES = [
   { id: "social", label: "Social links", icon: "link", site: "#join" },
   { id: "repos", label: "Repositories", icon: "github", site: "#projects" },
   { id: "activity", label: "Activity", icon: "list-box" },
+  { id: "analytics", label: "Analytics", icon: "eye", gate: () => isAdmin() || state.canAnalytics },
   { id: "subscribers", label: "Subscribers", icon: "mail", adminOnly: true },
   { id: "team", label: "Team", icon: "shield", adminOnly: true },
 ];
 
-const visiblePages = () => PAGES.filter((p) => !p.adminOnly || isAdmin());
+const visiblePages = () => PAGES.filter((p) => (!p.adminOnly || isAdmin()) && (!p.gate || p.gate()));
 
 function routeFromHash() {
   const id = location.hash.replace(/^#\/?/, "");
@@ -678,6 +682,7 @@ function renderPage() {
   else if (state.route === "activity") renderActivityPage(page);
   else if (state.route === "subscribers") renderSubscribersPage(page);
   else if (state.route === "repos") renderReposPage(page);
+  else if (state.route === "analytics") renderAnalyticsPage(page);
   else renderListPage(page);
 }
 
@@ -1634,6 +1639,7 @@ function renderTeamPage(page) {
               <select id="role-${escapeAttr(p.id)}" data-role-select>
                 ${Object.entries(ROLE_LABELS).map(([value, label]) => `<option value="${value}"${p.role === value ? " selected" : ""}>${label}</option>`).join("")}
               </select>
+              ${p.role === "editor" ? `<button type="button" class="btn btn-quiet" data-analytics aria-pressed="${Boolean(p.can_view_analytics)}" title="Let this editor see the Analytics page">${icon("eye")}<span>Analytics: ${p.can_view_analytics ? "on" : "off"}</span></button>` : ""}
               ${you ? "" : `<button type="button" class="btn btn-danger" data-remove aria-label="Remove ${escapeAttr(p.email || "this account")} completely">${icon("trash")}<span>Remove</span></button>`}
             </span>
           </li>`;
@@ -1684,6 +1690,19 @@ function renderTeamPage(page) {
     const approve = li.querySelector("[data-role]");
     if (approve) approve.addEventListener("click", () => change(approve.dataset.role));
     li.querySelector("[data-role-select]").addEventListener("change", (event) => change(event.target.value));
+    const analytics = li.querySelector("[data-analytics]");
+    if (analytics) analytics.addEventListener("click", async () => {
+      const person = state.profiles.find((p) => p.id === id) || {};
+      const allowed = !person.can_view_analytics;
+      try {
+        await busy(analytics, "Saving…", () => setAnalyticsAccess(id, allowed));
+        state.profiles = await listProfiles();
+        renderTeamPage(page);
+        toast(`${person.email || "They"} ${allowed ? "can now see" : "can no longer see"} Analytics.`, allowed ? "success" : "delete");
+      } catch (err) {
+        toast(err.message || "Could not change analytics access.", "error");
+      }
+    });
     const remove = li.querySelector("[data-remove]");
     if (remove) armedDelete(remove, async () => {
       const who = (state.profiles.find((p) => p.id === id) || {}).email || "the account";
@@ -1698,6 +1717,347 @@ function renderTeamPage(page) {
       }
     });
   });
+}
+
+/* ==================================================================
+ * Analytics: first-party, cookie-free numbers for the public site
+ * (js/track.js -> the collect Edge Function -> analytics_report()).
+ * Admins see it; so do editors an admin has switched it on for, on
+ * the Team page. The database enforces the same rule.
+ *
+ * Charts follow neobrutalism.dev/charts, drawn in plain SVG/CSS: solid
+ * fills with a 2px black outline, dashed grey horizontal grid, bars
+ * rounded on top, a bordered tooltip card, bordered legend squares, and
+ * every chart in a card with a trend line in its footer.
+ * ================================================================== */
+
+const ANALYTICS_RANGES = [["24h", "24 hours", 1], ["7d", "7 days", 7], ["30d", "30 days", 30], ["90d", "90 days", 90]];
+const SECTION_NAMES = {
+  abstract: "Abstract", icarus: "The Icarus Mark", protocol: "Operating Protocol", projects: "Projects",
+  resources: "Resources", "study-groups": "Study groups", events: "Events", contribute: "Contribution lanes",
+  core: "Core members", join: "Entry",
+};
+const EVENT_NAMES = {
+  join: "Opened a join link", copy: "Copied a Discord handle", social: "Footer social link", calendar: "Calendar",
+  notify: "Opened email signup", subscribe: "Signed up for emails", repo: "Opened a project", resource: "Opened a resource",
+  "member-link": "Opened a member's link", link: "Opened an event or group link",
+};
+const CHART_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
+
+const fmtSeconds = (s) => {
+  const n = Math.round(Number(s) || 0);
+  return n >= 60 ? `${Math.floor(n / 60)}m ${n % 60}s` : `${n}s`;
+};
+const num = (v) => Number(v) || 0;
+
+/* "▲ 50%" style change against the previous period. */
+function change(now, before, { lowerIsBetter = false } = {}) {
+  const a = num(now);
+  const b = num(before);
+  if (!b) return { text: a ? "new" : "", tone: "" };
+  const pct = Math.round(((a - b) / b) * 100);
+  if (!pct) return { text: "no change", tone: "" };
+  const good = lowerIsBetter ? pct < 0 : pct > 0;
+  return { text: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tone: good ? "is-good" : "is-bad", pct };
+}
+
+/* Every hour or day in the range, including empty ones, in local time
+ * (the report groups in the same timezone). */
+function analyticsBuckets(since, until, bucket, series) {
+  const byStart = new Map(series.map((s) => [Date.parse(s.t), s]));
+  const t = new Date(since);
+  if (bucket === "hour") t.setMinutes(0, 0, 0);
+  else t.setHours(0, 0, 0, 0);
+  const out = [];
+  while (t < until) {
+    const hit = byStart.get(t.getTime()) || {};
+    out.push({ at: new Date(t), visitors: hit.visitors || 0, pageviews: hit.pageviews || 0 });
+    if (bucket === "hour") t.setHours(t.getHours() + 1);
+    else t.setDate(t.getDate() + 1);
+  }
+  return out;
+}
+
+const bucketLabel = (d, bucket) => bucket === "hour"
+  ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/* A tidy axis top: four steps of 1, 2, 2.5 or 5 times a power of ten, so the
+ * grid reads 0, 25, 50, 75, 100 rather than 0, 13, 25, 38, 50. */
+function niceMax(max) {
+  const raw = Math.max(max, 1) / 4;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((v) => v >= raw);
+  return Math.max(4, step * 4);
+}
+
+/* Bars with only the top corners rounded, like Recharts' radius [4,4,0,0]. */
+function topRoundedBar(x, y, w, h, r = 4) {
+  if (h <= 0) return "";
+  r = Math.min(r, w / 2, h);
+  return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+}
+
+/* The traffic chart: one series at a time, switched from the header. */
+function trafficChartHTML(points, bucket, key) {
+  const W = 760, H = 240, L = 36, R = 8, T = 12, B = 26;
+  const iw = W - L - R, ih = H - T - B;
+  const top = niceMax(Math.max(0, ...points.map((p) => p[key])));
+  const step = iw / Math.max(points.length, 1);
+  const bw = Math.max(2, Math.min(28, step * 0.62));
+  const y = (v) => T + ih - (v / top) * ih;
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const gy = T + ih - f * ih;
+    return `<line class="nb-gridline" x1="${L}" x2="${W - R}" y1="${gy}" y2="${gy}" />
+      <text class="nb-tick" x="${L - 8}" y="${gy + 4}" text-anchor="end">${Math.round(f * top)}</text>`;
+  }).join("");
+  const every = Math.max(1, Math.ceil(points.length / 7));
+  const xTicks = points.map((p, i) => i % every ? "" :
+    `<text class="nb-tick" x="${L + step * i + step / 2}" y="${H - 6}" text-anchor="middle">${escapeHTML(bucketLabel(p.at, bucket))}</text>`).join("");
+  const bars = points.map((p, i) => {
+    const x = L + step * i + (step - bw) / 2;
+    return `<path class="nb-bar" style="fill: var(--chart-${key === "visitors" ? 1 : 2})" d="${topRoundedBar(x, y(p[key]), bw, T + ih - y(p[key]))}" />`;
+  }).join("");
+  const hits = points.map((p, i) =>
+    `<rect class="nb-hit" data-i="${i}" x="${L + step * i}" y="${T}" width="${step}" height="${ih}" />`).join("");
+  return `
+    <div class="nb-chart" data-chart>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${key === "visitors" ? "Visitors" : "Page views"} per ${bucket}">
+        ${grid}
+        <rect class="nb-cursor" x="0" y="${T}" width="${step}" height="${ih}" hidden />
+        ${bars}${xTicks}${hits}
+      </svg>
+      <div class="nb-tooltip" role="status" hidden></div>
+      <table class="visually-hidden">
+        <caption>${key === "visitors" ? "Visitors" : "Page views"} per ${bucket}</caption>
+        <tr><th>${bucket === "hour" ? "Hour" : "Day"}</th><th>Visitors</th><th>Page views</th></tr>
+        ${points.map((p) => `<tr><td>${escapeHTML(bucketLabel(p.at, bucket))}</td><td>${p.visitors}</td><td>${p.pageviews}</td></tr>`).join("")}
+      </table>
+    </div>`;
+}
+
+/* Hovering a bucket: grey cursor band and the tooltip card. */
+function bindTrafficChart(scope, points, bucket) {
+  const chart = scope.querySelector("[data-chart]");
+  if (!chart) return;
+  const svg = chart.querySelector("svg");
+  const cursor = chart.querySelector(".nb-cursor");
+  const tip = chart.querySelector(".nb-tooltip");
+  const hide = () => {
+    cursor.setAttribute("hidden", "");
+    tip.hidden = true;
+  };
+  svg.addEventListener("pointermove", (e) => {
+    const hit = e.target.closest && e.target.closest(".nb-hit");
+    if (!hit) return hide();
+    const p = points[Number(hit.dataset.i)];
+    cursor.setAttribute("x", hit.getAttribute("x"));
+    cursor.removeAttribute("hidden");
+    tip.innerHTML = `
+      <p class="nb-tooltip-label">${escapeHTML(bucket === "hour" ? `${p.at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, ${bucketLabel(p.at, bucket)}` : p.at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</p>
+      <p><i style="background: var(--chart-1)"></i>Visitors <strong>${p.visitors}</strong></p>
+      <p><i style="background: var(--chart-2)"></i>Page views <strong>${p.pageviews}</strong></p>`;
+    tip.hidden = false;
+    const box = chart.getBoundingClientRect();
+    const left = Math.min(Math.max(e.clientX - box.left + 14, 0), box.width - tip.offsetWidth);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${Math.max(e.clientY - box.top - tip.offsetHeight - 12, 0)}px`;
+  });
+  svg.addEventListener("pointerleave", hide);
+}
+
+/* Donut with the total in the middle (neobrutalism "Pie Chart - Donut
+ * with Text"), and a bordered-square legend. */
+function donutHTML(rows, { centre, caption }) {
+  const total = rows.reduce((s, r) => s + num(r.value), 0);
+  const R = 80, r = 50, C = 100;
+  const point = (a, rad) => [C + rad * Math.sin(a), C - rad * Math.cos(a)];
+  let a0 = 0;
+  const slices = total ? rows.filter((row) => num(row.value)).map((row, i) => {
+    const a1 = a0 + (num(row.value) / total) * Math.PI * 2;
+    const large = a1 - a0 > Math.PI ? 1 : 0;
+    // A single 100% slice cannot be drawn as one arc; draw two halves.
+    const d = a1 - a0 >= Math.PI * 2 - 1e-6
+      ? `M${C},${C - R}A${R},${R} 0 1 1 ${C},${C + R}A${R},${R} 0 1 1 ${C},${C - R}ZM${C},${C - r}A${r},${r} 0 1 0 ${C},${C + r}A${r},${r} 0 1 0 ${C},${C - r}Z`
+      : (() => {
+        const [x1, y1] = point(a0, R), [x2, y2] = point(a1, R), [x3, y3] = point(a1, r), [x4, y4] = point(a0, r);
+        return `M${x1},${y1}A${R},${R} 0 ${large} 1 ${x2},${y2}L${x3},${y3}A${r},${r} 0 ${large} 0 ${x4},${y4}Z`;
+      })();
+    a0 = a1;
+    return `<path class="nb-slice" fill-rule="evenodd" style="fill: ${row.color || CHART_COLORS[i % CHART_COLORS.length]}" d="${d}"><title>${escapeHTML(row.name)}: ${num(row.value)}</title></path>`;
+  }).join("") : `<circle class="nb-empty-ring" cx="${C}" cy="${C}" r="${(R + r) / 2}" />`;
+  return `
+    <div class="nb-donut">
+      <svg viewBox="0 0 200 200" role="img" aria-label="${escapeAttr(caption)}">
+        ${slices}
+        <text class="nb-donut-value" x="${C}" y="${C + 4}" text-anchor="middle">${escapeHTML(String(centre))}</text>
+        <text class="nb-donut-caption" x="${C}" y="${C + 24}" text-anchor="middle">${escapeHTML(caption)}</text>
+      </svg>
+      <ul class="nb-legend">${rows.map((row, i) => `
+        <li><i style="background: ${row.color || CHART_COLORS[i % CHART_COLORS.length]}"></i>${escapeHTML(row.name)} <strong>${num(row.value)}</strong></li>`).join("")}</ul>
+    </div>`;
+}
+
+/* Horizontal bars (neobrutalism "Bar Chart - Horizontal"): the name and
+ * value on one line, the bar under them, so a short bar never cuts the
+ * name in half. Plain HTML, so it reads well to a screen reader. */
+function hbarsHTML(rows, { valueKey = "sessions", nameOf = (r) => r.name, color = "var(--chart-1)" } = {}) {
+  if (!rows.length) return '<p class="empty-note">Nothing yet.</p>';
+  const max = Math.max(1, ...rows.map((r) => num(r[valueKey])));
+  return `<ol class="nb-hbars">${rows.slice(0, 8).map((r) => `
+    <li>
+      <span class="nb-hbar-name">${escapeHTML(nameOf(r) || "—")}</span>
+      <strong>${num(r[valueKey])}</strong>
+      <span class="nb-hbar" style="--share: ${Math.max(2, (num(r[valueKey]) / max) * 100)}%; --fill: ${color}"></span>
+    </li>`).join("")}</ol>`;
+}
+
+/* The card every chart sits in: title, description, body, trend footer. */
+function chartCard({ title, description = "", body, footer = "", wide = false, actions = "" }) {
+  return `
+    <section class="nb-card${wide ? " nb-card-wide" : ""}">
+      <header class="nb-card-head">
+        <div><h2>${escapeHTML(title)}</h2>${description ? `<p>${escapeHTML(description)}</p>` : ""}</div>
+        ${actions}
+      </header>
+      <div class="nb-card-body">${body}</div>
+      ${footer ? `<footer class="nb-card-foot">${footer}</footer>` : ""}
+    </section>`;
+}
+
+async function renderAnalyticsPage(page, { reuse = false } = {}) {
+  const range = ANALYTICS_RANGES.find(([k]) => k === state.analyticsRange) || ANALYTICS_RANGES[1];
+  const cached = reuse && state.analyticsLast && state.analyticsLast.range === range[0] ? state.analyticsLast : null;
+  const until = cached ? cached.until : new Date();
+  const since = new Date(until.getTime() - range[2] * 864e5);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const chips = `
+    <div class="page-filters" role="group" aria-label="Period">
+      ${ANALYTICS_RANGES.map(([key, label]) => `
+        <button type="button" class="chip${key === range[0] ? " is-active" : ""}" aria-pressed="${key === range[0]}" data-range="${key}">${label}</button>`).join("")}
+    </div>`;
+  const bindChips = () => root().querySelectorAll("[data-range]").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      state.analyticsRange = chip.dataset.range;
+      renderAnalyticsPage(page);
+    }));
+  let report = cached && cached.report;
+  if (!report) {
+    root().innerHTML = `${pageHead(page, { search: false })}${chips}<p class="empty-note">Counting&hellip;</p>`;
+    bindChips();
+  }
+  try {
+    report = report || await analyticsReport(since.toISOString(), until.toISOString(), tz);
+    state.analyticsLast = { range: range[0], until, report };
+  } catch (err) {
+    root().innerHTML = `${pageHead(page, { search: false })}<div class="empty-state"><p>Could not load analytics: ${escapeHTML(err.message || "unknown error")}</p></div>`;
+    return;
+  }
+  if (state.route !== "analytics") return;
+
+  const c = report.current || {};
+  const p = report.previous || {};
+  const span = `the last ${range[1]}`;
+  const kpis = [
+    ["Visitors", c.visitors, change(c.visitors, p.visitors), "Different people each day, added up over the period"],
+    ["New visitors", c.new_sessions, change(c.new_sessions, p.new_sessions), "Visits from a browser that had never been here before"],
+    ["Visits", c.sessions, change(c.sessions, p.sessions), "One per browser tab session"],
+    ["Page views", c.pageviews, change(c.pageviews, p.pageviews), ""],
+    ["Bounce rate", c.bounce_rate != null ? `${c.bounce_rate}%` : "—", change(c.bounce_rate, p.bounce_rate, { lowerIsBetter: true }), "Visits that saw one page for under 10 seconds"],
+    ["Time in view", c.avg_engaged_s != null ? fmtSeconds(c.avg_engaged_s) : "—", change(c.avg_engaged_s, p.avg_engaged_s), "Average per visit, only while the tab was visible"],
+    ["Pages per visit", c.pages_per_session ?? "—", change(c.pages_per_session, p.pages_per_session), ""],
+  ];
+  const points = analyticsBuckets(since, until, report.bucket, report.series || []);
+  const key = state.analyticsSeries === "pageviews" ? "pageviews" : "visitors";
+  const trend = change(key === "visitors" ? c.visitors : c.pageviews, key === "visitors" ? p.visitors : p.pageviews);
+  const trendText = trend.pct
+    ? `<strong class="${trend.tone}">Trending ${trend.pct > 0 ? "up" : "down"} by ${Math.abs(trend.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
+    : trend.text === "new" ? "<strong>All new</strong>: nothing in the period before" : "No change on the period before";
+  const returning = Math.max(0, num(c.sessions) - num(c.new_sessions));
+  const empty = !num(c.pageviews);
+
+  root().innerHTML = `
+    ${pageHead(page, { search: false })}
+    <p class="page-intro">
+      Visits to the public site over ${escapeHTML(span)}, compared with the ${escapeHTML(range[1])} before.
+      No cookies and no IP addresses are stored, and visitors who ask browsers not to track them are not counted.
+    </p>
+    ${chips}
+    ${empty ? `<div class="empty-state"><p>No visits recorded in this period yet. Numbers appear as people visit the live site (visits from your own computer on localhost are not counted).</p></div>` : ""}
+    <div class="kpi-grid">
+      ${kpis.map(([label, value, delta, hint]) => `
+        <div class="kpi"${hint ? ` title="${escapeAttr(hint)}"` : ""}>
+          <span class="kpi-label">${label}</span>
+          <strong class="kpi-value">${escapeHTML(String(value ?? 0))}</strong>
+          ${delta.text ? `<span class="kpi-delta ${delta.tone}">${delta.text}</span>` : ""}
+        </div>`).join("")}
+    </div>
+    <div class="nb-grid">
+      ${chartCard({
+        wide: true,
+        title: "Traffic",
+        description: `${report.bucket === "hour" ? "Per hour" : "Per day"}, ${span}. Times in ${tz}.`,
+        actions: `
+          <div class="nb-switch" role="group" aria-label="Show">
+            ${[["visitors", "Visitors", c.visitors], ["pageviews", "Page views", c.pageviews]].map(([k, label, total]) => `
+              <button type="button" data-series="${k}" aria-pressed="${k === key}">
+                <span>${label}</span><strong>${num(total)}</strong>
+              </button>`).join("")}
+          </div>`,
+        body: trafficChartHTML(points, report.bucket, key),
+        footer: `<p>${trendText}</p>`,
+      })}
+      ${chartCard({
+        title: "New and returning",
+        description: "Visits from browsers seen here before, or not.",
+        body: donutHTML([
+          { name: "New", value: c.new_sessions, color: "var(--chart-1)" },
+          { name: "Returning", value: returning, color: "var(--chart-2)" },
+        ], { centre: num(c.sessions) ? `${Math.round((num(c.new_sessions) / num(c.sessions)) * 100)}%` : "—", caption: "new" }),
+      })}
+      ${chartCard({
+        title: "Devices",
+        description: "By screen width.",
+        body: donutHTML((report.devices || []).map((d) => ({ name: d.name, value: d.sessions })), { centre: num(c.sessions), caption: "visits" }),
+      })}
+      ${chartCard({
+        title: "Actions",
+        description: "What visitors did, by number of times.",
+        body: hbarsHTML(report.events || [], { valueKey: "count", nameOf: (r) => EVENT_NAMES[r.name] || r.name, color: "var(--chart-3)" }),
+      })}
+      ${chartCard({
+        title: "Sections read",
+        description: "Visits that stopped on each section for a second or more.",
+        body: hbarsHTML(report.sections || [], { nameOf: (r) => SECTION_NAMES[r.name] || r.name, color: "var(--chart-1)" }),
+      })}
+      ${chartCard({
+        title: "Referrers",
+        description: "Where visits came from.",
+        body: hbarsHTML(report.referrers || [], { color: "var(--chart-2)" }),
+      })}
+      ${chartCard({
+        title: "Campaigns",
+        description: "Links tagged with ?utm_source=…, for example ?utm_source=instagram.",
+        body: hbarsHTML(report.campaigns || [], { color: "var(--chart-4)" }),
+      })}
+      ${chartCard({
+        title: "Pages",
+        description: "Page views per page.",
+        body: hbarsHTML(report.pages || [], { valueKey: "views", color: "var(--chart-5)" }),
+      })}
+      ${chartCard({
+        title: "Regions",
+        description: "From the visitor's timezone, so a rough guide.",
+        body: hbarsHTML(report.regions || [], { color: "var(--chart-2)" }),
+      })}
+    </div>`;
+  bindChips();
+  bindTrafficChart(root(), points, report.bucket);
+  root().querySelectorAll("[data-series]").forEach((button) =>
+    button.addEventListener("click", () => {
+      state.analyticsSeries = button.dataset.series;
+      renderAnalyticsPage(page, { reuse: true });
+    }));
 }
 
 /* ==================================================================

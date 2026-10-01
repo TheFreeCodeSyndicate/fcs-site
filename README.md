@@ -90,6 +90,35 @@ hidden until someone chooses otherwise.
    repository, permission **Actions: Read and write**, nothing else.
 2. Supabase > Edge Functions > Secrets: `GITHUB_DISPATCH_TOKEN` = the token.
 
+## Analytics
+
+Admin > **Analytics** shows how the public site is used, over the last
+24 hours, 7, 30 or 90 days, compared with the period before: visitors,
+new visitors, visits, page views, bounce rate (one page, under 10
+seconds), time in view, pages per visit; a traffic chart by hour or day;
+new vs returning and devices; what people did (join links, copy, email
+signup, calendar, projects...), which sections they stopped on,
+referrers, `utm_` campaigns, pages and rough regions.
+
+How it works, all first-party and free:
+
+- `js/track.js` (public pages only, never the admin) sends small beacons
+  to the `collect` Edge Function: a page view, the time the tab was
+  actually visible (on leaving, and every 30 seconds), named clicks, and
+  sections that stayed mid-screen for a second.
+- No cookies. A visitor is a hash of a random daily salt + IP + browser,
+  made on the server; the IP is never stored and old salts are deleted,
+  so visitors cannot be followed across days. "New" comes from a single
+  "been here before" flag in the browser's localStorage.
+- Not counted: Do Not Track / Global Privacy Control, bots, other sites,
+  and localhost (add `?track=1` to test locally).
+- Raw rows are readable only through `analytics_report()`, and only by
+  admins and editors an admin has switched on (Team page, "Analytics:
+  on/off"). Rows older than 13 months are deleted nightly (`pg_cron`).
+- Charts follow the look of neobrutalism.dev/charts, drawn in plain SVG.
+
+Migrations `016`-`018`; Edge Function `supabase/functions/collect`.
+
 ## Link icons
 
 Every link on the site and in the panel (social links, a core member's

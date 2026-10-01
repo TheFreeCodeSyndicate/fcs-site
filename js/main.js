@@ -808,6 +808,7 @@ function bindNotify() {
       });
       status.dataset.tone = "ok";
       status.textContent = `Check ${value} for a confirmation email. Click the link in it to finish.`;
+      if (window.fcsTrack) window.fcsTrack("subscribe", eventId ? "event" : "all events");
     } catch (err) {
       submit.disabled = false;
       status.dataset.tone = "error";

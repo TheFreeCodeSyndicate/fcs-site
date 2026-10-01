@@ -63,6 +63,7 @@ const data = {
   profiles: [
     { id: "u1", email: "maintainer@fcs.test", role: "admin", created_at: "2026-09-01" },
     { id: "u2", email: "newcomer@fcs.test", role: "pending", created_at: "2026-09-20" },
+    { id: "u3", email: "helper@fcs.test", role: "editor", can_view_analytics: false, created_at: "2026-09-21" },
   ],
 };
 
@@ -145,7 +146,7 @@ await settle(800);
 
 // --- shell --------------------------------------------------------------
 const links = await page.$$eval(".sidebar-link", (a) => a.map((x) => x.dataset.page));
-check("sidebar lists every page, Team included for an admin", links.length === 10 && links.includes("team") && links.includes("subscribers") && links.includes("activity"), links.join(","));
+check("sidebar lists every page, Team included for an admin", links.length === 11 && links.includes("analytics") && links.includes("team") && links.includes("subscribers") && links.includes("activity"), links.join(","));
 
 // --- events board -------------------------------------------------------
 const counts = () => page.$$eval(".board-column h3", (h) => h.map((x) => x.textContent.replace(/\s+/g, " ").trim()).join(", "));
@@ -265,6 +266,34 @@ await settle(500);
 const groupWrite = writes.filter((w) => w.table === "repo_kinds").pop() || {};
 check("linking a repo to a study group saves it", /"group_id":"g1"/.test(groupWrite.body) && /anti-aliasing/.test(groupWrite.body), groupWrite.body);
 
+// --- analytics ---------------------------------------------------------------
+const reportCalls = [];
+await page.route("**/rest/v1/rpc/analytics_report", (route) => {
+  const call = JSON.parse(route.request().postData() || "{}");
+  reportCalls.push(call);
+  // As the database does: hourly buckets for up to two days, else daily.
+  const hours = (Date.parse(call.until) - Date.parse(call.since)) / 36e5;
+  return route.fulfill({ json: {
+    bucket: hours <= 48 ? "hour" : "day",
+    current: { visitors: 12, new_sessions: 5, sessions: 14, pageviews: 20, bounce_rate: 40, avg_engaged_s: 75, pages_per_session: 1.4 },
+    previous: { visitors: 8, new_sessions: 5, sessions: 10, pageviews: 12, bounce_rate: 50, avg_engaged_s: 60, pages_per_session: 1.2 },
+    series: [], pages: [{ name: "/fcs-site/", views: 20, visitors: 12 }], referrers: [{ name: "Direct", sessions: 9 }],
+    campaigns: [], devices: [{ name: "mobile", sessions: 8 }], regions: [], sections: [{ name: "core", sessions: 7 }],
+    events: [{ name: "join", count: 4, visitors: 3 }],
+  } });
+});
+await page.goto("about:blank");
+await page.goto(new URL("admin.html#/analytics", base).href);
+await settle(1000);
+const kpiText = await page.$eval(".kpi-grid", (g) => g.textContent.replace(/\s+/g, " "));
+check("Analytics shows the headline numbers with change", /Visitors 12 ▲ 50%/.test(kpiText) && /Bounce rate 40% ▼ 20%/.test(kpiText), kpiText.slice(0, 160));
+check("Analytics names sections and actions", /Core members/.test(await page.textContent(".nb-grid")) && /Opened a join link/.test(await page.textContent(".nb-grid")));
+await page.click('[data-range="24h"]');
+await settle(700);
+const last = reportCalls[reportCalls.length - 1] || {};
+check("the 24 hours switch asks for one day, in local time", Math.round((Date.parse(last.until) - Date.parse(last.since)) / 36e5) === 24 && typeof last.tz === "string", JSON.stringify(last));
+check("24 hours draws one bar per hour", (await page.$$eval(".nb-chart .nb-bar", (b) => b.length)) >= 24);
+
 // --- team -------------------------------------------------------------------
 await page.goto(new URL("admin.html#/team", base).href);
 await settle(800);
@@ -273,6 +302,10 @@ await page.click('.list-row[data-id="u2"] [data-role="editor"]');
 await settle(700);
 const approve = lastWrite();
 check("approving writes the editor role", approve.table === "profiles" && approve.body === '{"role":"editor"}', approve.body);
+await page.click('.list-row[data-id="u3"] [data-analytics]');
+await settle(700);
+const grant = lastWrite();
+check("an admin can switch Analytics on for an editor", grant.table === "profiles" && grant.body === '{"can_view_analytics":true}' && grant.query.includes("u3"), grant.body);
 
 // --- activity log, undo, restore ----------------------------------------
 await page.goto(new URL("admin.html#/activity", base).href);
