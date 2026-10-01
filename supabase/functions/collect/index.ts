@@ -11,9 +11,11 @@
 //
 // Deployed with verify_jwt off: navigator.sendBeacon cannot send an
 // Authorization header. So it accepts only the site's own origins,
-// ignores bots and anyone sending Do Not Track or Global Privacy
-// Control, caps every field, and always answers 204 so a probe learns
-// nothing. The visitor id is a hash of (today's random salt + IP +
+// ignores bots, caps every field, and always answers 204 so a probe
+// learns nothing. Do Not Track and Global Privacy Control are not
+// applied: nothing personal is stored (see the privacy note on the site).
+// Location is the browser's timezone only: the host passes no country,
+// and a VPN would hide the real one anyway. The visitor id is a hash of (today's random salt + IP +
 // browser); the IP itself is never stored.
 // --------------------------------------------------------------------
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -51,7 +53,6 @@ Deno.serve(async (req) => {
   const done = () => new Response(null, { status: 204, headers: cors });
   if (req.method === "OPTIONS") return done();
   if (req.method !== "POST" || !ORIGINS.includes(origin)) return done();
-  if (req.headers.get("DNT") === "1" || req.headers.get("Sec-GPC") === "1") return done();
   const ua = req.headers.get("user-agent") ?? "";
   if (!ua || BOTS.test(ua)) return done();
 

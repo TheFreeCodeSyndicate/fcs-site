@@ -111,8 +111,13 @@ How it works, all first-party and free:
   made on the server; the IP is never stored and old salts are deleted,
   so visitors cannot be followed across days. "New" comes from a single
   "been here before" flag in the browser's localStorage.
-- Not counted: Do Not Track / Global Privacy Control, bots, other sites,
-  and localhost (add `?track=1` to test locally).
+- Not counted: bots, other sites,
+  and localhost (add `?track=1` to test locally). Do Not Track and Global
+  Privacy Control are not applied (Brave and Firefox send them by default,
+  which would hide most phone visitors); nothing personal is stored.
+  Regions come from the browser's timezone, because the host passes no
+  country and a VPN would hide the real one anyway. Add `?trackdebug=1` to
+  the site address to see on screen whether a visit is being counted.
 - Raw rows are readable only through `analytics_report()`, and only by
   admins and editors an admin has switched on (Team page, "Analytics:
   on/off"). Rows older than 13 months are deleted nightly (`pg_cron`).

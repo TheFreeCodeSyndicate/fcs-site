@@ -11,9 +11,10 @@
  *   event   key actions (join links, copy, calendar, subscribe, ...)
  *           and which sections were scrolled to, once each
  *
- * Nothing is sent when the visitor asks not to be tracked (Do Not
- * Track or Global Privacy Control), or when running on localhost
- * (add ?track=1 to test locally). The admin panel is never tracked.
+ * Do Not Track and Global Privacy Control are not applied (Brave and
+ * Firefox send them by default, which would hide most phone visitors):
+ * nothing personal is stored. Nothing is sent on localhost (add
+ * ?track=1 to test locally). The admin panel is never tracked.
  * ------------------------------------------------------------------
  */
 (function () {
@@ -35,9 +36,6 @@
     el.textContent = `Analytics: ${text}`;
   };
   if (!config.supabaseUrl) return note("not configured", false);
-  if (navigator.doNotTrack === "1" || navigator.globalPrivacyControl === true) {
-    return note("NOT counted: your browser sends Do Not Track / Global Privacy Control (Brave and Firefox do this by default)", false);
-  }
   if (/^(localhost|127\.)/.test(location.hostname) && !/[?&]track=1\b/.test(location.search)) return note("not counted on localhost", false);
 
   const endpoint = `${config.supabaseUrl}/functions/v1/collect`;

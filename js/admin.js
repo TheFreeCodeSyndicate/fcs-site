@@ -2058,7 +2058,7 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
     ${pageHead(page, { search: false })}
     <p class="page-intro">
       Visits to the public site over ${escapeHTML(span)}, compared with the ${escapeHTML(range[1])} before.
-      No cookies and no IP addresses are stored, and visitors who ask browsers not to track them are not counted.
+      No cookies and no IP addresses are stored, so every visitor is counted, including browsers that send a "do not track" signal.
     </p>
     ${chips}
     ${empty ? `<div class="empty-state"><p>No visits recorded in this period yet. Numbers appear as people visit the live site (visits from your own computer on localhost are not counted).</p></div>` : ""}
