@@ -1094,7 +1094,7 @@ body:has(.drawer.is-open) .toasts {
 .nb-card-foot .is-good { background: #3fb83f; color: #04210a; }
 .nb-card-foot .is-bad { background: #ff4d4d; color: #2b0505; }
 
-.nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
+.nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 18px; }
 .nb-card {
   display: flex;
   flex-direction: column;

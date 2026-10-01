@@ -181,6 +181,20 @@ check("the dialog says to check the inbox", /Check visitor@example\.com/.test(aw
 await page.click("#notify-cancel");
 check("the dialog closes", !(await page.$eval("#notify-dialog", (d) => d.open)));
 
+// --- phone widths: nothing may stick out past the screen -------------------
+for (const width of [320, 390]) {
+  await page.setViewportSize({ width, height: 800 });
+  await page.goto(base, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  await page.evaluate(() => document.getElementById("events").scrollIntoView());
+  await page.click("#cal-menu > summary");
+  await page.waitForTimeout(200);
+  const menu = await page.$eval(".cal-menu-list", (m) => { const r = m.getBoundingClientRect(); return { left: Math.round(r.left), right: Math.round(r.right) }; });
+  const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  check(`calendar menu fits on a ${width}px screen`, menu.left >= 0 && menu.right <= width, JSON.stringify(menu));
+  check(`the page does not scroll sideways at ${width}px`, pageWidth <= width, `${pageWidth}px`);
+}
+
 await browser.close();
 
 console.log(results.join("\n"));

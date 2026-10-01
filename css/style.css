@@ -2465,6 +2465,10 @@ a.status-active:focus-visible,
 .btn-subscribe-alt { background: var(--paper-raised); color: var(--ink); }
 
 .cal-menu { position: relative; }
+@media (max-width: 620px) {
+  /* The menu opens under the button, left-aligned and never wider than the screen. */
+  .cal-menu-list { right: auto; left: 0; width: min(300px, calc(100vw - 2 * var(--page-pad, 16px))); }
+}
 .cal-menu > summary { list-style: none; cursor: pointer; }
 .cal-menu > summary::-webkit-details-marker { display: none; }
 .cal-menu[open] > summary .icon:last-child { transform: rotate(180deg); }
