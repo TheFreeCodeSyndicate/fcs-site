@@ -1754,9 +1754,10 @@ const num = (v) => Number(v) || 0;
 function change(now, before, { lowerIsBetter = false } = {}) {
   const a = num(now);
   const b = num(before);
-  if (!b) return { text: a ? "new" : "", tone: "" };
+  if (!b) return { text: a ? "nothing earlier to compare" : "", tone: "", none: true };
   const pct = Math.round(((a - b) / b) * 100);
-  if (!pct) return { text: "no change", tone: "" };
+  if (!pct) return { text: "same as before", tone: "", none: true };
+  // Green is up and red is down, except where down is the good news.
   const good = lowerIsBetter ? pct < 0 : pct > 0;
   return { text: `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}%`, tone: good ? "is-good" : "is-bad", pct };
 }
@@ -2047,7 +2048,7 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
     const t = change(now, before);
     return `<p>${t.pct
       ? `<strong class="${t.tone}">Trending ${t.pct > 0 ? "up" : "down"} by ${Math.abs(t.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
-      : t.text === "new" ? "<strong>All new</strong>: nothing in the period before" : "No change on the period before"}</p>
+      : t.none && t.text.startsWith("nothing") ? `Nothing in the ${escapeHTML(range[1])} before to compare with` : "Same as the period before"}</p>
       <p class="nb-card-range">${escapeHTML(since.toLocaleDateString("en-GB", { day: "numeric", month: "short" }))} – ${escapeHTML(until.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }))}, times in ${escapeHTML(tz)}</p>`;
   };
   const returning = Math.max(0, num(c.sessions) - num(c.new_sessions));
@@ -2063,10 +2064,10 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
     ${empty ? `<div class="empty-state"><p>No visits recorded in this period yet. Numbers appear as people visit the live site (visits from your own computer on localhost are not counted).</p></div>` : ""}
     <div class="kpi-grid">
       ${kpis.map(([label, value, delta, hint]) => `
-        <div class="kpi"${hint ? ` title="${escapeAttr(hint)}"` : ""}>
+        <div class="kpi ${delta.tone}"${hint ? ` title="${escapeAttr(hint)}"` : ""}>
           <span class="kpi-label">${label}</span>
           <strong class="kpi-value">${escapeHTML(String(value ?? 0))}</strong>
-          ${delta.text ? `<span class="kpi-delta ${delta.tone}">${delta.text}</span>` : ""}
+          ${delta.text ? `<span class="kpi-delta ${delta.none ? "is-none" : delta.tone}">${delta.text}</span>` : ""}
         </div>`).join("")}
     </div>
     <div class="nb-grid">

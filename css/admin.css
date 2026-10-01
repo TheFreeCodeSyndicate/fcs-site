@@ -1084,9 +1084,15 @@ body:has(.drawer.is-open) .toasts {
 }
 .kpi-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); }
 .kpi-value { font-family: var(--font-display); font-size: 1.7rem; line-height: 1.1; }
-.kpi-delta { justify-self: start; padding: 1px 6px; border: 2px solid var(--ink); font-size: 0.72rem; font-weight: 700; }
-.kpi-delta.is-good, .nb-card-foot .is-good { background: var(--chart-4); color: #0a0a0a; }
-.kpi-delta.is-bad, .nb-card-foot .is-bad { background: var(--chart-3); color: #0a0a0a; }
+.kpi-delta { justify-self: start; padding: 1px 6px; border: 2px solid var(--ink); font-size: 0.78rem; font-weight: 700; }
+.kpi-delta.is-none { padding: 0; border: 0; font-size: 0.72rem; font-weight: 400; color: var(--ink-muted); }
+/* The whole card takes the colour: green up, red down. */
+.kpi.is-good { background: color-mix(in srgb, var(--chart-4) 30%, var(--paper-raised)); box-shadow: 4px 4px 0 #2f8f2f; }
+.kpi.is-bad { background: color-mix(in srgb, #ff4d4d 22%, var(--paper-raised)); box-shadow: 4px 4px 0 #c42b2b; }
+.kpi-delta.is-good { background: #3fb83f; color: #04210a; }
+.kpi-delta.is-bad { background: #ff4d4d; color: #2b0505; }
+.nb-card-foot .is-good { background: #3fb83f; color: #04210a; }
+.nb-card-foot .is-bad { background: #ff4d4d; color: #2b0505; }
 
 .nb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 18px; }
 .nb-card {
