@@ -95,7 +95,8 @@ hidden until someone chooses otherwise.
 Admin > **Analytics** shows how the public site is used, over the last
 24 hours, 7, 30 or 90 days, compared with the period before: visitors,
 new visitors, visits, page views, bounce rate (one page, under 10
-seconds), time in view, pages per visit; a traffic chart by hour or day;
+seconds), time in view, pages per visit; Visitors by device (stacked areas)
+and Page views or Visits (bars), by hour or day;
 new vs returning and devices; what people did (join links, copy, email
 signup, calendar, projects...), which sections they stopped on,
 referrers, `utm_` campaigns, pages and rough regions.

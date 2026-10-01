@@ -1771,7 +1771,10 @@ function analyticsBuckets(since, until, bucket, series) {
   const out = [];
   while (t < until) {
     const hit = byStart.get(t.getTime()) || {};
-    out.push({ at: new Date(t), visitors: hit.visitors || 0, pageviews: hit.pageviews || 0 });
+    out.push({
+      at: new Date(t), visitors: hit.visitors || 0, pageviews: hit.pageviews || 0, sessions: hit.sessions || 0,
+      desktop: hit.desktop || 0, mobile: hit.mobile || 0, tablet: hit.tablet || 0,
+    });
     if (bucket === "hour") t.setHours(t.getHours() + 1);
     else t.setDate(t.getDate() + 1);
   }
@@ -1782,12 +1785,12 @@ const bucketLabel = (d, bucket) => bucket === "hour"
   ? d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
   : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 
-/* A tidy axis top: four steps of 1, 2, 2.5 or 5 times a power of ten, so the
- * grid reads 0, 25, 50, 75, 100 rather than 0, 13, 25, 38, 50. */
+/* A tidy axis top: four even steps of a round number, close above the data,
+ * so the tallest bar or area fills most of the chart. */
 function niceMax(max) {
   const raw = Math.max(max, 1) / 4;
   const power = 10 ** Math.floor(Math.log10(raw));
-  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((v) => v >= raw);
+  const step = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * power).find((v) => v >= raw);
   return Math.max(4, step * 4);
 }
 
@@ -1798,73 +1801,139 @@ function topRoundedBar(x, y, w, h, r = 4) {
   return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
 }
 
-/* The traffic chart: one series at a time, switched from the header. */
-function trafficChartHTML(points, bucket, key) {
-  const W = 760, H = 240, L = 36, R = 8, T = 12, B = 26;
+/* A smooth line through the points that never overshoots between them
+ * (monotone cubic, what Recharts' type="monotone" draws), so a curve
+ * cannot dip below zero or above a peak. */
+function monotonePath(xs, ys) {
+  const n = xs.length;
+  if (n === 1) return `M${xs[0]},${ys[0]}`;
+  const dx = [], m = [];
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = xs[i + 1] - xs[i];
+    m[i] = (ys[i + 1] - ys[i]) / dx[i];
+  }
+  const t = [m[0]];
+  for (let i = 1; i < n - 1; i++) {
+    t[i] = m[i - 1] * m[i] <= 0 ? 0 : (3 * (dx[i - 1] + dx[i])) / ((2 * dx[i] + dx[i - 1]) / m[i - 1] + (dx[i] + 2 * dx[i - 1]) / m[i]);
+  }
+  t[n - 1] = m[n - 2];
+  let d = `M${xs[0]},${ys[0]}`;
+  for (let i = 0; i < n - 1; i++) {
+    d += `C${xs[i] + dx[i] / 3},${ys[i] + (t[i] * dx[i]) / 3} ${xs[i + 1] - dx[i] / 3},${ys[i + 1] - (t[i + 1] * dx[i]) / 3} ${xs[i + 1]},${ys[i + 1]}`;
+  }
+  return d;
+}
+
+const CHART_BOX = { W: 760, H: 250, L: 10, R: 10, T: 14, B: 28 };
+
+/* The parts every time chart shares: grid, date ticks, hover targets, a
+ * cursor, a tooltip, and a screen-reader table of the same numbers. */
+function chartFrame(points, bucket, series, plot, { cursor = "band" } = {}) {
+  const { W, H, L, R, T, B } = CHART_BOX;
   const iw = W - L - R, ih = H - T - B;
-  const top = niceMax(Math.max(0, ...points.map((p) => p[key])));
   const step = iw / Math.max(points.length, 1);
-  const bw = Math.max(2, Math.min(28, step * 0.62));
-  const y = (v) => T + ih - (v / top) * ih;
-  const grid = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const gy = T + ih - f * ih;
-    return `<line class="nb-gridline" x1="${L}" x2="${W - R}" y1="${gy}" y2="${gy}" />
-      <text class="nb-tick" x="${L - 8}" y="${gy + 4}" text-anchor="end">${Math.round(f * top)}</text>`;
-  }).join("");
-  const every = Math.max(1, Math.ceil(points.length / 7));
-  const xTicks = points.map((p, i) => i % every ? "" :
-    `<text class="nb-tick" x="${L + step * i + step / 2}" y="${H - 6}" text-anchor="middle">${escapeHTML(bucketLabel(p.at, bucket))}</text>`).join("");
-  const bars = points.map((p, i) => {
-    const x = L + step * i + (step - bw) / 2;
-    return `<path class="nb-bar" style="fill: var(--chart-${key === "visitors" ? 1 : 2})" d="${topRoundedBar(x, y(p[key]), bw, T + ih - y(p[key]))}" />`;
-  }).join("");
-  const hits = points.map((p, i) =>
-    `<rect class="nb-hit" data-i="${i}" x="${L + step * i}" y="${T}" width="${step}" height="${ih}" />`).join("");
+  const grid = [0, 0.25, 0.5, 0.75, 1].map((f) =>
+    `<line class="nb-gridline" x1="${L}" x2="${W - R}" y1="${T + ih - f * ih}" y2="${T + ih - f * ih}" />`).join("");
+  const every = Math.max(1, Math.ceil(points.length / 8));
+  const ticks = points.map((p, i) => i % every ? "" :
+    `<text class="nb-tick" x="${L + step * i + step / 2}" y="${H - 8}" text-anchor="middle">${escapeHTML(bucketLabel(p.at, bucket))}</text>`).join("");
+  const hits = points.map((p, i) => `<rect class="nb-hit" data-i="${i}" x="${L + step * i}" y="${T}" width="${step}" height="${ih}" />`).join("");
+  const cursorEl = cursor === "line"
+    ? `<line class="nb-cursor-line" x1="0" x2="0" y1="${T}" y2="${T + ih}" hidden />`
+    : `<rect class="nb-cursor" x="0" y="${T}" width="${step}" height="${ih}" hidden />`;
   return `
-    <div class="nb-chart" data-chart>
-      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${key === "visitors" ? "Visitors" : "Page views"} per ${bucket}">
-        ${grid}
-        <rect class="nb-cursor" x="0" y="${T}" width="${step}" height="${ih}" hidden />
-        ${bars}${xTicks}${hits}
+    <div class="nb-chart" data-chart data-cursor="${cursor}">
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeAttr(series.map((s) => s.label).join(", "))} per ${bucket}">
+        ${grid}${cursorEl}${plot({ L, T, iw, ih, step })}${ticks}${hits}
       </svg>
       <div class="nb-tooltip" role="status" hidden></div>
       <table class="visually-hidden">
-        <caption>${key === "visitors" ? "Visitors" : "Page views"} per ${bucket}</caption>
-        <tr><th>${bucket === "hour" ? "Hour" : "Day"}</th><th>Visitors</th><th>Page views</th></tr>
-        ${points.map((p) => `<tr><td>${escapeHTML(bucketLabel(p.at, bucket))}</td><td>${p.visitors}</td><td>${p.pageviews}</td></tr>`).join("")}
+        <tr><th>${bucket === "hour" ? "Hour" : "Day"}</th>${series.map((s) => `<th>${escapeHTML(s.label)}</th>`).join("")}</tr>
+        ${points.map((p) => `<tr><td>${escapeHTML(bucketLabel(p.at, bucket))}</td>${series.map((s) => `<td>${num(p[s.key])}</td>`).join("")}</tr>`).join("")}
       </table>
     </div>`;
 }
 
-/* Hovering a bucket: grey cursor band and the tooltip card. */
-function bindTrafficChart(scope, points, bucket) {
-  const chart = scope.querySelector("[data-chart]");
+/* Visitors: stacked areas by device ("Area Chart - Interactive"). */
+const DEVICE_LAYERS = [
+  { key: "desktop", label: "Desktop", color: "var(--chart-1)" },
+  { key: "tablet", label: "Tablet", color: "var(--chart-2)" },
+  { key: "mobile", label: "Mobile", color: "var(--chart-3)" },
+];
+
+function visitorsAreaHTML(points, bucket) {
+  const series = DEVICE_LAYERS;
+  return chartFrame(points, bucket, series, ({ L, T, iw, ih, step }) => {
+    // Stack from the bottom (mobile) up; draw the tallest stack first so
+    // each layer below sits on top of it, as stacked areas look.
+    const order = [...series].reverse();
+    const totals = points.map((p) => order.reduce((s, l) => s + num(p[l.key]), 0));
+    const top = niceMax(Math.max(0, ...totals));
+    const xs = points.map((_, i) => L + step * i + step / 2);
+    const base = T + ih;
+    let running = points.map(() => 0);
+    const layers = order.map((layer) => {
+      running = running.map((v, i) => v + num(points[i][layer.key]));
+      return { layer, ys: running.map((v) => base - (v / top) * ih) };
+    });
+    return layers.reverse().map(({ layer, ys }) => {
+      const line = monotonePath(xs, ys);
+      return `<path class="nb-area" style="fill: ${layer.color}" d="${line}L${xs[xs.length - 1]},${base}L${xs[0]},${base}Z" />`;
+    }).join("");
+  }, { cursor: "line" });
+}
+
+/* Page views or visits, one at a time ("Bar Chart - Interactive"). */
+function volumeBarsHTML(points, bucket, series) {
+  return chartFrame(points, bucket, [series], ({ L, T, iw, ih, step }) => {
+    const top = niceMax(Math.max(0, ...points.map((p) => num(p[series.key]))));
+    const bw = Math.max(2, Math.min(28, step * 0.62));
+    return points.map((p, i) => {
+      const h = (num(p[series.key]) / top) * ih;
+      return `<path class="nb-bar" style="fill: ${series.color}" d="${topRoundedBar(L + step * i + (step - bw) / 2, T + ih - h, bw, h)}" />`;
+    }).join("");
+  });
+}
+
+/* Hover: cursor and a tooltip listing exactly the series drawn. */
+function bindChart(chart, points, bucket, series) {
   if (!chart) return;
   const svg = chart.querySelector("svg");
-  const cursor = chart.querySelector(".nb-cursor");
+  const band = chart.querySelector(".nb-cursor");
+  const line = chart.querySelector(".nb-cursor-line");
   const tip = chart.querySelector(".nb-tooltip");
   const hide = () => {
-    cursor.setAttribute("hidden", "");
+    (band || line).setAttribute("hidden", "");
     tip.hidden = true;
   };
   svg.addEventListener("pointermove", (e) => {
     const hit = e.target.closest && e.target.closest(".nb-hit");
     if (!hit) return hide();
     const p = points[Number(hit.dataset.i)];
-    cursor.setAttribute("x", hit.getAttribute("x"));
-    cursor.removeAttribute("hidden");
-    tip.innerHTML = `
-      <p class="nb-tooltip-label">${escapeHTML(bucket === "hour" ? `${p.at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, ${bucketLabel(p.at, bucket)}` : p.at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }))}</p>
-      <p><i style="background: var(--chart-1)"></i>Visitors <strong>${p.visitors}</strong></p>
-      <p><i style="background: var(--chart-2)"></i>Page views <strong>${p.pageviews}</strong></p>`;
+    const x = Number(hit.getAttribute("x"));
+    if (band) band.setAttribute("x", x);
+    if (line) {
+      const mid = x + Number(hit.getAttribute("width")) / 2;
+      line.setAttribute("x1", mid);
+      line.setAttribute("x2", mid);
+    }
+    (band || line).removeAttribute("hidden");
+    const when = bucket === "hour"
+      ? `${p.at.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}, ${bucketLabel(p.at, bucket)}`
+      : p.at.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+    tip.innerHTML = `<p class="nb-tooltip-label">${escapeHTML(when)}</p>` +
+      series.map((s) => `<p><i style="background: ${s.color}"></i>${escapeHTML(s.label)} <strong>${num(p[s.key])}</strong></p>`).join("") +
+      (series.length > 1 ? `<p class="nb-tooltip-total">Total <strong>${series.reduce((t, s) => t + num(p[s.key]), 0)}</strong></p>` : "");
     tip.hidden = false;
     const box = chart.getBoundingClientRect();
-    const left = Math.min(Math.max(e.clientX - box.left + 14, 0), box.width - tip.offsetWidth);
-    tip.style.left = `${left}px`;
+    tip.style.left = `${Math.min(Math.max(e.clientX - box.left + 14, 0), box.width - tip.offsetWidth)}px`;
     tip.style.top = `${Math.max(e.clientY - box.top - tip.offsetHeight - 12, 0)}px`;
   });
   svg.addEventListener("pointerleave", hide);
 }
+
+const legendHTML = (series) =>
+  `<ul class="nb-legend">${series.map((s) => `<li><i style="background: ${s.color}"></i>${escapeHTML(s.label)}</li>`).join("")}</ul>`;
 
 /* Donut with the total in the middle (neobrutalism "Pie Chart - Donut
  * with Text"), and a bordered-square legend. */
@@ -1968,11 +2037,19 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
     ["Pages per visit", c.pages_per_session ?? "—", change(c.pages_per_session, p.pages_per_session), ""],
   ];
   const points = analyticsBuckets(since, until, report.bucket, report.series || []);
-  const key = state.analyticsSeries === "pageviews" ? "pageviews" : "visitors";
-  const trend = change(key === "visitors" ? c.visitors : c.pageviews, key === "visitors" ? p.visitors : p.pageviews);
-  const trendText = trend.pct
-    ? `<strong class="${trend.tone}">Trending ${trend.pct > 0 ? "up" : "down"} by ${Math.abs(trend.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
-    : trend.text === "new" ? "<strong>All new</strong>: nothing in the period before" : "No change on the period before";
+  // Page views card: page views or visits, switched from its header.
+  const VOLUME = {
+    pageviews: { key: "pageviews", label: "Page views", color: "var(--chart-2)", total: c.pageviews, before: p.pageviews },
+    sessions: { key: "sessions", label: "Visits", color: "var(--chart-4)", total: c.sessions, before: p.sessions },
+  };
+  const volume = VOLUME[state.analyticsSeries] || VOLUME.pageviews;
+  const trendLine = (now, before) => {
+    const t = change(now, before);
+    return `<p>${t.pct
+      ? `<strong class="${t.tone}">Trending ${t.pct > 0 ? "up" : "down"} by ${Math.abs(t.pct)}%</strong> compared with the ${escapeHTML(range[1])} before`
+      : t.text === "new" ? "<strong>All new</strong>: nothing in the period before" : "No change on the period before"}</p>
+      <p class="nb-card-range">${escapeHTML(since.toLocaleDateString("en-GB", { day: "numeric", month: "short" }))} – ${escapeHTML(until.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }))}, times in ${escapeHTML(tz)}</p>`;
+  };
   const returning = Math.max(0, num(c.sessions) - num(c.new_sessions));
   const empty = !num(c.pageviews);
 
@@ -1995,17 +2072,31 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
     <div class="nb-grid">
       ${chartCard({
         wide: true,
-        title: "Traffic",
-        description: `${report.bucket === "hour" ? "Per hour" : "Per day"}, ${span}. Times in ${tz}.`,
+        title: "Visitors",
+        description: `Showing visitors by device ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`,
+        actions: `
+          <label class="nb-select">
+            <span class="visually-hidden">Period</span>
+            <select data-range-select>
+              ${ANALYTICS_RANGES.map(([k, label]) => `<option value="${k}"${k === range[0] ? " selected" : ""}>Last ${label}</option>`).join("")}
+            </select>
+          </label>`,
+        body: `<div data-visitors>${visitorsAreaHTML(points, report.bucket)}</div>${legendHTML(DEVICE_LAYERS)}`,
+        footer: trendLine(c.visitors, p.visitors),
+      })}
+      ${chartCard({
+        wide: true,
+        title: volume.label,
+        description: `${volume.key === "pageviews" ? "Pages opened" : "Browser tab sessions"} ${report.bucket === "hour" ? "per hour" : "per day"} for ${span}`,
         actions: `
           <div class="nb-switch" role="group" aria-label="Show">
-            ${[["visitors", "Visitors", c.visitors], ["pageviews", "Page views", c.pageviews]].map(([k, label, total]) => `
-              <button type="button" data-series="${k}" aria-pressed="${k === key}">
-                <span>${label}</span><strong>${num(total)}</strong>
+            ${Object.values(VOLUME).map((v) => `
+              <button type="button" data-series="${v.key}" aria-pressed="${v.key === volume.key}">
+                <span>${v.label}</span><strong>${num(v.total)}</strong>
               </button>`).join("")}
           </div>`,
-        body: trafficChartHTML(points, report.bucket, key),
-        footer: `<p>${trendText}</p>`,
+        body: `<div data-volume>${volumeBarsHTML(points, report.bucket, volume)}</div>`,
+        footer: trendLine(volume.total, volume.before),
       })}
       ${chartCard({
         title: "New and returning",
@@ -2052,7 +2143,12 @@ async function renderAnalyticsPage(page, { reuse = false } = {}) {
       })}
     </div>`;
   bindChips();
-  bindTrafficChart(root(), points, report.bucket);
+  bindChart(root().querySelector("[data-visitors] [data-chart]"), points, report.bucket, DEVICE_LAYERS);
+  bindChart(root().querySelector("[data-volume] [data-chart]"), points, report.bucket, [volume]);
+  root().querySelector("[data-range-select]").addEventListener("change", (e) => {
+    state.analyticsRange = e.target.value;
+    renderAnalyticsPage(page);
+  });
   root().querySelectorAll("[data-series]").forEach((button) =>
     button.addEventListener("click", () => {
       state.analyticsSeries = button.dataset.series;

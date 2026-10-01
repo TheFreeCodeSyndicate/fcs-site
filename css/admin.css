@@ -1134,7 +1134,7 @@ body:has(.drawer.is-open) .toasts {
 
 .nb-chart { position: relative; }
 .nb-chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.nb-gridline { stroke: #80808080; stroke-dasharray: 3 3; }
+.nb-gridline { stroke: #80808080; }
 .nb-tick { fill: var(--ink-muted); font-size: 11px; font-family: inherit; }
 .nb-bar, .nb-slice { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
 .nb-cursor { fill: #8080804d; }
@@ -1177,3 +1177,23 @@ body:has(.drawer.is-open) .toasts {
   border-radius: 0 4px 4px 0;
   background: var(--fill);
 }
+
+/* Visitors: stacked areas and a line cursor; the period dropdown. */
+.nb-area { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.nb-cursor-line { stroke: #80808080; stroke-width: 2; }
+.nb-tooltip .nb-tooltip-total { margin-top: 4px; padding-top: 4px; border-top: 1px dashed var(--rule); }
+.nb-card-body > .nb-legend { margin-top: 10px; }
+.nb-card-range { color: var(--ink-muted); }
+.nb-select select {
+  min-height: 40px;
+  padding: 6px 34px 6px 12px;
+  border: var(--border-w) solid var(--ink);
+  background: var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 9h2v2H7zm2 2h2v2H9zm2 2h2v2h-2zm2-2h2v2h-2zm2-2h2v2h-2z'/%3E%3C/svg%3E") no-repeat right 8px center / 18px;
+  color: var(--accent-ink);
+  font: inherit;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 var(--ink);
+  appearance: none;
+  cursor: pointer;
+}
+.nb-select select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

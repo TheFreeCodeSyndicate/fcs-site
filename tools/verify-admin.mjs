@@ -293,6 +293,16 @@ await settle(700);
 const last = reportCalls[reportCalls.length - 1] || {};
 check("the 24 hours switch asks for one day, in local time", Math.round((Date.parse(last.until) - Date.parse(last.since)) / 36e5) === 24 && typeof last.tz === "string", JSON.stringify(last));
 check("24 hours draws one bar per hour", (await page.$$eval(".nb-chart .nb-bar", (b) => b.length)) >= 24);
+const volumeHit = page.locator("[data-volume] .nb-hit").nth(5);
+await volumeHit.scrollIntoViewIfNeeded();
+await volumeHit.hover();
+await settle(200);
+check("the Page views tooltip lists only the series drawn", (await page.$$eval("[data-volume] .nb-tooltip p i", (i) => i.length)) === 1);
+const areaHit = page.locator("[data-visitors] .nb-hit").nth(5);
+await areaHit.scrollIntoViewIfNeeded();
+await areaHit.hover();
+await settle(200);
+check("the Visitors tooltip lists each device drawn", (await page.$$eval("[data-visitors] .nb-tooltip p i", (i) => i.length)) === 3);
 
 // --- team -------------------------------------------------------------------
 await page.goto(new URL("admin.html#/team", base).href);
