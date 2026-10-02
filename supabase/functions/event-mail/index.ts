@@ -46,7 +46,7 @@ const service = () => createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_RO
 const esc = (s: string) =>
   String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const INK = "#0a0a0a", PAPER = "#faf8f2", BG = "#f3f0e6", ACCENT = "#ffc72c", MUTED = "#55524a";
+const INK = "#000000", PAPER = "#ffffff", BG = "#fff7e4", ACCENT = "#fcce37", MUTED = "#555248";
 const HEAD = "'Arial Black', 'Helvetica Neue', Arial, sans-serif";
 const BODY = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
 const MONO = "'Courier New', Courier, monospace";

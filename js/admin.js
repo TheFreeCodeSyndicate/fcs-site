@@ -275,7 +275,7 @@ function gate(inner, { form = false } = {}) {
   root().innerHTML = `
     <section class="gate">
       <${tag} class="gate-card" ${form ? 'id="gate-form" novalidate' : ""}>
-        <span class="gate-mark" aria-hidden="true"><img src="assets/favicon-192.png" alt="" width="56" height="56" /></span>
+        <span class="gate-mark" aria-hidden="true"><img src="assets/logoicon.svg" alt="" width="56" height="52" /></span>
         ${inner}
       </${tag}>
     </section>`;

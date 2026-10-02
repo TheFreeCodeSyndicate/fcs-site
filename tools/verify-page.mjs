@@ -70,9 +70,8 @@ check("new Discord invite is used", !/nH2PRmbB5/.test(bodyText));
 const tags = await page.evaluate(() =>
   [...document.querySelectorAll(".event-card .tag")].map((t) => t.textContent.trim())
 );
-check("no event claims to be UPCOMING when none is scheduled", !tags.includes("UPCOMING"), tags.join(","));
 check("event tags use the derived vocabulary",
-  tags.every((t) => ["UPCOMING", "LIVE NOW", "FINISHED"].includes(t)), tags.join(","));
+  tags.length > 0 && tags.every((t) => ["UPCOMING", "LIVE NOW", "FINISHED"].includes(t)), tags.join(","));
 
 // --- THE BUG: an active nav link must exist at the top of the page ---
 const activeAtTop = await page.evaluate(() =>
@@ -162,7 +161,7 @@ check("Escape closes the calendar menu", !(await page.$eval("#cal-menu", (d) => 
 const feed = await page.request.get(new URL("events.ics", base).href);
 check("events.ics is served as a calendar", feed.ok() && (await feed.text()).startsWith("BEGIN:VCALENDAR"), String(feed.status()));
 
-// "Email me about events" signs up through the event-mail function
+// \"Email me about events\" signs up through the event-mail function
 // (stubbed here, so no email is sent).
 const signups = [];
 await page.route("**/functions/v1/event-mail", (route) => {

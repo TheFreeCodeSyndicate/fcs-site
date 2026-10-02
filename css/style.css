@@ -14,80 +14,75 @@
 :root {
   color-scheme: light;
 
-  /* The FCS brand: black, white and signal yellow, with cyan and
-     magenta as secondaries. Restored from the pre-token stylesheet
-     (commit 17a0504). Yellow is a FILL colour: black text sits on it
-     at 12.7:1. Yellow as text on cream fails AA, so text that wants
-     the accent uses --accent-text, a deep amber, instead. */
-  --paper:        #f3f0e6;
-  --paper-raised: #faf8f2;
-  --ink:          #0a0a0a;
-  --ink-muted:    #57544b;
-  --ink-faint:    #6b6a62;
-  --rule:         #d5cfbf;
-  --rule-strong:  #0a0a0a;
+  /* The FCS brand system v1.0:
+     FCS Yellow: #FCCE37
+     Black:      #000000
+     FCS Cream:  #FFF7E4
+     FCS Red:    #D12D2D */
+  --paper:        #FFF7E4;   /* FCS Cream - Primary light background */
+  --paper-raised: #FFFFFF;
+  --ink:          #000000;   /* Black - Primary text and structure */
+  --ink-muted:    #555248;
+  --ink-faint:    #6e6a5f;
+  --rule:         #dcd6c5;
+  --rule-strong:  #000000;
 
-  --accent:       #ffc72c;   /* brand yellow, fills only */
+  --accent:       #fcce37;   /* FCS Yellow - Primary action / highlight fills */
   --accent-deep:  #f0972a;   /* the sun's orange edge */
-  --accent-soft:  #ffe9ac;   /* pale yellow, highlighter */
-  --accent-ink:   #0a0a0a;   /* text on --accent */
-  --accent-text:  #8a5a00;   /* accent as text on paper, 5.2:1 */
-  --focus:        #0a0a0a;
+  --accent-soft:  #fff0c2;   /* pale yellow, highlighter */
+  --accent-ink:   #000000;   /* text on --accent */
+  --accent-text:  #855700;   /* contrast text on cream (>5:1) */
+  --accent-alert: #d12d2d;   /* FCS Red - Alert / emphasis */
+  --focus:        #000000;
 
-  /* Secondaries, used only for event and group state. */
+  /* Secondaries, used for event and group status indicators. */
   --cyan:         #00d6d6;
   --cyan-text:    #006b6b;
   --magenta:      #ff45d4;
-  --live:         #b0127f;   /* magenta as text, 5.7:1 */
-  --live-soft:    #ffe0f6;
+  --live:         #d12d2d;   /* alert red (#D12D2D) */
+  --live-soft:    #fde8e8;
   --done:         #5f6b52;
   --mark:         #ffe9ac;
 
-  /* Slabs: the inverted panels (nav, stamps, group cards, dispatch).
-     They stay black in BOTH themes, so they cannot use --ink/--paper,
-     which swap. On black, yellow is readable as text. */
-  --slab:         #0a0a0a;
-  --slab-ink:     #faf8f2;
-  --slab-accent:  #ffc72c;
-  /* Plate: the mount behind the logo artwork, whose linework is black
-     on transparent and would vanish on dark paper. */
-  --plate:        #faf8f2;
+  /* Slabs: inverted panels (nav, stamps, group cards, dispatch). */
+  --slab:         #000000;
+  --slab-ink:     #FFF7E4;
+  --slab-accent:  #fcce37;
+  /* Plate: mount behind logo artwork */
+  --plate:        #FFF7E4;
 
   --radius: 0;
 
-  /* Non-colour tokens, carried over from the previous stylesheet
-     UNCHANGED — the clamp() fluid spacing and the deliberately thick
-     3px rules / 6px offset shadows are the brutalist character of
-     this page. Do not flatten these to fixed px. */
   --border-w: 3px;
   --shadow-off: 6px;
   --gap: clamp(1rem, 2vw, 1.75rem);
   --section-pad: clamp(2.5rem, 6vw, 5rem);
   --page-pad: clamp(1.25rem, 4vw, 3rem);
 
-  --font-mono: "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
-  /* Display face for the title and section heads only. A wide Swiss
-     grotesk carries the memo's authority; Fira Code keeps the voice. */
-  --font-display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  /* Approved brand fonts */
+  --font-mono: "Archivo Mono", "Latin Modern Mono", "Fira Code", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-code: "Latin Modern Mono", "Fira Code", "Archivo Mono", ui-monospace, monospace;
+  --font-display: "Archivo", "Archivo Mono", "Arial Narrow", system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
   --paper:        #0f0e0b;
-  --paper-raised: #1a1914;
-  --ink:          #f3f0e6;
+  --paper-raised: #181714;
+  --ink:          #FFF7E4;
   --ink-muted:    #b3ad9f;
   --ink-faint:    #948f82;
   --rule:         #34312a;
-  --rule-strong:  #f3f0e6;
+  --rule-strong:  #FFF7E4;
 
-  --accent:       #ffc72c;
+  --accent:       #fcce37;
   --accent-deep:  #f0972a;
   --accent-soft:  #3a2f0d;
-  --accent-ink:   #0a0a0a;
-  --accent-text:  #ffc72c;
-  --focus:        #ffc72c;
+  --accent-ink:   #000000;
+  --accent-text:  #fcce37;
+  --accent-alert: #d12d2d;
+  --focus:        #fcce37;
 
   --cyan:         #00d6d6;
   --cyan-text:    #3ee6e6;
@@ -97,10 +92,10 @@
   --done:         #9aa88a;
   --mark:         #4a3c10;
 
-  --slab:         #1f1d17;
-  --slab-ink:     #f3f0e6;
-  --slab-accent:  #ffc72c;
-  --plate:        #ebe7da;
+  --slab:         #161512;
+  --slab-ink:     #FFF7E4;
+  --slab-accent:  #fcce37;
+  --plate:        #1c1b17;
 }
 
 /* ---------- Reset ---------- */
@@ -268,11 +263,23 @@ mark {
 }
 
 .nav-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-decoration: none;
   font-size: 0.95rem;
   white-space: nowrap;
+}
+
+.nav-brand-logo,
+.admin-brand-logo {
+  display: block;
+  width: 1.55rem;
+  height: 1.45rem;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .nav-brand-sub {
@@ -361,23 +368,22 @@ mark {
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 1.25rem 1rem;
 }
 
 .hero-lockup img {
   width: 100%;
-  height: 100%;
-  min-height: 340px;
-  object-fit: cover;
-  object-position: 44% 49%;
+  max-width: 440px;
+  max-height: 380px;
+  object-fit: contain;
   display: block;
-  max-width: 100%;
   height: auto;
 }
 
 .hero-stamp {
   position: absolute;
   right: -0.65rem;
-  bottom: 1.1rem;
+  top: 1.1rem;
   display: grid;
   gap: 0.25rem;
   rotate: -2deg;
@@ -660,17 +666,20 @@ mark {
 .icarus-mark {
   display: flex;
   justify-content: center;
+  align-items: center;
   min-height: 280px;
   border: var(--border-w) solid var(--ink);
   background: var(--plate);
   box-shadow: var(--shadow-off) var(--shadow-off) 0 var(--ink);
   overflow: hidden;
+  padding: 1.5rem;
 }
 
 .icarus-mark img {
-  width: min(72%, 260px);
+  width: min(85%, 260px);
   height: auto;
   object-fit: contain;
+  display: block;
 }
 
 /* ---------- Protocol (Section 3) ---------- */
@@ -1263,11 +1272,11 @@ mark {
 
 .join-note img {
   position: absolute;
-  right: -4rem;
-  top: -3rem;
-  width: 260px;
+  right: -2rem;
+  top: -2rem;
+  width: 220px;
   max-width: none;
-  opacity: 0.2;
+  opacity: 0.18;
 }
 
 .join-note p {
@@ -1307,12 +1316,15 @@ mark {
   }
 
   .hero-lockup {
-    max-height: 360px;
+    max-height: 380px;
+    padding: 1rem;
   }
 
   .hero-lockup img {
-    min-height: 300px;
-    object-position: 43% 50%;
+    min-height: auto;
+    max-height: 280px;
+    object-fit: contain;
+    object-position: center;
   }
 
   .icarus-layout,
@@ -1425,7 +1437,7 @@ mark {
 
   .hero-stamp {
     right: 0.5rem;
-    bottom: 0.7rem;
+    top: 0.7rem;
   }
 
   .hero-stamp span {
@@ -2566,3 +2578,8 @@ a.site-link { display: inline-flex; align-items: center; gap: 6px; }
 .privacy h2 { margin: 12px 0 0; font-size: 1.05rem; }
 .privacy ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; list-style: disc; }
 .privacy a { color: var(--accent-text); }
+
+/* Brand Typography: Latin Modern Mono for code snippets, RFC identifiers and technical metadata */
+code, kbd, samp, pre, .protocol-stamp, .sec-num, [data-meta], .kicker, .hero-ledger {
+  font-family: var(--font-code);
+}

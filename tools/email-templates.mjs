@@ -13,11 +13,11 @@ const PROJECT_REF = "odkpecmcvzjakeavaqcf";
 const SITE = "https://thefreecodesyndicate.github.io/fcs-site/";
 const LOGO = `${SITE}assets/favicon-192.png`;
 
-const INK = "#0a0a0a";
-const PAPER = "#faf8f2";
-const BG = "#f3f0e6";
-const ACCENT = "#ffc72c";
-const MUTED = "#55524a";
+const INK = "#000000";
+const PAPER = "#ffffff";
+const BG = "#fff7e4";
+const ACCENT = "#fcce37";
+const MUTED = "#555248";
 const HEAD = "'Arial Black', 'Helvetica Neue', Arial, sans-serif";
 const BODY = "Arial, 'Helvetica Neue', Helvetica, sans-serif";
 const MONO = "'Courier New', Courier, monospace";
