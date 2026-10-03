@@ -1287,19 +1287,36 @@ mark {
 }
 
 /* ---------- Footer ---------- */
+/* The footer is a night slab in both themes, so the sky under it
+   (js/footer-sky.js) always sits on black. */
 .doc-footer {
-  border-top: var(--border-w) solid var(--ink);
-  padding: 1.5rem var(--page-pad) 2.5rem;
+  --ink: var(--slab-ink);
+  --ink-muted: #b3ad9f;
+  --rule-strong: var(--slab-ink);
+  --paper-raised: var(--slab);
+  --accent-text: var(--slab-accent);
+  --focus: var(--slab-accent);
+  background: var(--slab);
+  border-top: var(--border-w) solid var(--accent);
+  padding: 1.5rem var(--page-pad) 0;
   text-align: center;
   font-size: 0.75rem;
   color: var(--ink-muted);
+}
+
+.footer-sky {
+  display: block;
+  width: calc(100% + 2 * var(--page-pad));
+  height: clamp(240px, 30vw, 480px);
+  margin: 1.5rem calc(-1 * var(--page-pad)) 0;
+  touch-action: pan-y;
 }
 
 .doc-footer p {
   margin-bottom: 0.3rem;
 }
 
-.doc-footer p:last-child {
+.doc-footer p:last-of-type {
   margin-bottom: 0;
 }
 
