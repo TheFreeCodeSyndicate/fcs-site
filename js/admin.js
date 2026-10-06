@@ -24,6 +24,7 @@ import {
   createStudyGroup, updateStudyGroup, deleteStudyGroup,
   createSocialLink, updateSocialLink, deleteSocialLink,
   createCoreMember, updateCoreMember, deleteCoreMember,
+  createBlogPost, updateBlogPost, deleteBlogPost, uploadBlogImage,
   saveRepoKind, deleteRepoKind, refreshSite,
   analyticsReport, getAnalyticsAccess, setAnalyticsAccess,
   listProfiles, setProfileRole, removeMember, watchMyAccess,
@@ -34,7 +35,9 @@ import {
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./lib/forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./lib/forms.js";
+import { iconHTML } from "./lib/blog-pages.js";
+import { openBlogEditor } from "./blog-editor.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
   coreCardHTML, portraitHTML, roleStamp,
@@ -147,8 +150,8 @@ function dismiss(item) {
 
 const quoted = (text) => `“${String(text || "untitled").slice(0, 60)}”`;
 
-async function readTable(name, order = "sort_order") {
-  const { data, error } = await getClientOrThrow().from(name).select("*").order(order);
+async function readTable(name, order = "sort_order", newestFirst = false) {
+  const { data, error } = await getClientOrThrow().from(name).select("*").order(order, { ascending: !newestFirst });
   if (error) throw error;
   return data || [];
 }
@@ -584,10 +587,11 @@ const TABLES = [
   ["social_links", "sort_order"],
   ["repo_kinds", "repo_name"],
   ["core_members", "sort_order"],
+  ["blog_posts", "created_at", true],
 ];
 
 async function loadAll() {
-  const results = await Promise.all(TABLES.map(([name, order]) => readTable(name, order)));
+  const results = await Promise.all(TABLES.map(([name, order, newestFirst]) => readTable(name, order, newestFirst)));
   TABLES.forEach(([name], i) => {
     state.data[name] = results[i];
   });
@@ -595,8 +599,8 @@ async function loadAll() {
 }
 
 async function reload(table) {
-  const order = (TABLES.find(([name]) => name === table) || [])[1];
-  state.data[table] = await readTable(table, order);
+  const [, order, newestFirst] = TABLES.find(([name]) => name === table) || [];
+  state.data[table] = await readTable(table, order, newestFirst);
 }
 
 /* ==================================================================
@@ -609,6 +613,7 @@ const PAGES = [
   { id: "core", label: "Core members", icon: "users", site: "#core" },
   { id: "groups", label: "Study groups", icon: "book-open", site: "#study-groups" },
   { id: "resources", label: "Resources", icon: "bookmark", site: "#resources" },
+  { id: "blog", label: "Blog", icon: "pencil", site: "blog/" },
   { id: "social", label: "Social links", icon: "link", site: "#join" },
   { id: "repos", label: "Repositories", icon: "github", site: "#projects" },
   { id: "activity", label: "Activity", icon: "list-box" },
@@ -843,6 +848,19 @@ const EDITORS = {
     remove: deleteCoreMember,
   },
 
+  blog: {
+    table: "blog_posts",
+    noun: "post",
+    intro: "Posts open as full pages, like Notion: add a cover and an icon, type / for blocks (headings, lists, to-dos, callouts, toggles, code, equations, tables, images, video). Drafts save as you type; publishing rebuilds the site, so a post is live about a minute later. Images go to the club's public image repository: only upload pictures you are happy to have public for good.",
+    title: (r) => r.title,
+    subtitle: (r) => [r.status === "published" && r.published_at ? `Published ${formatDateTimeLocal(r.published_at)}` : `Edited ${formatDateTimeLocal(r.updated_at)}`, r.author_name].filter(Boolean).join(", "),
+    thumb: (r) => (r.icon ? `<span class="post-thumb">${iconHTML(r.icon)}</span>` : icon("pencil")),
+    badges: (r) => [`<span class="badge">${r.status === "published" ? "Published" : "Draft"}</span>`],
+    filters: [{ key: "status", label: "Status", options: [["all", "All"], ["draft", "Drafts"], ["published", "Published"]], initial: "all" }],
+    searchIn: (r) => [r.title, r.slug, r.excerpt, r.author_name],
+    open: (row) => openPostEditor(row),
+  },
+
   groups: {
     table: "study_groups",
     noun: "group",
@@ -936,6 +954,41 @@ const EVENT_FIELDS = [
   { name: "link", label: "Link", type: "url", wide: true },
   { name: "details", label: "Details", type: "textarea", wide: true },
 ];
+
+/* The post editor (js/blog-editor.js). A post that is, or was, live
+ * changes the public site, so saving it starts a rebuild; a draft does not. */
+async function rebuildSite() {
+  try {
+    await refreshSite();
+    toast("Rebuilding the site. The change is live in about a minute.", "info");
+  } catch {
+    toast("Saved, but the rebuild did not start. It will go live within 30 minutes.", "info");
+  }
+}
+
+function openPostEditor(row) {
+  openBlogEditor({
+    row,
+    isAdmin: isAdmin(),
+    toast,
+    uploadImage: async (file) => uploadBlogImage(await shrinkForBlog(file)),
+    save: async (values, { id, wasLive }) => {
+      const saved = id ? await updateBlogPost(id, values) : await createBlogPost(values);
+      if (values.status === "published" || wasLive) await rebuildSite();
+      return saved;
+    },
+    remove: async (id, wasLive) => {
+      await deleteBlogPost(id);
+      toast("Deleted the post.", "delete", { action: { label: "Undo", run: () => undoDelete("blog_posts", id, "the post") } });
+      if (wasLive) await rebuildSite();
+    },
+    onClose: async () => {
+      await reload("blog_posts");
+      renderSidebar();
+      renderPage();
+    },
+  });
+}
 
 /* ==================================================================
  * Form rendering, reading and validation
@@ -1399,6 +1452,7 @@ function moveRow(id, row, delta) {
 
 function openEditor(id, row) {
   const editor = EDITORS[id];
+  if (editor.open) return editor.open(row);
   const key = row ? rowKey(editor, row) : null;
   const refresh = async () => {
     await reload(editor.table);
@@ -3005,7 +3059,7 @@ async function renderSubscribersPage(page) {
 const TABLE_NOUNS = {
   events: "event", class_sessions: "session", resources: "resource",
   study_groups: "group", social_links: "link", core_members: "member",
-  repo_kinds: "repo curation", profiles: "account", email_sends: "email",
+  repo_kinds: "repo curation", profiles: "account", email_sends: "email", blog_posts: "post",
 };
 const ACTION_VERBS = { create: "created", update: "edited", delete: "deleted", restore: "restored" };
 const ACTION_ICONS = { create: "plus", update: "pencil", delete: "trash", restore: "undo" };
@@ -3245,6 +3299,32 @@ async function uploadPendingPhoto(values) {
   if (!form || !form._photo) throw new Error("The new photo was lost. Pick it again.");
   Object.assign(values, await uploadMemberPhoto(form._photo.full, form._photo.thumb));
   form._photo = null;
+}
+
+/* ==================================================================
+ * Blog images
+ *
+ * The post editor shrinks every picture in the browser (WebP, at most
+ * 1600px wide) before the upload-asset Edge Function commits it to the
+ * public image repository. Unlike member photos this happens at once,
+ * not on save, so a discarded draft can leave a stray picture behind.
+ * ================================================================== */
+
+async function shrinkForBlog(file) {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("Use a JPG, PNG or WebP image.");
+  if (file.size > 15 * 1024 * 1024) throw new Error("That image is over 15 MB. Pick a smaller one.");
+  const img = await loadImage(await readAsDataURL(file));
+  const scale = Math.min(1, 1600 / img.naturalWidth);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", 0.85));
+  if (!blob) throw new Error("This browser could not process the image.");
+  if (blob.size > 2 * 1024 * 1024) throw new Error("That image is still over 2 MB after shrinking. Pick a simpler one.");
+  return blob;
 }
 
 /* ==================================================================

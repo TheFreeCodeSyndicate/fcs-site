@@ -90,6 +90,54 @@ hidden until someone chooses otherwise.
    repository, permission **Actions: Read and write**, nothing else.
 2. Supabase > Edge Functions > Secrets: `GITHUB_DISPATCH_TOKEN` = the token.
 
+## Blog
+
+Admin > **Blog** opens each post as a full, Notion-style page
+(`js/blog-editor.js`): a cover you can upload and drag to reposition, an
+icon (emoji, one of the site's icons, or an uploaded image), the title,
+properties (address, author, summary), then blocks. Type `/` for the block
+menu: text, headings, bulleted, numbered and to-do lists, toggles, quotes,
+callouts, dividers, images, YouTube videos, web bookmarks, code (with
+syntax highlighting), LaTeX equations (block and inline, via KaTeX),
+tables and a table of contents. Markdown shortcuts work as you type
+(`# `, `- `, `1. `, `[] `, `> ` toggle, `" ` quote, ```` ``` ````, `---`,
+`$$ `, and inline `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`,
+`==highlight==`, `$math$`). Selecting text shows a formatting bar; blocks
+drag by their handle; Tab nests list items; Ctrl+Z undoes; pasting or
+dropping images uploads them. Drafts save as you type; a published post
+changes only when you press **Update**.
+
+Posts are stored as Markdown (the syntax is listed at the top of
+`js/lib/markdown.js`). The deploy turns each published post into a static
+page, `blog/<slug>/`, with its own title and link preview, and writes
+`sitemap.xml` (`tools/blog-build.mjs`; neither is committed). Publishing
+or updating a live post starts a deploy through `refresh-site`, so it
+shows in about a minute. `node tools/blog-build.mjs` previews locally.
+KaTeX and highlight.js are vendored under `js/vendor/`, so there is still
+no build step or npm dependency.
+
+Page and callout icons: emoji are drawn with [Twemoji](https://github.com/jdecked/twemoji)
+(CC-BY 4.0, credited in the blog footer) from jsDelivr, so they look the same on
+every system; the picker's list is `js/vendor/emoji/emoji-groups.json` (from
+`unicode-emoji-json`, MIT). The Icons tab is every pixelarticons icon
+(`assets/pixel-icons.svg`, rebuilt by `tools/build-pixel-icons.mjs`), in
+Notion's ten colours (`icon:<name>:<colour>`, migration `024`).
+
+Post text lives in Supabase (`blog_posts`, migration `022`). **Images**
+are committed to the public `TheFreeCodeSyndicate/fcs-assets` repository
+by the `upload-asset` Edge Function and served by jsDelivr at an address
+pinned to the commit, so it never changes and never needs a cache purge.
+Only editors and admins can upload; JPG, PNG or WebP up to 2 MB (the
+panel shrinks pictures to WebP first). Everything in that repository is
+public and permanent, so never upload anything private. Set once:
+
+1. Run `supabase/migrations/022_blog_posts.sql`, `023_blog_page_look.sql` and
+   `024_blog_icon_colors.sql` in the SQL editor.
+2. GitHub > Fine-grained tokens > Generate: resource owner
+   **TheFreeCodeSyndicate**, only the **fcs-assets** repository,
+   permission **Contents: Read and write**, nothing else.
+3. Supabase > Edge Functions > Secrets: `GITHUB_ASSETS_TOKEN` = the token.
+
 ## Analytics
 
 Admin > **Analytics** shows how the public site is used, over the last

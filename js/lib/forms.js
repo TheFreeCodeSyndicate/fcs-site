@@ -47,3 +47,15 @@ export function formatDateTimeLocal(isoString) {
     minute: "2-digit",
   });
 }
+
+/** "Hello, World! 2026" -> "hello-world-2026" (blog post addresses; max 80). */
+export function slugify(text) {
+  return String(text || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80)
+    .replace(/-+$/, "");
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal } from "./forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./forms.js";
 
 test("an ISO instant round-trips through the datetime-local value", () => {
   const original = "2026-10-05T18:30:00.000Z";
@@ -30,4 +30,12 @@ test("a valid ISO string produces readable text containing the year", () => {
 
 test("a blank ISO string formats as an em dash", () => {
   assert.equal(formatDateTimeLocal(""), "—");
+});
+
+test("slugify makes a clean address, even from accents and symbols", () => {
+  assert.equal(slugify("Hello, World! 2026"), "hello-world-2026");
+  assert.equal(slugify("  Café --- au lait  "), "cafe-au-lait");
+  assert.equal(slugify("!!!"), "");
+  assert.ok(slugify("a ".repeat(100)).length <= 80);
+  assert.ok(!slugify("a".repeat(79) + " b").endsWith("-"));
 });

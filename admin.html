@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <!-- Scripts only from this site; network calls only to Supabase,
        GitHub and Discord. Limits what an injected script could do. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.github.com https://discord.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.github.com https://discord.com; frame-src https://www.youtube-nocookie.com; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <script src="js/theme-init.js"></script>
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -23,6 +23,8 @@
 
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/admin.css" />
+  <link rel="stylesheet" href="js/vendor/katex/katex.min.css" />
+  <link rel="stylesheet" href="css/blog-editor.css" />
 </head>
 <body class="admin-body is-gate">
   <canvas id="pixel-field" class="pixel-field" aria-hidden="true"></canvas>

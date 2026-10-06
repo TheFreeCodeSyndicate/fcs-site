@@ -263,6 +263,17 @@ export const deleteCoreMember = (id) =>
   write((s) => s.from("core_members").delete(WRITE_OPTS).eq("id", id).select())
     .then((rows) => assertChanged(rows, "Deleting the core member"));
 
+export const createBlogPost = (patch) =>
+  write((s) => s.from("blog_posts").insert(patch).select().single());
+
+export const updateBlogPost = (id, patch) =>
+  write((s) => s.from("blog_posts").update(patch).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Updating the post"));
+
+export const deleteBlogPost = (id) =>
+  write((s) => s.from("blog_posts").delete(WRITE_OPTS).eq("id", id).select())
+    .then((rows) => assertChanged(rows, "Deleting the post"));
+
 /* ---- team (admins only; RLS returns just your own row otherwise) --- */
 
 export async function listProfiles() {
@@ -322,6 +333,27 @@ export const inviteMember = (email, role, redirectTo) =>
 /* Runs the deploy workflow now (Edge Function refresh-site): editors
  * and admins, when a new repo should show without waiting. */
 export const refreshSite = () => invokeFunction("refresh-site", {});
+
+/* Blog images (Edge Function supabase/functions/upload-asset): commits one
+ * picture to the public fcs-assets repository and returns its jsDelivr
+ * address. Editors and admins. */
+export async function uploadBlogImage(blob) {
+  const { data, error } = await getClientOrThrow().functions.invoke("upload-asset", {
+    body: blob,
+    headers: { "Content-Type": blob.type || "application/octet-stream" },
+  });
+  if (error) {
+    let message = error.message;
+    try {
+      const body = await error.context.json();
+      if (body && body.error) message = body.error;
+    } catch {
+      /* not JSON: keep the generic message */
+    }
+    throw new Error(message);
+  }
+  return data.url;
+}
 
 export const eventMail = (action, payload = {}) => invokeFunction("event-mail", { action, ...payload });
 
@@ -411,7 +443,7 @@ export async function lastChange(table, rowId) {
  * turn this into a general "insert anything anywhere" call. */
 const RESTORABLE = new Set([
   "events", "class_sessions", "resources", "study_groups",
-  "social_links", "core_members", "repo_kinds",
+  "social_links", "core_members", "repo_kinds", "blog_posts",
 ]);
 
 /** Re-inserts the most recently deleted version of a row. */
