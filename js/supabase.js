@@ -426,6 +426,34 @@ export async function listActivity(limit = 300) {
   return data || [];
 }
 
+/** Who can be a blog author: every admin and editor, with a photo and
+ * link from their core-member card when there is one (migration 027). */
+export async function listBlogAuthors() {
+  const { data, error } = await getClientOrThrow().rpc("blog_authors");
+  if (error) throw error;
+  return data || [];
+}
+
+/** Link your own login to your core-member card (migration 028; only the
+ * account's owner may, so this always targets the signed-in user). */
+export async function linkMemberCard(userId, memberId) {
+  return write((s) => s.from("profiles").update({ core_member_id: memberId }).eq("id", userId).select())
+    .then((rows) => assertChanged(rows, "Linking your member card"));
+}
+
+/** One row's history, newest first (the blog editor's version history). */
+export async function listRowHistory(table, rowId, limit = 30) {
+  const { data, error } = await getClientOrThrow()
+    .from("activity_log")
+    .select("at, actor_email, action, changed")
+    .eq("table_name", table)
+    .eq("row_id", String(rowId))
+    .order("at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 /** The newest log entry for one row: "last edited by X, 2h ago". */
 export async function lastChange(table, rowId) {
   const { data, error } = await getClientOrThrow()

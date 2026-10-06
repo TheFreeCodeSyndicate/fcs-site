@@ -30,14 +30,16 @@ import {
   listProfiles, setProfileRole, removeMember, watchMyAccess,
   eventMail, listSubscriptions, addSubscribers, removeSubscription, listEmailSends,
   requestPasswordReset, updatePassword,
-  listActivity, lastChange, restoreDeleted, inviteMember,
+  listActivity, lastChange, listRowHistory, listBlogAuthors, linkMemberCard, restoreDeleted, inviteMember,
   uploadMemberPhoto, removeMemberPhotos,
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./lib/forms.js";
-import { iconHTML } from "./lib/blog-pages.js";
+import { iconHTML, avatarHTML, avatarGroupHTML, postAuthors, authorNames, postCardHTML } from "./lib/blog-pages.js";
 import { openBlogEditor } from "./blog-editor.js";
+import { openMemberPicker, memberCard } from "./member-picker.js";
+import { guessMember } from "./lib/member-match.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
   coreCardHTML, portraitHTML, roleStamp,
@@ -619,7 +621,7 @@ const PAGES = [
   { id: "activity", label: "Activity", icon: "list-box" },
   { id: "analytics", label: "Analytics", icon: "eye", gate: () => isAdmin() || state.canAnalytics },
   { id: "subscribers", label: "Subscribers", icon: "mail", adminOnly: true },
-  { id: "team", label: "Team", icon: "shield", adminOnly: true },
+  { id: "team", label: "Team", icon: "shield" },
 ];
 
 const visiblePages = () => PAGES.filter((p) => (!p.adminOnly || isAdmin()) && (!p.gate || p.gate()));
@@ -693,6 +695,7 @@ function renderPage() {
   else if (state.route === "subscribers") renderSubscribersPage(page);
   else if (state.route === "repos") renderReposPage(page);
   else if (state.route === "analytics") renderAnalyticsPage(page);
+  else if (state.route === "blog") renderBlogPage(page);
   else renderListPage(page);
 }
 
@@ -966,9 +969,17 @@ async function rebuildSite() {
   }
 }
 
-function openPostEditor(row) {
+async function openPostEditor(row) {
+  // The people who can be authors; the editor works without them (guests only).
+  const team = await listBlogAuthors().catch(() => []);
+  const me = team.find((t) => t.id === state.user.id) || { id: state.user.id, name: state.user.email.split("@")[0] };
   openBlogEditor({
     row,
+    team,
+    me,
+    // Until linked, the Authors row asks "Which member card are you?".
+    meGuess: memberLink(team).suggested,
+    whoami: (anchor, after) => chooseMemberCard(anchor, team, after),
     isAdmin: isAdmin(),
     toast,
     uploadImage: async (file) => uploadBlogImage(await shrinkForBlog(file)),
@@ -982,6 +993,20 @@ function openPostEditor(row) {
       toast("Deleted the post.", "delete", { action: { label: "Undo", run: () => undoDelete("blog_posts", id, "the post") } });
       if (wasLive) await rebuildSite();
     },
+    duplicate: async (values) => {
+      const taken = new Set(state.data.blog_posts.map((p) => p.slug));
+      let slug = `${values.slug}-copy`;
+      for (let n = 2; taken.has(slug); n++) slug = `${values.slug}-copy-${n}`;
+      await createBlogPost({ ...values, title: `Copy of ${values.title}`, slug, status: "draft", locked: false });
+      await reload("blog_posts");
+      toast(`Saved a copy as a draft: “Copy of ${values.title}”.`, "info");
+    },
+    history: (id) => listRowHistory("blog_posts", id),
+    // "@" mentions: core members, linked to GitHub or their site.
+    people: state.data.core_members
+      .filter((m) => m.is_published !== false)
+      .map((m) => ({ name: m.name, url: m.github_username ? `https://github.com/${m.github_username}` : m.website_url || m.linkedin_url || "" }))
+      .filter((p) => /^https:\/\//.test(p.url)),
     onClose: async () => {
       await reload("blog_posts");
       renderSidebar();
@@ -1296,6 +1321,90 @@ function visibleRows(id) {
     const hay = (editor.searchIn ? editor.searchIn(row) : [editor.title(row), editor.subtitle(row)])
       .filter(Boolean).join(" ").toLowerCase();
     return hay.includes(q);
+  });
+}
+
+/* Blog: drafts and published as tabs, then a table (default) or a gallery
+ * of the same cards the site shows. The choice of view is remembered. */
+function renderBlogPage(page) {
+  const editor = EDITORS.blog;
+  const all = state.data.blog_posts;
+  const filters = filtersFor("blog");
+  const rows = visibleRows("blog").sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")));
+  const view = localStorage.getItem("fcs-blog-view") === "gallery" ? "gallery" : "table";
+  const count = (status) => (status === "all" ? all.length : all.filter((p) => p.status === status).length);
+  const live = (p) => p.status === "published";
+  const statusBadge = (p) => `<span class="badge${live(p) ? " badge-live" : ""}">${live(p) ? "Published" : "Draft"}</span>`;
+
+  const table = `
+    <div class="blog-table-wrap">
+      <table class="blog-table">
+        <thead><tr>
+          <th scope="col">Post</th><th scope="col">Status</th><th scope="col">Authors</th>
+          <th scope="col" aria-sort="descending">Edited</th><th scope="col">Published</th>
+          <th scope="col"><span class="visually-hidden">Actions</span></th>
+        </tr></thead>
+        <tbody>${rows.map((p) => {
+          const authors = postAuthors(p);
+          return `<tr data-key="${escapeAttr(p.id)}">
+            <td><button type="button" class="blog-row-open" data-open>
+              <span class="blog-thumb${p.cover_url ? "" : " is-blank"}">${p.cover_url ? `<img src="${escapeAttr(p.cover_url)}" alt="" loading="lazy" />` : ""}${p.icon ? `<span class="blog-thumb-icon">${iconHTML(p.icon)}</span>` : ""}</span>
+              <span class="blog-row-title"><strong>${escapeHTML(p.title || "Untitled")}</strong><span class="sub">/blog/${escapeHTML(p.slug || "")}</span></span>
+            </button></td>
+            <td data-label="Status">${statusBadge(p)}</td>
+            <td data-label="Authors">${authors.length ? `<span class="blog-row-authors" title="${escapeAttr(authorNames(authors))}">${avatarGroupHTML(authors, 3)}<span>${escapeHTML(authors[0].name)}${authors.length > 1 ? ` +${authors.length - 1}` : ""}</span></span>` : '<span class="sub">None</span>'}</td>
+            <td data-label="Edited"><span title="${escapeAttr(formatDateTimeLocal(p.updated_at))}">${p.updated_at ? ago(p.updated_at) : ""}</span></td>
+            <td data-label="Published">${p.published_at ? escapeHTML(formatDateTimeLocal(p.published_at)) : '<span class="sub">Not yet</span>'}</td>
+            <td class="blog-row-actions">${live(p) ? `<a class="btn btn-quiet" href="./blog/${escapeAttr(p.slug)}/" target="_blank" rel="noopener">${icon("eye")}<span>View</span></a>` : ""}</td>
+          </tr>`;
+        }).join("")}</tbody>
+      </table>
+    </div>`;
+
+  const gallery = `
+    <ul class="post-grid blog-gallery">
+      ${rows.map((p) => `<li data-key="${escapeAttr(p.id)}">${postCardHTML(p, { href: `#/blog/${p.id}`, badge: `<span class="post-card-badge">${statusBadge(p)}</span>` })}</li>`).join("")}
+    </ul>`;
+
+  root().innerHTML = `
+    ${pageHead(page, { count: all.length, newLabel: "New post" })}
+    <p class="page-intro">${escapeHTML(editor.intro)}</p>
+    <div class="blog-toolbar">
+      <div class="page-filters" role="group" aria-label="Status">
+        ${[["all", "All"], ["draft", "Drafts"], ["published", "Published"]].map(([value, label]) => `
+          <button type="button" class="chip${filters.status === value ? " is-active" : ""}" aria-pressed="${filters.status === value}"
+                  data-filter="status" data-value="${value}">${label} <span class="chip-count">${count(value)}</span></button>`).join("")}
+      </div>
+      <div class="view-toggle" role="group" aria-label="View">
+        ${[["table", "Table", "list-box"], ["gallery", "Gallery", "image"]].map(([value, label, glyph]) => `
+          <button type="button" class="chip${view === value ? " is-active" : ""}" aria-pressed="${view === value}" data-view="${value}">${icon(glyph)}<span>${label}</span></button>`).join("")}
+      </div>
+    </div>
+    <div data-blog-results>${rows.length ? (view === "table" ? table : gallery)
+      : all.length
+        ? `<div class="empty-state"><p>${state.search ? "Nothing matches. Clear the search." : filters.status === "draft" ? "No drafts." : "Nothing published yet."}</p></div>`
+        : `<div class="empty-state"><p>No posts yet.</p><button type="button" class="btn btn-primary" data-empty-new>${icon("plus")}<span>Write the first post</span></button></div>`}</div>`;
+
+  const openNew = () => openEditor("blog", null);
+  root().querySelector("#page-new").addEventListener("click", openNew);
+  const emptyNew = root().querySelector("[data-empty-new]");
+  if (emptyNew) emptyNew.addEventListener("click", openNew);
+  bindSearch();
+  root().querySelectorAll("[data-filter]").forEach((chip) => chip.addEventListener("click", () => {
+    filters[chip.dataset.filter] = chip.dataset.value;
+    renderBlogPage(page);
+  }));
+  root().querySelectorAll("[data-view]").forEach((chip) => chip.addEventListener("click", () => {
+    localStorage.setItem("fcs-blog-view", chip.dataset.view);
+    renderBlogPage(page);
+  }));
+  root().querySelector("[data-blog-results]").addEventListener("click", (event) => {
+    const opener = event.target.closest("[data-open], .post-card-link");
+    if (!opener) return;
+    event.preventDefault();
+    const key = opener.closest("[data-key]").dataset.key;
+    const row = all.find((p) => String(p.id) === key);
+    if (row) openEditor("blog", row);
   });
 }
 
@@ -1650,7 +1759,71 @@ function openEventEditor(id) {
 
 const ROLE_LABELS = { admin: "Admin", editor: "Editor", pending: "No access" };
 
+/** The signed-in person's core-member card: the one they chose, else a
+ * guess (same email, then the email's letters) for them to confirm. */
+function memberLink(team) {
+  const me = team.find((t) => t.id === state.user.id);
+  const cards = state.data.core_members.map(memberCard);
+  const taken = new Set(team.filter((t) => t.linked && t.id !== state.user.id).map((t) => t.member_id));
+  const current = me && me.linked ? me.member_id : null;
+  const suggested = current ? null
+    : cards.find((c) => me && c.id === me.member_id && !taken.has(c.id)) || guessMember(state.user.email, cards, taken);
+  return { cards, taken, current, suggested };
+}
+
+/** Opens "Which member card are you?"; `after(team)` gets the refreshed authors list. */
+function chooseMemberCard(anchor, team, after) {
+  const { cards, ...link } = memberLink(team);
+  openMemberPicker(anchor, {
+    members: cards,
+    ...link,
+    onConfirm: async (card) => {
+      try {
+        await linkMemberCard(state.user.id, card.id);
+      } catch (err) {
+        toast(/duplicate|unique/i.test(err.message || "") ? `${card.name} is already linked to another account.` : err.message || "Could not link the card.", "error");
+        throw err;
+      }
+      toast(`Linked your account to ${card.name}.`, "success");
+      after(await listBlogAuthors().catch(() => team));
+    },
+  });
+}
+
+/** "Your member card" on the Team page, for admins and editors alike. */
+async function paintWhoami(page) {
+  const panel = root().querySelector("[data-whoami-panel]");
+  if (!panel) return;
+  const team = await listBlogAuthors().catch(() => null);
+  if (!team || state.route !== "team") return;
+  const { cards, current, suggested } = memberLink(team);
+  const card = cards.find((c) => c.id === current);
+  const shown = card || suggested;
+  panel.innerHTML = `
+    <span class="whoami-card">${shown ? avatarHTML(shown) : `<span class="list-thumb">${icon("user")}</span>`}
+      <span><strong>${card ? escapeHTML(card.name) : "Which member card are you?"}</strong>
+      <span class="sub">${card ? "Your member card. Posts you write show this name and picture." : shown ? `Probably ${escapeHTML(shown.name)}. Confirm it so posts show your name and picture.` : "Choose your card so posts show your name and picture."}</span></span></span>
+    <button type="button" class="btn ${card ? "btn-quiet" : "btn-primary"}" data-whoami>${icon(card ? "pencil" : "check")}<span>${card ? "Change" : shown ? "Confirm" : "Choose"}</span></button>`;
+  panel.querySelector("[data-whoami]").addEventListener("click", (e) =>
+    chooseMemberCard(e.currentTarget, team, () => paintWhoami(page)));
+  // Admins: show each account's card in the list (read-only; only its owner can change it).
+  team.forEach((t) => {
+    const slot = root().querySelector(`[data-card-for="${CSS.escape(t.id)}"]`);
+    if (slot) slot.textContent = t.linked ? `Card: ${t.name}` : "No member card chosen yet";
+  });
+}
+
 function renderTeamPage(page) {
+  const whoami = `<section class="whoami-panel" data-whoami-panel><span class="sub">Loading your member card…</span></section>`;
+  if (!isAdmin()) {
+    root().innerHTML = `
+      ${pageHead(page, { search: false })}
+      <p class="page-intro">Link your login to your core-member card, so the blog shows your name and picture as an author.
+        Only you can change your own link.</p>
+      ${whoami}`;
+    paintWhoami(page);
+    return;
+  }
   const people = [...state.profiles].sort(
     (a, b) => (a.role === "pending" ? -1 : 0) - (b.role === "pending" ? -1 : 0)
   );
@@ -1665,6 +1838,7 @@ function renderTeamPage(page) {
       <strong>No access</strong> keeps the account but blocks it; <strong>Remove</strong>
       deletes their login entirely.
     </p>
+    ${whoami}
     <form class="invite-form" id="invite-form" novalidate>
       <div class="field">
         <label for="invite-email">Invite by email</label>
@@ -1688,6 +1862,7 @@ function renderTeamPage(page) {
             <span class="list-open">
               <strong>${escapeHTML(p.display_name || p.email || "Unknown")}${you ? " (you)" : ""}</strong>
               <span class="sub">${escapeHTML(p.email || "")}</span>
+              ${p.role === "pending" ? "" : `<span class="sub" data-card-for="${escapeAttr(p.id)}"></span>`}
             </span>
             <span class="list-badges"><span class="badge">${ROLE_LABELS[p.role] || p.role}</span></span>
             <span class="team-actions">
@@ -1776,6 +1951,7 @@ function renderTeamPage(page) {
       }
     });
   });
+  paintWhoami(page);
 }
 
 /* ==================================================================

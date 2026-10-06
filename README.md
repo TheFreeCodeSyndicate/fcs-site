@@ -94,34 +94,72 @@ hidden until someone chooses otherwise.
 
 Admin > **Blog** opens each post as a full, Notion-style page
 (`js/blog-editor.js`): a cover you can upload and drag to reposition, an
-icon (emoji, one of the site's icons, or an uploaded image), the title,
-properties (address, author, summary), then blocks. Type `/` for the block
-menu: text, headings, bulleted, numbered and to-do lists, toggles, quotes,
-callouts, dividers, images, YouTube videos, web bookmarks, code (with
-syntax highlighting), LaTeX equations (block and inline, via KaTeX),
-tables and a table of contents. Markdown shortcuts work as you type
-(`# `, `- `, `1. `, `[] `, `> ` toggle, `" ` quote, ```` ``` ````, `---`,
-`$$ `, and inline `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`,
-`==highlight==`, `$math$`). Selecting text shows a formatting bar; blocks
-drag by their handle; Tab nests list items; Ctrl+Z undoes; pasting or
-dropping images uploads them. Drafts save as you type; a published post
-changes only when you press **Update**.
+icon (emoji, a pixel icon in one of ten colours, or an uploaded image),
+the title, properties (address, author, summary), then blocks.
+
+- **`/`** opens the block menu: text, headings 1-4, bulleted, numbered
+  and to-do lists, toggles and toggle headings, quote, callout, divider,
+  table, table of contents, 2-4 columns, image, YouTube video, web
+  bookmark, code, block and inline equations (KaTeX), mentions, dates and
+  emoji. **`:`** suggests emoji (`:rocket`), **`@`** mentions a core
+  member or a date. While a menu is open the page does not scroll.
+- **Markdown shortcuts** as you type: `# `..`#### `, `- `, `1. `, `a. `,
+  `[] `, `> ` toggle, `" ` quote, ```` ``` ````, `---`, `$$ `, and inline
+  `**bold**`, `*italic*`, `++underline++`, `` `code` ``, `~~strike~~`,
+  `==highlight==`, `$math$`.
+- **Selecting text** shows a bar: turn into, bold, italic, underline,
+  strike, code, equation, link, text and background colour, and more
+  (highlight, superscript, subscript, clear formatting).
+- **Each block** has a `+` (Alt-click adds above) and a grip: drag to move,
+  click (or Ctrl+/) for a searchable menu: turn into, colour, alignment,
+  list format, insert above/below, duplicate, move, copy link (headings),
+  delete. **Tables** have row and column handles (insert, move, duplicate,
+  clear, delete, column alignment). **Images** align and resize by their
+  edges.
+- **Authors**: a post starts with whoever created it; the Authors row adds or
+  removes club members (every admin and editor, with the photo from their
+  core-member card, else their GitHub avatar, else initials) and guest
+  authors by name. They show as an avatar group under the published title.
+  `@` mentions the same people.
+- **Ctrl+F** finds and replaces. Ctrl+Z / Ctrl+Shift+Z undo and redo.
+- The **⋯ menu**: the post's font (Default, Mono = Archivo Mono, Technical
+  = Latin Modern Mono, Garet, all from the brand guide), small text, full width,
+  lock page, zoom, copy link, copy as Markdown, duplicate as a new draft,
+  import Markdown, export as Markdown, HTML or PDF, version history,
+  unpublish, delete.
+
+Drafts save as you type; a published post changes only when you press
+**Update**.
 
 Posts are stored as Markdown (the syntax is listed at the top of
 `js/lib/markdown.js`). The deploy turns each published post into a static
 page, `blog/<slug>/`, with its own title and link preview, and writes
 `sitemap.xml` (`tools/blog-build.mjs`; neither is committed). Publishing
 or updating a live post starts a deploy through `refresh-site`, so it
-shows in about a minute. `node tools/blog-build.mjs` previews locally.
-KaTeX and highlight.js are vendored under `js/vendor/`, so there is still
-no build step or npm dependency.
+shows in about a minute. `npm ci` once, then `node tools/blog-build.mjs`,
+previews locally. KaTeX and highlight.js are vendored under `js/vendor/`;
+the site itself has no build step.
+
+**Link previews.** The same build draws a 1200x630 card for every post
+(`blog/<slug>/og.jpg`: title, summary, authors, date, cover and icon), for
+the blog (`blog/og/blog.jpg`) and for the home page (`blog/og/home.jpg`,
+also used by `privacy.html`), with `tools/og.mjs` (satori and sharp, the
+only npm dev dependencies). Cards are redrawn every deploy, so they follow
+edits and the newest post; a post's card URL carries `?v=<last edit>` so
+WhatsApp, Discord and X fetch the new one. To refresh a preview that was
+already shared: Facebook's Sharing Debugger ("Scrape again"), LinkedIn's
+Post Inspector, or Telegram's @WebpageBot.
 
 Page and callout icons: emoji are drawn with [Twemoji](https://github.com/jdecked/twemoji)
 (CC-BY 4.0, credited in the blog footer) from jsDelivr, so they look the same on
 every system; the picker's list is `js/vendor/emoji/emoji-groups.json` (from
 `unicode-emoji-json`, MIT). The Icons tab is every pixelarticons icon
 (`assets/pixel-icons.svg`, rebuilt by `tools/build-pixel-icons.mjs`), in
-Notion's ten colours (`icon:<name>:<colour>`, migration `024`).
+Notion's ten colours (`icon:<name>:<colour>`, migration `024`). Latin Modern
+Mono is vendored in `assets/fonts` (GUST Font License). Garet (Book and Heavy, by Spacetype)
+is there too under Spacetype's free-font EULA, which allows embedding in web
+pages but not redistributing or modifying the files; see
+`assets/fonts/GARET-LICENSE.txt`.
 
 Post text lives in Supabase (`blog_posts`, migration `022`). **Images**
 are committed to the public `TheFreeCodeSyndicate/fcs-assets` repository
@@ -131,12 +169,16 @@ Only editors and admins can upload; JPG, PNG or WebP up to 2 MB (the
 panel shrinks pictures to WebP first). Everything in that repository is
 public and permanent, so never upload anything private. Set once:
 
-1. Run `supabase/migrations/022_blog_posts.sql`, `023_blog_page_look.sql` and
-   `024_blog_icon_colors.sql` in the SQL editor.
+1. Run `supabase/migrations/022_blog_posts.sql` to `028_profile_member_link.sql`
+   in the SQL editor.
 2. GitHub > Fine-grained tokens > Generate: resource owner
    **TheFreeCodeSyndicate**, only the **fcs-assets** repository,
    permission **Contents: Read and write**, nothing else.
 3. Supabase > Edge Functions > Secrets: `GITHUB_ASSETS_TOKEN` = the token.
+
+Authors are named from core-member cards. Each admin and editor links their
+own login to their card once (Team page, or the prompt in a post's Authors
+row; the card is guessed from their email). Only they can change it.
 
 ## Analytics
 

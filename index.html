@@ -10,6 +10,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Free Code Syndicate | RFC 0001</title>
   <meta name="description" content="The Free Code Syndicate is a public group for free code, study, and careful work." />
+  <!-- Link previews. The card is drawn at deploy time (tools/blog-build.mjs, tools/og.mjs). -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="The Free Code Syndicate" />
+  <meta property="og:title" content="The Free Code Syndicate" />
+  <meta property="og:description" content="The Free Code Syndicate is a public group for free code, study, and careful work." />
+  <meta property="og:url" content="https://thefreecodesyndicate.github.io/fcs-site/" />
+  <meta property="og:image" content="https://thefreecodesyndicate.github.io/fcs-site/blog/og/home.jpg" />
+  <meta property="og:image:secure_url" content="https://thefreecodesyndicate.github.io/fcs-site/blog/og/home.jpg" />
+  <meta property="og:image:type" content="image/jpeg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="The Free Code Syndicate: a public group for free code, study, and careful work" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://thefreecodesyndicate.github.io/fcs-site/blog/og/home.jpg" />
+  <meta name="twitter:image:alt" content="The Free Code Syndicate: a public group for free code, study, and careful work" />
 
   <link rel="icon" type="image/svg+xml" href="assets/logoicon.svg" />
   <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png" />
@@ -78,6 +93,7 @@
       <li><a href="#resources" data-section="resources">Resources</a></li>
       <li><a href="#study-groups" data-section="study-groups">Groups</a></li>
       <li><a href="#events" data-section="events">Events</a></li>
+      <li><a href="blog/">Blog</a></li>
       <li><a href="#join" data-section="join">Join</a></li>
     </ul>
 
@@ -355,13 +371,32 @@
       <div id="event-list" class="event-list"></div>
     </section>
 
+    <div class="rule" data-blog-rule hidden></div>
+
+    <!-- ========================================================
+         SECTION 8 — FROM THE BLOG. The three newest posts, as cards
+         the deploy writes to blog/latest.html (tools/blog-build.mjs).
+         Hidden until there is one.
+         ======================================================== -->
+    <section class="doc-section" id="blog" hidden>
+      <div class="sec-head-row">
+        <h2><span class="sec-num">08</span> From the Blog</h2>
+        <a class="sec-more" href="blog/">All posts &rarr;</a>
+      </div>
+      <p class="sec-intro">
+        Notes, write-ups and updates from the group: what we built, what we
+        read, and what broke along the way.
+      </p>
+      <ul id="blog-grid" class="post-grid"></ul>
+    </section>
+
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 8 — CONTRIBUTION LANES
+         SECTION 9 — CONTRIBUTION LANES
          ======================================================== -->
     <section class="doc-section" id="contribute">
-      <h2><span class="sec-num">08</span> Contribution Lanes</h2>
+      <h2><span class="sec-num">09</span> Contribution Lanes</h2>
       <p class="sec-intro">
         Permission is not the first step. Useful work is the first step. Pick
         a small task, finish it, and leave a clear path for the next person.
@@ -386,10 +421,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 9 — MAINTAINERS
+         SECTION 10 — MAINTAINERS
          ======================================================== -->
     <section class="doc-section" id="core">
-      <h2><span class="sec-num">09</span> Core Members <span class="core-count" id="core-count"></span></h2>
+      <h2><span class="sec-num">10</span> Core Members <span class="core-count" id="core-count"></span></h2>
       <p class="sec-intro">
         Core members keep the public record usable. They run the rooms,
         mentor newcomers, and decide when silence would harm the work.
@@ -412,10 +447,10 @@
     <div class="rule"></div>
 
     <!-- ========================================================
-         SECTION 10 — HOW TO JOIN
+         SECTION 11 — HOW TO JOIN
          ======================================================== -->
     <section class="doc-section" id="join">
-      <h2><span class="sec-num">10</span> Entry</h2>
+      <h2><span class="sec-num">11</span> Entry</h2>
       <p class="sec-intro">
         There is no form and no gate. Choose a room. State your purpose.
       </p>
