@@ -10,3 +10,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 .shots/
+
+# Built by tools/blog-build.mjs on every deploy
+blog/
+sitemap.xml

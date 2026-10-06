@@ -1215,3 +1215,7 @@ body:has(.drawer.is-open) .toasts {
 .link-maker .optional { font-weight: 400; color: var(--ink-muted); }
 .lm-result { display: flex; flex-wrap: wrap; gap: 10px; }
 .lm-result input { flex: 1 1 260px; min-width: 0; font-size: 0.8rem; }
+
+/* Blog list: a post's icon as its thumbnail. */
+.post-thumb { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; font-size: 1.3rem; }
+.post-thumb .page-icon-svg, .post-thumb .page-icon-img { width: 22px; height: 22px; }

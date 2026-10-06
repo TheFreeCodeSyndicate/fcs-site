@@ -51,6 +51,9 @@ jobs:
       - name: Calendar feed
         run: node tools/events-feed.mjs
 
+      - name: Blog pages
+        run: node tools/blog-build.mjs
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
