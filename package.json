@@ -7,5 +7,11 @@
   "scripts": {
     "test": "node --test js/lib/*.test.js",
     "serve": "python -m http.server 8000"
+  },
+  "devDependencies": {
+    "@fontsource/archivo": "^5.3.0",
+    "@fontsource/fira-code": "^5.3.0",
+    "satori": "^0.35.1",
+    "sharp": "^0.35.5"
   }
 }

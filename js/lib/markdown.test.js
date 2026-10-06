@@ -9,7 +9,9 @@ test("raw HTML is escaped, never passed through", () => {
 });
 
 test("only https links and images become elements", () => {
-  assert.match(renderMarkdown("[ok](https://a.example/x)"), /<a href="https:\/\/a\.example\/x" rel="noopener">ok<\/a>/);
+  assert.match(renderMarkdown("[ok](https://a.example/x)"), /<a class="link" href="https:\/\/a\.example\/x" target="_blank" rel="noopener"><span class="link-lead"><span class="link-icon" aria-hidden="true"><img src="https:\/\/www\.google\.com\/s2\/favicons\?domain=a\.example&amp;sz=32"[^>]*><\/span>o<\/span>k<\/a>/);
+  assert.match(renderMarkdown("[repo](https://github.com/x/y?a=1&b=2)"), /<span class="link-lead"><span class="link-icon" aria-hidden="true"><svg [^>]*>.*<\/svg><\/span>r<\/span>epo<\/a>/);
+  assert.match(renderMarkdown("[`code` link](https://a.example)"), /<span class="link-icon" aria-hidden="true"><img [^>]*><\/span><code>code<\/code> link<\/a>/);
   assert.ok(!renderMarkdown("[bad](javascript:alert(1))").includes("<a "));
   assert.ok(!renderMarkdown("[http](http://a.example)").includes("<a "));
   assert.match(renderMarkdown("![alt](https://cdn.example/a.webp)"), /<img src="https:\/\/cdn\.example\/a\.webp" alt="alt"/);
@@ -107,4 +109,52 @@ test("twemoji file names follow Twemoji's rules", () => {
   assert.equal(name("❤️"), "2764.svg");
   assert.equal(name("👩‍💻"), "1f469-200d-1f4bb.svg");
   assert.equal(name("🇮🇳"), "1f1ee-1f1f3.svg");
+});
+
+test("new inline marks: underline, sup, sub, colours, mentions and dates", () => {
+  assert.equal(inline("++u++ x^2^ H~2~O"), "<u>u</u> x<sup>2</sup> H<sub>2</sub>O");
+  assert.equal(inline("{color=red}hot{/} and {bg=yellow color=blue}both{/}"), '<span class="c-red">hot</span> and <span class="bg-yellow c-blue">both</span>');
+  assert.equal(inline("{color=evil}x{/}"), "x");
+  assert.match(inline("@[Ada](https://github.com/ada)"), /<a class="mention" href="https:\/\/github\.com\/ada" target="_blank" rel="noopener">@Ada<\/a>/);
+  assert.equal(inline("@[Grace]"), '<span class="mention">@Grace</span>');
+  assert.match(inline("@{2026-10-06}"), /<time class="mention-date" datetime="2026-10-06">@6 October 2026<\/time>/);
+  assert.equal(inline("H\\~2\\~O and \\{color=red}x{/}"), "H~2~O and {color=red}x{/}");
+});
+
+test("block attributes survive a round trip and reach the HTML", () => {
+  const md = [
+    "Centred {: align=center color=red}",
+    "#### Small heading {: bg=blue}",
+    "1. one {: list=a}",
+    "2. two",
+    "![cap](https://cdn.example/a.webp) {: width=50 align=left}",
+    "+++ Big toggle {: h=2}\ninside\n+++",
+    "::: columns\nleft\n::: column\nright\n:::",
+    "| a | b |\n| :---: | ---: |\n| 1 | 2 |",
+  ].join("\n\n");
+  const blocks = parseBlocks(md);
+  assert.deepEqual(blocks.map((b) => b.type), ["p", "h4", "number", "number", "image", "toggle", "columns", "table"]);
+  assert.deepEqual(blocks[0].attrs, { align: "center", color: "red" });
+  assert.equal(blocks[0].text, "Centred");
+  assert.deepEqual(blocks[6].cols.map((c) => c.map((b) => b.text)), [["left"], ["right"]]);
+  assert.deepEqual(blocks[7].align, ["center", "right"]);
+  assert.equal(serializeBlocks(parseBlocks(serializeBlocks(blocks))), serializeBlocks(blocks));
+  const html = renderMarkdown(md);
+  assert.match(html, /<p class="c-red align-center">Centred<\/p>/);
+  assert.match(html, /<h5 id="small-heading" class="bg-blue has-bg">/);
+  assert.match(html, /<ol type="a">/);
+  assert.match(html, /<figure class="image align-left" style="width: 50%">/);
+  assert.match(html, /<summary><h3 class="toggle-heading">Big toggle<\/h3><\/summary>/);
+  assert.match(html, /<div class="columns" style="--cols: 2"><div class="column"><p>left<\/p><\/div><div class="column"><p>right<\/p><\/div><\/div>/);
+  assert.match(html, /<th class="align-center">a<\/th><th class="align-right">b<\/th>/);
+  assert.ok(!renderMarkdown('x {: color="><script>}').includes("<script>"));
+});
+
+test("an image keeps left alignment; centre is its default", () => {
+  assert.equal(serializeBlocks([{ type: "image", url: "https://a.example/i.png", caption: "", attrs: { align: "left", width: "40" } }]), "![](https://a.example/i.png) {: align=left width=40}");
+  assert.equal(serializeBlocks([{ type: "image", url: "https://a.example/i.png", caption: "", attrs: { align: "center" } }]), "![](https://a.example/i.png)");
+});
+
+test("a paragraph that looks like attributes is escaped by the editor's rules", () => {
+  assert.deepEqual(parseBlocks("text \\{: align=center}")[0].attrs, undefined);
 });

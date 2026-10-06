@@ -1,0 +1,9 @@
+Garet (Book, Heavy) by Spacetype, https://spacetype.co
+Licensed under the Spacetype foundry EULA for Free Fonts (version 1.0, April 2020),
+which allows personal and commercial use, use on websites with unlimited pageviews (1.5),
+embedding in web pages (2.2) and generating web-font packages (2.4).
+It does NOT allow modifying the font software (4.1-4.3) or distributing, selling or
+giving away the fonts themselves (5.1). These .woff2 files are unmodified conversions
+of the original OTF files, served only so this site's pages can display them.
+Do not copy them for use elsewhere: download Garet from spacetype.co instead.
+Questions: contact@spacetype.co

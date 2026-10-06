@@ -65,11 +65,12 @@ document.addEventListener("DOMContentLoaded", () => {
   setupCopyButtons();
   setupGlassNav();
 
-  // The three fetches are deliberately independent: a Supabase outage
+  // The fetches are deliberately independent: a Supabase outage
   // or a GitHub rate limit degrades one section without touching the
   // others.
   loadContent();
   loadRepositories();
+  loadLatestPosts();
 });
 
 
@@ -152,6 +153,22 @@ async function loadContent() {
   renderCoreMembers(coreMembers);
   renderFooterSocials(socialLinks);
   bindIcs();
+}
+
+/* "From the blog": the deploy writes the three newest posts as cards to
+ * blog/latest.html (tools/blog-build.mjs). Our own build output, so it
+ * goes in as HTML. No file (a local preview) or no posts: the section stays hidden. */
+async function loadLatestPosts() {
+  try {
+    const res = await fetch("blog/latest.html", { cache: "no-cache" });
+    const html = res.ok ? (await res.text()).trim() : "";
+    if (!html.startsWith("<li>")) return;
+    document.getElementById("blog-grid").innerHTML = html;
+    document.getElementById("blog").hidden = false;
+    document.querySelector("[data-blog-rule]").hidden = false;
+  } catch {
+    /* offline: no section */
+  }
 }
 
 /* ------------------------------------------------------------------
