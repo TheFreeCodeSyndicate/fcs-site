@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { twemojiURL, renderMarkdown, plainSummary, parseBlocks, serializeBlocks, inline, youtubeId, readingTime } from "./markdown.js";
+import { twemojiURL, renderMarkdown, plainSummary, parseBlocks, serializeBlocks, inline, youtubeId, readingTime, bookmarkURLs } from "./markdown.js";
 
 test("raw HTML is escaped, never passed through", () => {
   const html = renderMarkdown('<script>alert(1)</script> and "quotes"');
@@ -115,9 +115,11 @@ test("new inline marks: underline, sup, sub, colours, mentions and dates", () =>
   assert.equal(inline("++u++ x^2^ H~2~O"), "<u>u</u> x<sup>2</sup> H<sub>2</sub>O");
   assert.equal(inline("{color=red}hot{/} and {bg=yellow color=blue}both{/}"), '<span class="c-red">hot</span> and <span class="bg-yellow c-blue">both</span>');
   assert.equal(inline("{color=evil}x{/}"), "x");
-  assert.match(inline("@[Ada](https://github.com/ada)"), /<a class="mention" href="https:\/\/github\.com\/ada" target="_blank" rel="noopener">@Ada<\/a>/);
-  assert.equal(inline("@[Grace]"), '<span class="mention">@Grace</span>');
-  assert.match(inline("@{2026-10-06}"), /<time class="mention-date" datetime="2026-10-06">@6 October 2026<\/time>/);
+  assert.match(inline("@[Ada](https://github.com/ada)"), /<a class="mention" href="https:\/\/github\.com\/ada" target="_blank" rel="noopener"><img class="mention-avatar" src="https:\/\/github\.com\/ada\.png\?size=40" alt="" loading="lazy" \/><span class="mention-name">Ada<\/span><\/a>/);
+  assert.match(inline("@[Grace]"), /^<span class="mention"><span class="mention-avatar mention-initials" style="background: #[0-9a-f]{6}" aria-hidden="true">G<\/span><span class="mention-name">Grace<\/span><\/span>$/);
+  assert.match(inline("@{2026-10-06}"), /<time class="mention-date" datetime="2026-10-06"><span class="mention-at" aria-hidden="true">@<\/span>6 October 2026<\/time>/);
+  assert.ok(!inline("@[x](https://github.com/a/b)").includes("<img"), "only a profile link gets a GitHub avatar");
+  assert.ok(!inline("@[*x*](https://a.example)").includes("<em>"), "a name is not reformatted");
   assert.equal(inline("H\\~2\\~O and \\{color=red}x{/}"), "H~2~O and {color=red}x{/}");
 });
 
@@ -157,4 +159,32 @@ test("an image keeps left alignment; centre is its default", () => {
 
 test("a paragraph that looks like attributes is escaped by the editor's rules", () => {
   assert.deepEqual(parseBlocks("text \\{: align=center}")[0].attrs, undefined);
+});
+
+test("a line break inside a list item survives (Shift+Enter)", () => {
+  const blocks = [
+    { type: "number", indent: 0, text: "first line\nsecond line" },
+    { type: "number", indent: 0, text: "next item" },
+    { type: "bullet", indent: 1, text: "nested\nand more" },
+    { type: "todo", indent: 0, checked: false, text: "task\ndetail" },
+  ];
+  const md = serializeBlocks(blocks);
+  assert.equal(md, "1. first line\n   second line\n2. next item\n  - nested\n    and more\n- [ ] task\n      detail");
+  const back = parseBlocks(md);
+  assert.deepEqual(back.map((b) => b.text), ["first line\nsecond line", "next item", "nested\nand more", "task\ndetail"]);
+  assert.equal(serializeBlocks(back), md);
+  assert.match(renderMarkdown(md), /<li>first line<br \/>second line<\/li><li>next item/);
+});
+
+test("bookmarks: a full card with details, the site's name without", () => {
+  const url = "https://github.com/TheFreeCodeSyndicate/fcs-site";
+  const bare = renderMarkdown(`@[bookmark](${url})`);
+  assert.match(bare, /<a class="bookmark" href="https:\/\/github\.com\/TheFreeCodeSyndicate\/fcs-site"/);
+  assert.match(bare, /<strong class="bookmark-title">github\.com<\/strong>/);
+  assert.ok(!bare.includes("bookmark-thumb"));
+  const full = renderMarkdown(`@[bookmark](${url})`, { links: { [url]: { title: "fcs-site <repo>", description: "The site", image: "https://opengraph.githubassets.com/x.png" } } });
+  assert.match(full, /class="bookmark has-image"/);
+  assert.match(full, /<strong class="bookmark-title">fcs-site &lt;repo&gt;<\/strong>/);
+  assert.match(full, /<span class="bookmark-thumb"><img src="https:\/\/opengraph\.githubassets\.com\/x\.png"/);
+  assert.ok(!renderMarkdown(`@[bookmark](${url})`, { links: { [url]: { image: "javascript:alert(1)" } } }).includes("javascript:"));
 });

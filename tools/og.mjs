@@ -19,6 +19,7 @@ import { createRequire } from "node:module";
 import satori from "satori";
 import sharp from "sharp";
 import { twemojiURL, isEmoji } from "../js/lib/markdown.js";
+import { SITE } from "../js/lib/blog-pages.js";
 
 const require = createRequire(import.meta.url);
 const font = (pkg, file) => readFileSync(require.resolve(`${pkg}/files/${file}`));
@@ -52,9 +53,11 @@ const SPRITE = readFileSync("assets/pixel-icons.svg", "utf8");
 /** A remote image as a JPEG/PNG data URI at the size it is drawn, or null. */
 async function fetchImage(url, width, height, { round = false } = {}) {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!res.ok) return null;
-    let pipe = sharp(Buffer.from(await res.arrayBuffer())).resize(width * 2, height * 2, { fit: "cover" });
+    // The site's own covers (assets/covers) are read from this checkout.
+    const own = url.startsWith(SITE) ? readFileSync(url.slice(SITE.length)) : null;
+    const res = own ? null : await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (res && !res.ok) return null;
+    let pipe = sharp(own || Buffer.from(await res.arrayBuffer())).resize(width * 2, height * 2, { fit: "cover" });
     return round ? dataURI(await pipe.png().toBuffer(), "image/png") : dataURI(await pipe.jpeg({ quality: 82 }).toBuffer(), "image/jpeg");
   } catch {
     return null;

@@ -65,6 +65,61 @@ export function renderMath(tex, displayMode = false) {
   return katex.renderToString(String(tex), { displayMode, throwOnError: false, output: "htmlAndMathml" });
 }
 
+/* ---- mentions and bookmarks, as in Notion -------------------------------------
+ * A person: a small avatar (their GitHub picture when the link is a GitHub
+ * profile, else initials) and their name. Shared by the renderer and the
+ * editor, so both draw the same pill. */
+const MENTION_TINTS = ["#c78b1d", "#d9730d", "#448361", "#337ea9", "#9065b0", "#c14c8a", "#d44c47", "#9f6b53"];
+const githubUser = (url) => (/^https:\/\/github\.com\/([A-Za-z0-9-]{1,39})\/?$/.exec(url || "") || [])[1];
+function mentionAvatar(name, url) {
+  const user = githubUser(url);
+  if (user) return `<img class="mention-avatar" src="https://github.com/${user}.png?size=40" alt="" loading="lazy" />`;
+  let hash = 0;
+  for (const c of name) hash = (hash * 31 + c.codePointAt(0)) >>> 0;
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => [...w][0]).join("").toUpperCase() || "?";
+  return `<span class="mention-avatar mention-initials" style="background: ${MENTION_TINTS[hash % MENTION_TINTS.length]}" aria-hidden="true">${escapeHTML(initials)}</span>`;
+}
+/** `name` arrives already HTML-escaped (it comes out of inline()). */
+export function mentionHTML(name, url = "") {
+  const inner = `${mentionAvatar(name, url)}<span class="mention-name">${name}</span>`;
+  return /^https:\/\/\S+$/.test(url)
+    ? `<a class="mention" href="${url}" target="_blank" rel="noopener">${inner}</a>`
+    : `<span class="mention">${inner}</span>`;
+}
+export const dateMentionHTML = (iso) => `<time class="mention-date" datetime="${iso}"><span class="mention-at" aria-hidden="true">@</span>${dateText(iso)}</time>`;
+
+/** A web bookmark card: title, description, favicon and address, and the
+ * page's image on the right. `meta` ({ title, description, image }) comes
+ * from the deploy (tools/link-meta.mjs) or, in the editor, from microlink;
+ * without it the card shows the site's name. */
+export function bookmarkHTML(url, meta = null) {
+  let host = url;
+  try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep the address */ }
+  const m = meta || {};
+  const safeImg = (u) => (/^https:\/\/\S+$/i.test(u || "") ? escapeHTML(u) : "");
+  const image = safeImg(m.image);
+  return `<a class="bookmark${image ? " has-image" : ""}" href="${escapeHTML(url)}" target="_blank" rel="noopener">
+      <span class="bookmark-body">
+        <strong class="bookmark-title">${escapeHTML(m.title || host)}</strong>
+        ${m.description ? `<span class="bookmark-desc">${escapeHTML(m.description)}</span>` : ""}
+        <span class="bookmark-url"><img class="bookmark-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&amp;sz=32" alt="" width="16" height="16" loading="lazy" referrerpolicy="no-referrer" /><span>${escapeHTML(url)}</span></span>
+      </span>
+      ${image ? `<span class="bookmark-thumb"><img src="${image}" alt="" loading="lazy" referrerpolicy="no-referrer" /></span>` : ""}
+    </a>`;
+}
+
+/** Every bookmark address in a post (inside toggles and columns too). */
+export function bookmarkURLs(source) {
+  const out = new Set();
+  const walk = (blocks) => blocks.forEach((b) => {
+    if (b.type === "bookmark" && b.url) out.add(b.url);
+    if (b.children) walk(b.children);
+    if (b.cols) b.cols.forEach(walk);
+  });
+  walk(parseBlocks(source || ""));
+  return [...out];
+}
+
 export const dateText = (iso) => {
   const d = new Date(`${iso}T00:00:00Z`);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
@@ -96,9 +151,9 @@ export function inline(text) {
   }
   s += escapeHTML(raw.slice(last));
   s = s
-    .replace(/@\{(\d{4}-\d{2}-\d{2})\}/g, (_, d) => `<time class="mention-date" datetime="${d}">@${dateText(d)}</time>`)
-    .replace(/@\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a class="mention" href="$2" target="_blank" rel="noopener">@$1</a>')
-    .replace(/@\[([^\]]+)\](?!\()/g, '<span class="mention">@$1</span>')
+    .replace(/@\{(\d{4}-\d{2}-\d{2})\}/g, (_, d) => hold(dateMentionHTML(d)))
+    .replace(/@\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, (_, name, url) => hold(mentionHTML(name, url)))
+    .replace(/@\[([^\]]+)\](?!\()/g, (_, name) => hold(mentionHTML(name)))
     .replace(/!\[([^\]]*)\]\((https:\/\/[^\s)]+)\)/g, '<img src="$2" alt="$1" loading="lazy" />')
     .replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, (_, text, url) => `<a class="link" href="${url}" target="_blank" rel="noopener">${linkIconHTML(url)}${text}</a>`)
     .replace(SPAN_ATTRS, (_, attrs, inner) => {
@@ -298,7 +353,12 @@ export function parseBlocks(source) {
       out().push(block);
     } else if ((m = LIST.exec(line))) {
       const indent = Math.min(Math.floor(m[1].length / 2), 6);
-      const [text, attrs] = takeAttrs(m[6]);
+      // Lines indented under an item, not items themselves, continue it (Shift+Enter).
+      const lines2 = [m[6]];
+      const deeper = m[1].length + 2;
+      while (i + 1 < lines.length && lines[i + 1].trim() && /^ +/.test(lines[i + 1])
+        && lines[i + 1].match(/^ */)[0].length >= deeper && !LIST.test(lines[i + 1])) lines2.push(lines[++i].trim());
+      const [text, attrs] = takeAttrs(lines2.join("\n"));
       if (m[3] != null) out().push(withAttrs({ type: "todo", indent, checked: m[3] !== " ", text }, attrs));
       else if (m[4]) out().push(withAttrs({ type: "bullet", indent, text }, attrs));
       else out().push(withAttrs({ type: "number", indent, text }, attrs));
@@ -331,7 +391,9 @@ export function serializeBlocks(blocks) {
       counters[indent] = b.type === "number" && prev && prev.type === "number" && (prev.indent || 0) >= indent ? (counters[indent] || 0) + 1 : b.type === "number" ? 1 : 0;
       const pad = "  ".repeat(indent);
       const marker = b.type === "todo" ? `- [${b.checked ? "x" : " "}]` : b.type === "number" ? `${counters[indent]}.` : "-";
-      text = `${pad}${marker} ${oneLine(b.text)}${tail}`;
+      // A line break inside an item continues under its text, indented past the marker.
+      const lines = String(b.text || "").split(/\n+/).map((l) => l.trim()).filter((l, n) => l || n === 0);
+      text = `${pad}${marker} ${lines.join(`\n${pad}${" ".repeat(marker.length + 1)}`)}${tail}`;
     } else {
       counters.length = 0;
       switch (b.type) {
@@ -499,8 +561,7 @@ function renderBlocks(blocks, ctx) {
         break;
       }
       case "bookmark": {
-        const host = (() => { try { return new URL(b.url).hostname.replace(/^www\./, ""); } catch { return b.url; } })();
-        out.push(`<a class="bookmark" href="${escapeHTML(b.url)}" target="_blank" rel="noopener"><strong>${escapeHTML(host)}</strong><span>${escapeHTML(b.url)}</span></a>`);
+        out.push(bookmarkHTML(b.url, ctx.links && ctx.links[b.url]));
         break;
       }
       case "table": {
@@ -522,8 +583,9 @@ export function tocHTML(headings) {
     .map((h) => `<a class="toc-${h.level}" href="#${h.id}">${escapeHTML(inlineText(h.text))}</a>`).join("")}</nav>`;
 }
 
-export function renderMarkdown(source) {
-  const ctx = { ids: new Set(), headings: [] };
+/** `links`: bookmark details by address ({ title, description, image }). */
+export function renderMarkdown(source, { links = null } = {}) {
+  const ctx = { ids: new Set(), headings: [], links };
   const html = renderBlocks(parseBlocks(source), ctx);
   return html.replace(/\u0000toc\u0000/g, () => tocHTML(ctx.headings));
 }

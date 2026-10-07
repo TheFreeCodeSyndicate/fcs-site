@@ -31,6 +31,7 @@ import {
   eventMail, listSubscriptions, addSubscribers, removeSubscription, listEmailSends,
   requestPasswordReset, updatePassword,
   listActivity, lastChange, listRowHistory, listBlogAuthors, linkMemberCard, restoreDeleted, inviteMember,
+  getBlogDraft, saveBlogDraft, clearBlogDraft, addBlogVersion, listBlogVersions, postAnalytics, searchUnsplash, trackUnsplash,
   uploadMemberPhoto, removeMemberPhotos,
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
@@ -577,7 +578,9 @@ async function onSignedIn(user) {
   bindShortcuts();
   startIdleWatch();
   startAccessWatch(user.id);
+  const startPost = postFromHash();
   go(routeFromHash());
+  if (startPost) openPostById(startPost);
   toast(`Signed in as ${user.email}.`, "info");
 }
 
@@ -627,11 +630,39 @@ const PAGES = [
 const visiblePages = () => PAGES.filter((p) => (!p.adminOnly || isAdmin()) && (!p.gate || p.gate()));
 
 function routeFromHash() {
-  const id = location.hash.replace(/^#\/?/, "");
+  const id = location.hash.replace(/^#\/?/, "").split("/")[0];
   return visiblePages().some((p) => p.id === id) ? id : "events";
 }
 
-function onHashChange() {
+/* An open post lives in the address, "#/blog/<id>": a reload reopens it,
+ * and Back (or the touchpad swipe) closes it, saving first. */
+const postFromHash = () => (/^#\/blog\/([0-9a-f-]{36})$/i.exec(location.hash) || [])[1] || null;
+let postEditor = null; // { id, handle, pushed }
+
+function openPostById(id) {
+  const row = state.data.blog_posts.find((p) => p.id === id);
+  if (!row) {
+    history.replaceState(null, "", "#/blog");
+    toast("That post no longer exists.", "error");
+    return;
+  }
+  if (state.route !== "blog") go("blog");
+  openPostEditor(row, { replace: true });
+}
+
+async function onHashChange() {
+  const postId = postFromHash();
+  // Back left the open post (or, for a new post not saved yet, left the Blog page).
+  if (postEditor && postEditor.handle && (postEditor.id ? postEditor.id !== postId : routeFromHash() !== "blog")) {
+    if ((await postEditor.handle.close()) === false && postEditor) {
+      history.pushState(null, "", postEditor.id ? `#/blog/${postEditor.id}` : "#/blog"); // stayed: unsaved and could not save
+      return;
+    }
+  }
+  if (postId) {
+    if (!postEditor) openPostById(postId);
+    return;
+  }
   const next = routeFromHash();
   if (next === state.route) return;
   // Leaving a page with unsaved edits: stay, and ask in the drawer.
@@ -718,8 +749,11 @@ function pageHead(page, { count, newLabel, search = true } = {}) {
 
 function bindShortcuts() {
   document.addEventListener("keydown", (event) => {
-    if (drawer.open || event.ctrlKey || event.metaKey || event.altKey) return;
-    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if (drawer.open || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+    // The post editor owns the keyboard ("/" opens its block menu there).
+    if (document.body.classList.contains("nb-open")) return;
+    const active = document.activeElement;
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable;
     if (typing) return;
     if (event.key === "/") {
       const search = document.getElementById("page-search");
@@ -854,7 +888,7 @@ const EDITORS = {
   blog: {
     table: "blog_posts",
     noun: "post",
-    intro: "Posts open as full pages, like Notion: add a cover and an icon, type / for blocks (headings, lists, to-dos, callouts, toggles, code, equations, tables, images, video). Drafts save as you type; publishing rebuilds the site, so a post is live about a minute later. Images go to the club's public image repository: only upload pictures you are happy to have public for good.",
+    intro: "Posts open as full pages, like Notion: add a cover and an icon, type / for blocks (headings, lists, to-dos, callouts, toggles, code, equations, tables, images, video). Everything saves as you type; a live post changes on the site only when you press Update. Past versions are in the ••• menu. Publishing rebuilds the site, so a post is live about a minute later. Images go to the club's public image repository: only upload pictures you are happy to have public for good.",
     title: (r) => r.title,
     subtitle: (r) => [r.status === "published" && r.published_at ? `Published ${formatDateTimeLocal(r.published_at)}` : `Edited ${formatDateTimeLocal(r.updated_at)}`, r.author_name].filter(Boolean).join(", "),
     thumb: (r) => (r.icon ? `<span class="post-thumb">${iconHTML(r.icon)}</span>` : icon("pencil")),
@@ -969,14 +1003,38 @@ async function rebuildSite() {
   }
 }
 
-async function openPostEditor(row) {
+async function openPostEditor(row, { replace = false } = {}) {
   // The people who can be authors; the editor works without them (guests only).
-  const team = await listBlogAuthors().catch(() => []);
+  const [team, draft] = await Promise.all([
+    listBlogAuthors().catch(() => []),
+    row && row.status === "published" ? getBlogDraft(row.id).catch(() => null) : null,
+  ]);
+  const entry = { id: row ? row.id : null, handle: null, pushed: false };
+  postEditor = entry;
+  const showInAddress = (id) => {
+    const hash = `#/blog/${id}`;
+    if (location.hash === hash) return;
+    if (replace) history.replaceState(null, "", hash);
+    else { history.pushState(null, "", hash); entry.pushed = true; }
+  };
+  if (entry.id) showInAddress(entry.id);
   const me = team.find((t) => t.id === state.user.id) || { id: state.user.id, name: state.user.email.split("@")[0] };
-  openBlogEditor({
+  entry.handle = openBlogEditor({
     row,
     team,
     me,
+    draft,
+    // Autosave and versions (migration 029).
+    saveDraft: (id, values) => saveBlogDraft(id, values),
+    clearDraft: (id) => clearBlogDraft(id),
+    snapshot: (id, values, kind) => addBlogVersion(id, values, kind),
+    versions: (id) => listBlogVersions(id),
+    onSaved: (saved) => {
+      if (!entry.id && saved.id) {
+        entry.id = saved.id;
+        showInAddress(saved.id);
+      }
+    },
     // Until linked, the Authors row asks "Which member card are you?".
     meGuess: memberLink(team).suggested,
     whoami: (anchor, after) => chooseMemberCard(anchor, team, after),
@@ -1001,13 +1059,22 @@ async function openPostEditor(row) {
       await reload("blog_posts");
       toast(`Saved a copy as a draft: “Copy of ${values.title}”.`, "info");
     },
-    history: (id) => listRowHistory("blog_posts", id),
+    history: (id) => listRowHistory("blog_posts", id, 100),
+    analytics: (slug, days) => postAnalytics(slug, days),
+    // The cover picker's Unsplash tab (supabase/functions/unsplash).
+    unsplash: { search: searchUnsplash, track: trackUnsplash },
     // "@" mentions: core members, linked to GitHub or their site.
     people: state.data.core_members
       .filter((m) => m.is_published !== false)
       .map((m) => ({ name: m.name, url: m.github_username ? `https://github.com/${m.github_username}` : m.website_url || m.linkedin_url || "" }))
       .filter((p) => /^https:\/\//.test(p.url)),
     onClose: async () => {
+      if (postEditor === entry) postEditor = null;
+      // Closed with "Posts": take the post out of the address too.
+      if (entry.id && postFromHash() === entry.id) {
+        if (entry.pushed) history.back();
+        else history.replaceState(null, "", "#/blog");
+      }
       await reload("blog_posts");
       renderSidebar();
       renderPage();
