@@ -1043,7 +1043,8 @@ async function openPostEditor(row, { replace = false } = {}) {
     uploadImage: async (file) => uploadBlogImage(await shrinkForBlog(file)),
     save: async (values, { id, wasLive }) => {
       const saved = id ? await updateBlogPost(id, values) : await createBlogPost(values);
-      if (values.status === "published" || wasLive) await rebuildSite();
+      // The rebuild runs on its own: the save (and clearing the draft) need not wait for it.
+      if (values.status === "published" || wasLive) rebuildSite();
       return saved;
     },
     remove: async (id, wasLive) => {
