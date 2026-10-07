@@ -242,6 +242,15 @@ function fillInline(el, md) {
 /** The parts of a post a draft or a version holds (not its address, status or dates). */
 const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "authors", "author_name", "body"];
 const contentOf = (c) => Object.fromEntries(CONTENT_KEYS.filter((k) => c && k in c).map((k) => [k, c[k]]));
+/** Content as a comparable string: "", [] and missing all read as nothing,
+ * and object keys in any order (the database's jsonb reorders them). */
+const sortKeys = (v) => Array.isArray(v) ? v.map(sortKeys)
+  : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v;
+const contentKey = (c) => JSON.stringify(CONTENT_KEYS.map((k) => {
+  const v = c ? c[k] : null;
+  if (v == null || v === "" || (Array.isArray(v) && !v.length)) return null;
+  return typeof v === "string" ? v.trim() : sortKeys(v);
+}));
 
 /* A bookmark's title, description and image, for the editor's card. The
  * published page gets the same from the deploy (tools/link-meta.mjs); here
@@ -887,6 +896,17 @@ export function openBlogEditor(opts) {
     if (!dirty || !canDraft) return true;
     const v = values();
     dirty = false;
+    // Edits undone back to what's live: no draft at all, nothing to Update.
+    if (contentKey(v) === liveKey) {
+      if (hasDraft && opts.clearDraft) {
+        saving = opts.clearDraft(post.id).catch(() => {});
+        await saving;
+        saving = null;
+      }
+      hasDraft = false;
+      paintState();
+      return true;
+    }
     saving = opts.saveDraft(post.id, v);
     paintState();
     try {
@@ -911,6 +931,7 @@ export function openBlogEditor(opts) {
   const SNAPSHOT_EVERY = 10 * 60 * 1000;
   let lastSnapshot = 0;
   let openedContent = null; // set once the page is built
+  let liveKey = null; // contentKey of the live post; null while it's a draft
   function snapshotSoon(v, kind = "edit") {
     if (!opts.snapshot || !post.id) return;
     const now = Date.now();
@@ -1038,6 +1059,7 @@ export function openBlogEditor(opts) {
       Object.assign(post, row || {}, { status: v.status });
       if (opts.onSaved) opts.onSaved(post);
       if (v.status === "published") {
+        liveKey = contentKey(v);
         if (hasDraft && opts.clearDraft) await opts.clearDraft(post.id).catch(() => {});
         hasDraft = false;
         snapshotSoon(v, "publish");
@@ -3967,6 +3989,15 @@ export function openBlogEditor(opts) {
   paintState();
   commitHistory();
   openedContent = values();
+  // What's on the site, to tell real edits from ones that add up to nothing.
+  // The draft's page can't show it, so it comes from the row; else from the page.
+  liveKey = post.status !== "published" ? null : contentKey(hasDraft ? opts.row : openedContent);
+  if (hasDraft && contentKey(openedContent) === liveKey) {
+    // A draft identical to the live post (edits made and undone): drop it.
+    hasDraft = false;
+    if (opts.clearDraft) opts.clearDraft(post.id).catch(() => {});
+    paintState();
+  }
   if (hasDraft) opts.toast(`Picked up your unpublished changes from ${new Date(opts.draft.updated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Update puts them on the site.`, "info");
 
   document.body.append(ed);
