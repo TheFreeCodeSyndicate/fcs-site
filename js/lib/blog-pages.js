@@ -211,7 +211,7 @@ export function postPage(post, { others = [], social = [] } = {}) {
   const more = others.filter((o) => o.slug !== post.slug).slice(0, 3);
   return shell({
     social,
-    scripts: `\n  <script type="module" src="${root}js/post-rail.js"></script>`,
+    scripts: `\n  <script type="module" src="${root}js/post-rail.js"></script>\n  <script type="module" src="${root}js/image-zoom.js"></script>`,
     root: "../../",
     title: `${post.title} | The Free Code Syndicate`,
     description: describe(post),

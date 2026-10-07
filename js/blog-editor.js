@@ -35,6 +35,7 @@ import { mountRail } from "./post-rail.js";
 import { slugify } from "./lib/forms.js";
 import { escapeHTML, escapeAttr, icon } from "./render.js";
 import "./link-preview.js";
+import "./image-zoom.js";
 
 /* ==================================================================
  * Catalogue
