@@ -26,9 +26,12 @@
  */
 import {
   parseBlocks, serializeBlocks, inline, renderMath, highlightCode, youtubeId, readingTime,
-  tocHTML, inlineText, twemojiURL, emojiHTML, COLORS, listMarker, dateText as isoDateText,
+  tocHTML, inlineText, twemojiURL, emojiHTML, COLORS, listMarker, dateText as isoDateText, renderMarkdown,
+  mentionHTML, dateMentionHTML, bookmarkHTML,
 } from "./lib/markdown.js";
-import { iconHTML, postArticleHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML } from "./lib/blog-pages.js";
+import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
+import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
+import { mountRail } from "./post-rail.js";
 import { slugify } from "./lib/forms.js";
 import { escapeHTML, escapeAttr, icon } from "./render.js";
 import "./link-preview.js";
@@ -39,7 +42,8 @@ import "./link-preview.js";
 
 const TEXT_TYPES = new Set(["p", "h1", "h2", "h3", "h4", "bullet", "number", "todo", "quote", "callout", "toggle"]);
 const LIST_TYPES = new Set(["bullet", "number", "todo"]);
-const MULTILINE = new Set(["p", "quote", "callout"]);
+// Blocks where Shift+Enter adds a line break inside the block.
+const MULTILINE = new Set(["p", "quote", "callout", "bullet", "number", "todo"]);
 const TYPE_NAMES = {
   p: "Text", h1: "Heading 1", h2: "Heading 2", h3: "Heading 3", h4: "Heading 4", bullet: "Bulleted list",
   number: "Numbered list", todo: "To-do list", quote: "Quote", callout: "Callout", toggle: "Toggle list",
@@ -197,7 +201,7 @@ function toInline(node) {
     if (n.classList.contains("math")) { out += `$${n.dataset.tex}$`; continue; }
     if (n.classList.contains("mention-date") && /^\d{4}-\d{2}-\d{2}$/.test(n.getAttribute("datetime") || "")) { out += `@{${n.getAttribute("datetime")}}`; continue; }
     if (n.classList.contains("mention")) {
-      const who = escText(n.textContent.replace(/^@/, "").trim());
+      const who = escText((n.querySelector(".mention-name") || n).textContent.replace(/^@/, "").trim());
       const href = n.getAttribute("href") || "";
       out += /^https:\/\/\S+$/.test(href) ? `@[${who}](${href})` : `@[${who}]`;
       continue;
@@ -235,6 +239,30 @@ function fillInline(el, md) {
   el.querySelectorAll("a").forEach((a) => a.setAttribute("rel", "noopener"));
 }
 
+/** The parts of a post a draft or a version holds (not its address, status or dates). */
+const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "authors", "author_name", "body"];
+const contentOf = (c) => Object.fromEntries(CONTENT_KEYS.filter((k) => c && k in c).map((k) => [k, c[k]]));
+
+/* A bookmark's title, description and image, for the editor's card. The
+ * published page gets the same from the deploy (tools/link-meta.mjs); here
+ * microlink fetches it (free, about 50 new pages a day per person). */
+const linkMeta = new Map();
+async function fetchLinkMeta(url) {
+  const cached = sessionStorage.getItem(`fcs-link:${url}`);
+  if (cached) { const m = JSON.parse(cached); linkMeta.set(url, m); return m; }
+  try {
+    const res = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`);
+    const { status, data } = await res.json();
+    if (status !== "success") return null;
+    const meta = { title: data.title || "", description: data.description || "", image: (data.image && data.image.url) || "" };
+    linkMeta.set(url, meta);
+    sessionStorage.setItem(`fcs-link:${url}`, JSON.stringify(meta));
+    return meta;
+  } catch {
+    return null;
+  }
+}
+
 function downloadFile(name, type, text) {
   const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
@@ -256,7 +284,13 @@ function downloadFile(name, type, text) {
  * @param {(id, wasLive) => Promise<void>} opts.remove
  * @param {(file: File) => Promise<string>} opts.uploadImage      returns the image's address
  * @param {(values) => Promise<void>} [opts.duplicate]           saves a copy as a new draft
- * @param {(id) => Promise<Array>} [opts.history]                 this post's activity log
+ * @param {(id) => Promise<Array>} [opts.history]                 this post's activity log (used when versions are unavailable)
+ * @param {{content, updated_at}|null} [opts.draft]              a published post's saved, unpublished edits
+ * @param {(id, values) => Promise} [opts.saveDraft]             autosave for published posts (migration 029)
+ * @param {(id) => Promise} [opts.clearDraft]
+ * @param {(id, values, kind) => Promise} [opts.snapshot]        adds a version
+ * @param {(id) => Promise<Array>} [opts.versions]               versions, newest first
+ * @param {(row) => void} [opts.onSaved]                          after each save of the post itself
  * @param {Array<{name, url}>} [opts.people]                      who "@" can mention
  * @param {(msg, tone?) => void} opts.toast
  * @param {() => void} opts.onClose
@@ -268,6 +302,9 @@ export function openBlogEditor(opts) {
     font: "default", small_text: false, full_width: false, locked: false,
     ...(opts.row || {}),
   };
+  // A published post's unpublished edits, saved by autosave, pick up where they left off.
+  let hasDraft = Boolean(opts.draft && post.id && post.status === "published");
+  if (hasDraft) Object.assign(post, contentOf(opts.draft.content));
   post.cover_position = Number.isFinite(post.cover_position) ? post.cover_position : 50;
   // Authors: whoever starts a post is its first author; more can be added.
   const team = opts.team || [];
@@ -289,7 +326,6 @@ export function openBlogEditor(opts) {
   let menu = null; // the "/", ":" or "@" menu while one is open
   let popover = null;
   let zoom = Number(localStorage.getItem("fcs-editor-zoom")) || 100;
-  const sortables = [];
 
   const ed = h(`
     <div class="nb" role="dialog" aria-modal="true" aria-label="Post editor">
@@ -302,6 +338,7 @@ export function openBlogEditor(opts) {
         <span class="nb-state" data-state role="status"></span>
         <button type="button" class="nb-ghost nb-square" data-undo title="Undo (Ctrl+Z)" aria-label="Undo">${pixelIcon("undo")}</button>
         <button type="button" class="nb-ghost nb-square" data-redo title="Redo (Ctrl+Shift+Z)" aria-label="Redo">${pixelIcon("redo")}</button>
+        <button type="button" class="nb-ghost" data-updates aria-haspopup="dialog" title="Updates and analytics">${pixelIcon("analytics")}<span>Updates</span></button>
         <button type="button" class="nb-ghost" data-preview>${icon("eye")}<span>Preview</span></button>
         <button type="button" class="nb-primary" data-save></button>
         <button type="button" class="nb-ghost nb-square" data-more aria-label="More actions" aria-haspopup="menu">${pixelIcon("more-horizontal")}</button>
@@ -320,6 +357,7 @@ export function openBlogEditor(opts) {
       <div class="nb-scroll" data-scroll>
         <div class="nb-cover" data-cover>
           <img alt="" data-cover-img draggable="false" />
+          <div data-cover-credit></div>
           <div class="nb-cover-tools" data-cover-tools>
             <button type="button" data-cover-change>Change cover</button>
             <button type="button" data-cover-move>Reposition</button>
@@ -497,7 +535,6 @@ export function openBlogEditor(opts) {
         const kids = h(`<div class="nb-blocks nb-children"></div>`);
         (b.children || []).forEach((c) => kids.append(blockEl(c)));
         content.append(kids);
-        initSortable(kids);
       }
       applyAttrs(el);
       return el;
@@ -557,7 +594,6 @@ export function openBlogEditor(opts) {
           const col = h(`<div class="nb-blocks nb-col"></div>`);
           (c.length ? c : [{ type: "p", text: "" }]).forEach((child) => col.append(blockEl(child)));
           box.append(col);
-          initSortable(col);
         });
         content.append(box);
         break;
@@ -633,10 +669,13 @@ export function openBlogEditor(opts) {
         ? `<div class="nb-video"><iframe src="https://www.youtube-nocookie.com/embed/${id}" title="YouTube video" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe><div class="nb-media-tools" contenteditable="false"><button type="button" data-media-clear title="Remove">${pixelIcon("trash")}</button></div></div>`
         : `<p class="nb-muted">That is not a YouTube link. <button type="button" class="nb-link" data-media-clear>Try another</button></p>`;
     } else {
-      let host = url;
-      try { host = new URL(url).hostname.replace(/^www\./, ""); } catch { /* keep the address */ }
-      content.innerHTML = `<a class="bookmark" href="${escapeAttr(url)}" target="_blank" rel="noopener"><strong>${escapeHTML(host)}</strong><span>${escapeHTML(url)}</span></a>
+      const paint = (meta) => {
+        if (block.dataset.url !== url) return;
+        content.innerHTML = `${bookmarkHTML(url, meta)}
         <div class="nb-media-tools" contenteditable="false"><button type="button" data-media-clear title="Remove">${pixelIcon("trash")}</button></div>`;
+      };
+      paint(linkMeta.get(url));
+      if (!linkMeta.has(url)) fetchLinkMeta(url).then((meta) => { if (meta) paint(meta); });
     }
   }
 
@@ -787,13 +826,33 @@ export function openBlogEditor(opts) {
 
   function commitHistory() {
     clearTimeout(historyTimer);
+    historyTimer = 0;
+    burstBlock = null;
     const snap = snapshot();
     const last = history[historyAt];
-    if (last && last.title === snap.title && last.body === snap.body) return;
+    if (last && last.title === snap.title && last.body === snap.body) return paintUndo();
     history.splice(historyAt + 1);
     history.push(snap);
     if (history.length > 200) history.shift();
     historyAt = history.length - 1;
+    paintUndo();
+  }
+
+  /* Undo steps, as in Notion: a pause in typing ends a step, and so does
+   * moving to another block, so one undo never reverts two places. */
+  let burstBlock = null;
+  const blockOfCaret = () => {
+    const r = rangeNow();
+    const node = r && (r.startContainer.nodeType === 1 ? r.startContainer : r.startContainer.parentElement);
+    return node ? node.closest(".nb-block") || (titleEl.contains(node) ? titleEl : null) : null;
+  };
+  function onCaretMove() {
+    if (historyTimer && burstBlock && blockOfCaret() && blockOfCaret() !== burstBlock) commitHistory();
+  }
+  function paintUndo() {
+    const pending = Boolean(historyTimer && burstBlock);
+    $("[data-undo]").disabled = historyAt <= 0 && !pending;
+    $("[data-redo]").disabled = historyAt >= history.length - 1 && !pending;
   }
 
   function changed({ structural = false } = {}) {
@@ -805,28 +864,108 @@ export function openBlogEditor(opts) {
     if (structural) commitHistory();
     else {
       clearTimeout(historyTimer);
-      historyTimer = setTimeout(commitHistory, 600);
+      burstBlock = burstBlock || blockOfCaret();
+      historyTimer = setTimeout(() => { historyTimer = 0; commitHistory(); }, 700);
+      paintUndo();
     }
     scheduleSave();
     if (findState.open) refreshFind();
   }
 
+  // Everything saves as you type, as in Notion: a draft to the post itself,
+  // a live post to its unpublished draft (the site changes on "Update").
   const scheduleSave = () => {
     clearTimeout(autosaveTimer);
-    if (post.status === "draft") autosaveTimer = setTimeout(() => save({ quiet: true }), 1400);
+    if (post.status === "draft") autosaveTimer = setTimeout(() => save({ quiet: true }), 1000);
+    else if (post.id && canDraft) autosaveTimer = setTimeout(saveDraft, 1000);
   };
 
+  let canDraft = Boolean(opts.saveDraft);
+  async function saveDraft() {
+    clearTimeout(autosaveTimer);
+    if (saving) await saving;
+    if (!dirty || !canDraft) return true;
+    const v = values();
+    dirty = false;
+    saving = opts.saveDraft(post.id, v);
+    paintState();
+    try {
+      await saving;
+      hasDraft = true;
+      snapshotSoon(v);
+      return true;
+    } catch (err) {
+      // Drafts refused (migration 029 missing, or no access): back to "Update to save", said once.
+      dirty = true;
+      canDraft = false;
+      opts.toast(`Autosave is off for this live post: ${err.message || "the draft could not be saved"}. Press Update to save.`, "error");
+      return false;
+    } finally {
+      saving = null;
+      paintState();
+    }
+  }
+
+  /* Versions: the post as it was opened, at the first edit; then the latest
+   * at most every ten minutes of editing; and every publish or update. */
+  const SNAPSHOT_EVERY = 10 * 60 * 1000;
+  let lastSnapshot = 0;
+  let openedContent = null; // set once the page is built
+  function snapshotSoon(v, kind = "edit") {
+    if (!opts.snapshot || !post.id) return;
+    const now = Date.now();
+    if (kind === "edit" && now - lastSnapshot < SNAPSHOT_EVERY) return;
+    if (!lastSnapshot && openedContent && kind === "edit") opts.snapshot(post.id, openedContent, "edit").catch(() => {});
+    lastSnapshot = now;
+    opts.snapshot(post.id, v, kind).catch(() => {});
+  }
+
+  /* The page as text, per block, to find what an undo or redo changed. */
+  const pageState = () => ({
+    title: titleEl.textContent,
+    blocks: allBlocks().map((el) => ({ md: JSON.stringify(readBlock(el)), text: textEl(el) ? textEl(el).textContent : null })),
+  });
+
+  /** The caret goes where the text differs (Notion's precise undo):
+   * the end of what came back, or where removed text was. */
+  function caretAtChange(el, was, now) {
+    let start = 0;
+    while (start < was.length && start < now.length && was[start] === now[start]) start++;
+    let tail = 0;
+    while (tail < was.length - start && tail < now.length - start && was[was.length - 1 - tail] === now[now.length - 1 - tail]) tail++;
+    const at = Math.max(start, now.length - tail);
+    el.focus({ preventScroll: true });
+    sel().removeAllRanges();
+    sel().addRange(rangeAt(el, at, at));
+    (el.closest(".nb-block") || el).scrollIntoView({ block: "nearest" });
+  }
+
   function restore(snap) {
-    const order = allBlocks();
-    const focusIndex = order.indexOf(document.activeElement && document.activeElement.closest(".nb-block"));
+    const before = pageState();
+    const scroller = $("[data-scroll]");
+    const top = scroller.scrollTop;
+    selectBlock(null);
     titleEl.textContent = snap.title;
     loadBody(snap.body);
+    scroller.scrollTop = top;
     dirty = true;
     refreshDerived();
     paintState();
     scheduleSave();
-    const target = allBlocks()[Math.max(0, Math.min(focusIndex, allBlocks().length - 1))];
-    if (target) focusBlock(target, true);
+    const after = pageState();
+    if (after.title !== before.title) return caretAtChange(titleEl, before.title, after.title);
+    const blocks = allBlocks();
+    let i = 0;
+    while (i < before.blocks.length && i < after.blocks.length && before.blocks[i].md === after.blocks[i].md) i++;
+    const block = blocks[Math.min(i, blocks.length - 1)];
+    if (!block) return;
+    const text = textEl(block);
+    if (text && after.blocks[blocks.indexOf(block)].text != null) {
+      const was = before.blocks[i] && before.blocks[i].text != null ? before.blocks[i].text : "";
+      return caretAtChange(text, was, text.textContent);
+    }
+    focusBlock(block, true);
+    block.scrollIntoView({ block: "nearest" });
   }
 
   function undo(redo = false) {
@@ -835,6 +974,7 @@ export function openBlogEditor(opts) {
     if (next < 0 || next >= history.length) return;
     historyAt = next;
     restore(history[historyAt]);
+    paintUndo();
   }
 
   function values() {
@@ -848,6 +988,7 @@ export function openBlogEditor(opts) {
       author_name: authorNames(post.authors) || null,
       excerpt: ed.querySelector("[data-prop=excerpt]").value.trim() || null,
       cover_url: post.cover_url || null,
+      cover_credit: (post.cover_url && post.cover_credit) || null,
       cover_position: Math.round(post.cover_position),
       icon: post.icon || null,
       font: post.font || "default",
@@ -860,10 +1001,15 @@ export function openBlogEditor(opts) {
 
   function paintState(text) {
     const state = $("[data-state]");
-    state.textContent = text || (saving ? "Saving…" : dirty ? (post.status === "published" ? "Unpublished changes" : "Editing") : post.id ? "Saved" : "Not saved yet");
+    const live = post.status === "published";
+    state.textContent = text || (saving ? "Saving…"
+      : dirty ? (live && !canDraft ? "Unpublished changes" : "Editing")
+      : live ? (hasDraft ? "Saved · not live yet" : "Live")
+      : post.id ? "Saved" : "Not saved yet");
+    state.title = live && hasDraft ? "Your edits are saved. Press Update to put them on the site." : "";
     const button = $("[data-save]");
-    button.textContent = post.status === "published" ? "Update" : "Publish";
-    button.disabled = post.status === "published" && !dirty;
+    button.textContent = live ? "Update" : "Publish";
+    button.disabled = live && !dirty && !hasDraft;
   }
 
   async function save({ quiet = false, status } = {}) {
@@ -890,6 +1036,14 @@ export function openBlogEditor(opts) {
     try {
       const row = await saving;
       Object.assign(post, row || {}, { status: v.status });
+      if (opts.onSaved) opts.onSaved(post);
+      if (v.status === "published") {
+        if (hasDraft && opts.clearDraft) await opts.clearDraft(post.id).catch(() => {});
+        hasDraft = false;
+        snapshotSoon(v, "publish");
+      } else {
+        snapshotSoon(v);
+      }
       paintProps();
       if (!quiet && !status) opts.toast(post.status === "published" ? "Updated. The site rebuilds in about a minute." : "Saved.", "info");
       return true;
@@ -908,11 +1062,15 @@ export function openBlogEditor(opts) {
    * Page header: cover, icon, title, properties, page style
    * ================================================================ */
 
+  let shownCredit = null;
   function paintCover() {
     const cover = $("[data-cover]");
     cover.hidden = !post.cover_url;
-    $("[data-cover-img]").src = post.cover_url || "";
+    $("[data-cover-img]").src = assetSrc(post.cover_url) || "";
     $("[data-cover-img]").style.objectPosition = `50% ${post.cover_position}%`;
+    // Only when it changes: a new credit plays its fade-in once, as a new cover appears.
+    const credit = coverCreditHTML(post.cover_credit);
+    if (credit !== shownCredit) $("[data-cover-credit]").innerHTML = shownCredit = credit;
     $("[data-add-cover]").hidden = Boolean(post.cover_url);
     ed.classList.toggle("has-cover", Boolean(post.cover_url));
   }
@@ -1812,17 +1970,7 @@ export function openBlogEditor(opts) {
     const r = rangeNow();
     if (!r) return;
     let el;
-    if (item.kind === "date") {
-      el = document.createElement("time");
-      el.className = "mention-date";
-      el.setAttribute("datetime", item.iso);
-      el.textContent = `@${isoDateText(item.iso)}`;
-    } else {
-      el = document.createElement(/^https:\/\/\S+$/.test(item.url || "") ? "a" : "span");
-      el.className = "mention";
-      if (el.tagName === "A") { el.href = item.url; el.rel = "noopener"; }
-      el.textContent = `@${item.label}`;
-    }
+    el = h(item.kind === "date" ? dateMentionHTML(item.iso) : mentionHTML(escapeHTML(item.label), /^https:\/\/\S+$/.test(item.url || "") ? item.url : ""));
     el.contentEditable = "false";
     r.insertNode(el);
     caretAfter(el);
@@ -2293,28 +2441,139 @@ export function openBlogEditor(opts) {
 
   /* ---- cover ---------------------------------------------------------------- */
 
+  /** The cover picker, as in Notion: Gallery, Upload, Link and Unsplash. */
   function openCoverPicker(anchor) {
+    const tabs = ["Gallery", "Upload", "Link", ...(opts.unsplash ? ["Unsplash"] : [])];
     const el = openPopover(`
-      <div class="nb-picker">
-        <div class="nb-tabs"><button type="button" class="is-active">Upload</button><span class="nb-spacer"></span>${post.cover_url ? '<button type="button" data-remove>Remove</button>' : ""}</div>
-        <div class="nb-picker-body nb-picker-short"><div class="nb-upload" data-upload-pane></div></div>
-      </div>`, anchor.getBoundingClientRect(), { width: 408 });
-    const setCover = (url) => {
+      <div class="nb-picker nb-cover-picker">
+        <div class="nb-tabs" role="tablist">
+          ${tabs.map((t, i) => `<button type="button" role="tab" data-ctab="${t}" class="${i ? "" : "is-active"}" aria-selected="${!i}">${t === "Unsplash" ? `${UNSPLASH_LOGO}${t}` : t}</button>`).join("")}
+          <span class="nb-spacer"></span>
+          ${post.cover_url ? '<button type="button" data-remove>Remove</button>' : ""}
+        </div>
+        <div class="nb-picker-body nb-cover-body" data-cbody></div>
+      </div>`, anchor.getBoundingClientRect(), { width: 560 });
+    el.style.left = `${Math.max(8, anchor.getBoundingClientRect().right - 560)}px`;
+    const body = el.querySelector("[data-cbody]");
+    const setCover = (url, credit = null) => {
       closePopover();
       post.cover_url = url;
+      post.cover_credit = credit;
       post.cover_position = 50;
       paintCover();
       changed();
     };
-    mountUpload(el.querySelector("[data-upload-pane]"), {
-      tiles: false,
-      hint: "Wide images work best, at least 1500px across.",
-      onSave: setCover,
-      onCancel: closePopover,
+
+    const show = async (tab) => {
+      el.querySelectorAll("[data-ctab]").forEach((x) => { x.classList.toggle("is-active", x.dataset.ctab === tab); x.setAttribute("aria-selected", String(x.dataset.ctab === tab)); });
+      body.classList.toggle("nb-picker-short", tab === "Upload" || tab === "Link");
+      body.scrollTop = 0;
+      if (tab === "Upload") {
+        body.innerHTML = '<div class="nb-upload"></div>';
+        return mountUpload(body.firstChild, { tiles: false, hint: "Wide images work best, at least 1500px across.", onSave: setCover, onCancel: closePopover });
+      }
+      if (tab === "Link") {
+        body.innerHTML = `<form class="nb-cover-link" data-clink>
+          <input type="url" placeholder="Paste an image link…" aria-label="Image link" required />
+          <button type="submit" class="nb-primary">Submit</button>
+          <p class="nb-upload-hint">Works with any image on the web (https).</p>
+        </form>`;
+        const form = body.querySelector("[data-clink]");
+        form.querySelector("input").focus();
+        return form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const url = form.querySelector("input").value.trim();
+          if (/^https:\/\/\S+$/i.test(url)) setCover(url);
+          else opts.toast("Use a full image link starting with https://", "error");
+        });
+      }
+      if (tab === "Gallery") return showGallery();
+      return showUnsplash();
+    };
+
+    async function showGallery() {
+      body.innerHTML = '<p class="nb-pop-empty">Loading…</p>';
+      try {
+        const groups = await (galleryCache = galleryCache || fetch("assets/cover-gallery.json").then((r) => r.json()));
+        if (!el.isConnected) return;
+        body.innerHTML = groups.map((g, gi) => `
+          <p class="nb-pop-section">${escapeHTML(g.name)}</p>
+          <div class="nb-cover-grid">${g.items.map((it, i) => `<button type="button" class="nb-cover-tile" data-g="${gi}:${i}" title="${escapeAttr(it.title)}"><img src="${escapeAttr(it.thumb)}" alt="" loading="lazy" /></button>`).join("")}</div>
+          ${g.credit ? `<p class="nb-cover-credit">${escapeHTML(g.credit)}</p>` : ""}`).join("");
+        body.onclick = (e) => {
+          const t = e.target.closest("[data-g]");
+          if (!t) return;
+          const [gi, i] = t.dataset.g.split(":").map(Number);
+          const url = groups[gi].items[i].url;
+          // Ours (assets/covers) are stored as full site addresses: covers must be https.
+          setCover(/^https:\/\//.test(url) ? url : SITE + url);
+        };
+      } catch {
+        body.innerHTML = '<p class="nb-pop-empty">Could not load the gallery.</p>';
+      }
+    }
+
+    function showUnsplash() {
+      body.onclick = null;
+      body.innerHTML = `<div class="nb-list-search nb-unsplash-search"><input type="search" placeholder="Search for an image…" aria-label="Search Unsplash" data-uq /></div>
+        <div class="nb-cover-grid is-unsplash" data-ugrid></div>
+        <p class="nb-pop-empty" data-unote>Loading…</p>
+        <p class="nb-unsplash-foot">Photos from <a href="https://unsplash.com/?${escapeAttr(UNSPLASH_UTM)}" target="_blank" rel="noopener">Unsplash</a>. The post credits the photographer.</p>`;
+      const q = body.querySelector("[data-uq]");
+      const grid = body.querySelector("[data-ugrid]");
+      const note = body.querySelector("[data-unote]");
+      let page = 1;
+      let pages = 1;
+      let query = "";
+      let busy = false;
+      let found = [];
+      const load = async (more = false) => {
+        if (busy || (more && page >= pages)) return;
+        busy = true;
+        if (!more) { page = 1; found = []; grid.innerHTML = ""; } else page++;
+        note.textContent = "Loading…";
+        note.hidden = false;
+        try {
+          const res = await opts.unsplash.search(query, page);
+          if (!el.isConnected) return;
+          pages = res.totalPages || 1;
+          const start = found.length;
+          found = found.concat(res.results);
+          grid.insertAdjacentHTML("beforeend", res.results.map((r, i) => `<figure class="nb-unsplash-item">
+            <button type="button" class="nb-cover-tile" data-u="${start + i}" title="${escapeAttr(r.alt || "Unsplash photo")}"><img src="${escapeAttr(r.thumb)}" alt="${escapeAttr(r.alt)}" loading="lazy" /></button>
+            <figcaption>by <a href="${escapeAttr(r.profile)}" target="_blank" rel="noopener">${escapeHTML(r.name)}</a></figcaption></figure>`).join(""));
+          note.hidden = found.length > 0;
+          if (!found.length) note.textContent = "No photos match. Try another word.";
+        } catch (err) {
+          note.hidden = false;
+          note.textContent = err.message || "Could not reach Unsplash.";
+        } finally {
+          busy = false;
+        }
+      };
+      let timer = 0;
+      q.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(() => { query = q.value.trim(); load(); }, 350); });
+      // More photos as you reach the bottom, as in Notion.
+      body.onscroll = () => { if (body.scrollTop + body.clientHeight > body.scrollHeight - 120) load(true); };
+      grid.addEventListener("click", (e) => {
+        const t = e.target.closest("[data-u]");
+        if (!t) return;
+        const photo = found[Number(t.dataset.u)];
+        opts.unsplash.track(photo.download).catch(() => {});
+        setCover(photo.url, { name: photo.name, url: photo.profile });
+      });
+      q.focus();
+      load();
+    }
+
+    el.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-ctab]");
+      if (t) { body.onscroll = null; return show(t.dataset.ctab); }
+      if (e.target.closest("[data-remove]")) setCover("");
     });
-    const remove = el.querySelector("[data-remove]");
-    if (remove) remove.addEventListener("click", () => setCover(""));
+    show("Gallery");
   }
+  let galleryCache = null;
 
   function startReposition() {
     const cover = $("[data-cover]");
@@ -2500,7 +2759,7 @@ export function openBlogEditor(opts) {
         ${act("export-md", "Export as Markdown", "download")}
         ${act("export-html", "Export as HTML", "file-text")}
         ${act("export-pdf", "Print or save as PDF", "printer")}
-        ${opts.history && post.id ? act("history", "Version history", "clock") : ""}
+        ${(opts.versions || opts.history) && post.id ? act("history", "Version history", "clock") : ""}
         <hr />
         ${live ? act("unpublish", "Unpublish (back to draft)", "eye-off") : ""}
         ${!live && post.id ? act("save", "Save draft now", "check", "Ctrl+S") : ""}
@@ -2608,6 +2867,13 @@ export function openBlogEditor(opts) {
   }
 
   async function openHistory(anchor) {
+    if (opts.versions) {
+      try {
+        return openVersions(await opts.versions(post.id));
+      } catch {
+        // No versions table yet (migration 029): the activity list below.
+      }
+    }
     const el = openPopover('<div class="nb-history"><p class="nb-pop-section">Version history</p><p class="nb-pop-empty">Loading…</p></div>', anchor.getBoundingClientRect(), { width: 320, className: "nb-menu" });
     el.style.left = `${Math.max(8, anchor.getBoundingClientRect().right - 320)}px`;
     try {
@@ -2620,6 +2886,250 @@ export function openBlogEditor(opts) {
     } catch (err) {
       el.querySelector(".nb-history").innerHTML = `<p class="nb-pop-empty">${escapeHTML(err.message || "Could not load the history.")}</p>`;
     }
+  }
+
+  /** Notion's version history: the page on the left, versions on the right, Restore. */
+  function openVersions(rows) {
+    closePopover();
+    const nameOf = (id) => (team.find((t) => t.id === id) || {}).name || "Someone";
+    const when = (iso) => {
+      const d = new Date(iso);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diff = Math.round((today - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
+      const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      if (diff === 0) return `Today · ${time}`;
+      if (diff === 1) return `Yesterday · ${time}`;
+      return `${d.toLocaleDateString(undefined, { day: "numeric", month: "long", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" })} · ${time}`;
+    };
+    const list = [{ current: true, content: values() }, ...rows];
+    const box = h(`
+      <div class="nb-versions" role="dialog" aria-modal="true" aria-label="Version history">
+        <div class="nb-versions-preview" data-vpreview></div>
+        <aside class="nb-versions-side">
+          <div class="nb-versions-head"><strong>Version history</strong><button type="button" class="nb-ghost nb-square" data-vclose aria-label="Close">${pixelIcon("close")}</button></div>
+          <div class="nb-versions-list" role="listbox" aria-label="Versions" tabindex="0" data-vlist>
+            ${list.map((r, i) => `<button type="button" class="nb-version" role="option" data-v="${i}">
+              <strong>${r.current ? "Current version" : escapeHTML(when(r.created_at))}</strong>
+              <span>${r.current ? "What you are editing now" : escapeHTML(nameOf(r.created_by))}${r.kind === "publish" ? '<em class="nb-version-tag">Published</em>' : ""}</span>
+              <small>${escapeHTML(changeSummary(list[i + 1] && list[i + 1].content, r.content))}</small>
+            </button>`).join("")}
+            ${rows.length ? "" : '<p class="nb-pop-empty">Versions appear as you edit: one when you start, then every ten minutes, and each time you publish.</p>'}
+          </div>
+          <div class="nb-versions-foot"><label class="nb-vtoggle"><input type="checkbox" data-vdiff checked /> Highlight changes</label><button type="button" class="nb-primary" data-vrestore disabled>Restore</button></div>
+        </aside>
+      </div>`);
+    ed.append(box);
+    ed.classList.add("is-menu-open");
+    let at = 0;
+    const show = (i) => {
+      at = Math.max(0, Math.min(i, list.length - 1));
+      box.querySelectorAll("[data-v]").forEach((b) => b.classList.toggle("is-active", Number(b.dataset.v) === at));
+      const c = list[at].content;
+      const older = list[at + 1] && list[at + 1].content;
+      const marked = older && box.querySelector("[data-vdiff]").checked ? changesHTML(older.body, c.body) : "";
+      const pane = box.querySelector("[data-vpreview]");
+      pane.innerHTML = `<div class="blog-page nb-preview-page">${postArticleHTML({ ...post, ...contentOf(c), title: c.title || "Untitled", published_at: post.published_at || new Date().toISOString() }, "", marked)}</div>`;
+      const first = pane.querySelector(".vd");
+      if (first) first.scrollIntoView({ block: "center" });
+      else pane.scrollTop = 0;
+      box.querySelector("[data-vrestore]").disabled = Boolean(list[at].current);
+      box.querySelector(`[data-v="${at}"]`).scrollIntoView({ block: "nearest" });
+    };
+    const keys = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); shut(); }
+      else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); show(at + (e.key === "ArrowDown" ? 1 : -1)); }
+    };
+    const shut = () => { box.remove(); ed.classList.remove("is-menu-open"); document.removeEventListener("keydown", keys, true); };
+    document.addEventListener("keydown", keys, true);
+    box.querySelector("[data-vdiff]").addEventListener("change", () => show(at));
+    box.addEventListener("click", (e) => {
+      if (e.target.closest(".nb-versions-preview a")) e.preventDefault();
+      const v = e.target.closest("[data-v]");
+      if (v) return show(Number(v.dataset.v));
+      if (e.target.closest("[data-vclose]")) return shut();
+      if (e.target.closest("[data-vrestore]") && !list[at].current) {
+        const chosen = list[at];
+        snapshotSoon(values(), "edit");
+        applyContent(chosen.content);
+        shut();
+        changed({ structural: true });
+        opts.toast(`Restored the version from ${when(chosen.created_at)}.`, "info");
+      }
+    });
+    show(0);
+    box.querySelector("[data-vlist]").focus();
+  }
+
+  /** A version's body with what changed since the one before marked, as in Notion. */
+  function changesHTML(oldBody, newBody) {
+    const ops = diffBlocks(oldBody, newBody);
+    const out = [];
+    for (let i = 0; i < ops.length; i++) {
+      // Unchanged blocks render together, so a numbered list keeps counting.
+      if (ops[i].op === "same") {
+        const run = [];
+        while (i < ops.length && ops[i].op === "same") run.push(ops[i++].md);
+        i--;
+        out.push(renderMarkdown(joinBlocks(run)));
+      } else out.push(changeHTML(ops[i]));
+    }
+    return out.join("");
+  }
+
+  /** A changed block: green when added, red and struck through when removed, yellow with "Before" when edited. */
+  function changeHTML(o) {
+    if (o.op === "edit") return `<div class="vd vd-edit">${renderMarkdown(o.md)}<details class="vd-was"><summary>Before</summary>${renderMarkdown(o.was)}</details></div>`;
+    return `<div class="vd vd-${o.op}">${renderMarkdown(o.md)}</div>`;
+  }
+
+  /* ---- Updates and Analytics, Notion's side panel --------------------------- */
+
+  const ago = (iso) => {
+    const s = (new Date(iso).getTime() - Date.now()) / 1000;
+    const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+    for (const [unit, size] of [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]]) {
+      if (Math.abs(s) >= size) return rtf.format(Math.round(s / size), unit);
+    }
+    return "just now";
+  };
+  const FIELD_NAMES = {
+    body: "the text", title: "the title", icon: "the icon", cover_url: "the cover", cover_position: "the cover", excerpt: "the summary",
+    authors: "the authors", author_name: "the authors", slug: "the address", font: "the page style", small_text: "the page style",
+    full_width: "the page style", locked: "the lock",
+  };
+  const personOf = (r) => team.find((t) => t.id === r.actor_id) || { name: r.actor_email ? r.actor_email.split("@")[0] : "Someone" };
+  const whatOf = (r) => {
+    if (r.action === "create") return "created the post";
+    if (r.action === "restore") return "restored the post";
+    const cols = r.changed || [];
+    if (cols.includes("status")) return cols.includes("published_at") || post.published_at ? "published the post" : "changed the status";
+    const named = [...new Set(cols.map((c) => FIELD_NAMES[c]).filter(Boolean))];
+    return named.length ? `edited ${named.length > 1 ? `${named.slice(0, -1).join(", ")} and ${named.at(-1)}` : named[0]}` : "edited the post";
+  };
+
+  let side = null;
+  let historyRows = null;
+  const loadHistory = async () => (historyRows = historyRows || (opts.history && post.id ? await opts.history(post.id) : []));
+
+  function toggleSide(tab = "updates") {
+    if (side) { side.remove(); side = null; ed.classList.remove("has-side"); return; }
+    side = h(`
+      <aside class="nb-side" aria-label="Updates and analytics">
+        <div class="nb-side-head">
+          <div class="nb-tabs" role="tablist">
+            <button type="button" role="tab" data-stab="updates">Updates</button>
+            <button type="button" role="tab" data-stab="analytics">Analytics</button>
+          </div>
+          <button type="button" class="nb-ghost nb-square" data-sclose aria-label="Close">${pixelIcon("close")}</button>
+        </div>
+        <div class="nb-side-body" data-sbody></div>
+      </aside>`);
+    ed.append(side);
+    ed.classList.add("has-side");
+    side.addEventListener("click", (e) => {
+      const t = e.target.closest("[data-stab]");
+      if (t) return showSide(t.dataset.stab);
+      if (e.target.closest("[data-sclose]")) return toggleSide();
+      if (e.target.closest("[data-sversions]")) return openHistory(e.target.closest("[data-sversions]"));
+    });
+    side.addEventListener("change", (e) => { if (e.target.matches("[data-srange]")) showSide("analytics", Number(e.target.value)); });
+    showSide(tab);
+  }
+
+  async function showSide(tab, days = 28) {
+    if (!side) return;
+    side.querySelectorAll("[data-stab]").forEach((b) => { b.classList.toggle("is-active", b.dataset.stab === tab); b.setAttribute("aria-selected", String(b.dataset.stab === tab)); });
+    const body = side.querySelector("[data-sbody]");
+    body.innerHTML = '<p class="nb-pop-empty">Loading…</p>';
+    try {
+      if (tab === "updates") {
+        const rows = await loadHistory();
+        if (!side) return;
+        // As in Notion: one person's edits within a quarter of an hour are one update.
+        const groups = [];
+        for (const r of rows) {
+          const last = groups.at(-1);
+          if (last && last.actor_id === r.actor_id && r.action === "update" && last.action === "update"
+            && new Date(last.at) - new Date(r.at) < 15 * 60 * 1000) {
+            last.changed = [...new Set([...(last.changed || []), ...(r.changed || [])])];
+            last.count++;
+          } else groups.push({ ...r, count: 1 });
+        }
+        body.innerHTML = `
+          ${opts.versions || opts.history ? `<button type="button" class="nb-side-link" data-sversions>${pixelIcon("clock")}<span>Version history</span></button>` : ""}
+          ${groups.length ? groups.map((g) => {
+            const who = personOf(g);
+            return `<div class="nb-update">${avatarHTML(who, "avatar nb-update-avatar")}
+              <div><p><strong>${escapeHTML(who.name)}</strong> ${escapeHTML(whatOf(g))}</p>
+              <time datetime="${escapeAttr(g.at)}" title="${escapeAttr(new Date(g.at).toLocaleString())}">${escapeHTML(ago(g.at))}</time></div></div>`;
+          }).join("") : '<p class="nb-pop-empty">No updates yet.</p>'}`;
+        return;
+      }
+      if (!post.published_at || !opts.analytics) {
+        body.innerHTML = '<p class="nb-pop-empty">Analytics start once the post is published: views, readers and where they came from.</p>';
+        return;
+      }
+      const [data, rows] = await Promise.all([opts.analytics(post.slug, days), loadHistory().catch(() => [])]);
+      if (!side) return;
+      const created = rows.filter((r) => r.action === "create").at(-1);
+      const edited = rows.find((r) => r.action === "update");
+      const mins = Math.round((data.avg_engaged_ms || 0) / 60000 * 10) / 10;
+      body.innerHTML = `
+        <div class="nb-stat-head">
+          <p><strong>Views</strong> <span class="nb-muted">(${data.views} total)</span></p>
+          <select data-srange aria-label="Range">${[[7, "Last 7 days"], [28, "Last 28 days"], [90, "Last 90 days"]].map(([d, l]) => `<option value="${d}"${d === days ? " selected" : ""}>${l}</option>`).join("")}</select>
+        </div>
+        ${viewsChart(data.daily || [])}
+        <div class="nb-stats">
+          <div><strong>${data.visitors}</strong><span>unique readers</span></div>
+          <div><strong>${data.avg_engaged_ms ? (mins >= 1 ? `${mins} min` : `${Math.round(data.avg_engaged_ms / 1000)} s`) : "–"}</strong><span>average reading time</span></div>
+        </div>
+        ${(data.referrers || []).length ? `<p class="nb-side-label">Where readers came from</p>${data.referrers.map((r) => `<div class="nb-ref"><span>${escapeHTML(r.host)}</span><span class="nb-ref-bar" style="--w: ${Math.round((r.views / data.views) * 100)}%"></span><b>${r.views}</b></div>`).join("")}` : ""}
+        <p class="nb-side-label">Editors</p>
+        ${created ? `<div class="nb-editor-row">${avatarHTML(personOf(created), "avatar nb-update-avatar")}<span>Created by <strong>${escapeHTML(personOf(created).name)}</strong></span><time>${escapeHTML(ago(created.at))}</time></div>` : ""}
+        ${edited ? `<div class="nb-editor-row">${avatarHTML(personOf(edited), "avatar nb-update-avatar")}<span>Recently edited by <strong>${escapeHTML(personOf(edited).name)}</strong></span><time>${escapeHTML(ago(edited.at))}</time></div>` : ""}
+        <p class="nb-help">Counted without cookies; no personal data is kept.</p>`;
+    } catch (err) {
+      body.innerHTML = `<p class="nb-pop-empty">${escapeHTML(err.message || "Could not load this.")}</p>`;
+    }
+  }
+
+  /** Views (area) and unique readers (line) per day; hover a day for its numbers. */
+  function viewsChart(daily) {
+    const W = 320, H = 140, pad = 22;
+    const max = Math.max(1, ...daily.map((d) => d.views));
+    const x = (i) => pad + (daily.length < 2 ? 0 : (i * (W - pad - 6)) / (daily.length - 1));
+    const y = (v) => H - 18 - (v / max) * (H - 30);
+    const line = (key) => daily.map((d, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(d[key]).toFixed(1)}`).join(" ");
+    const fmt = (day) => new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    const ticks = daily.length ? [0, Math.floor((daily.length - 1) / 2), daily.length - 1] : [];
+    return `<svg class="nb-vchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Views per day">
+      <line x1="${pad}" x2="${W - 6}" y1="${y(max)}" y2="${y(max)}" class="nb-vchart-grid" />
+      <text x="2" y="${y(max) + 4}" class="nb-vchart-axis">${max}</text>
+      <line x1="${pad}" x2="${W - 6}" y1="${y(0)}" y2="${y(0)}" class="nb-vchart-base" />
+      ${daily.length ? `<path d="${line("views")} L${x(daily.length - 1)},${y(0)} L${x(0)},${y(0)} Z" class="nb-vchart-area" />
+      <path d="${line("views")}" class="nb-vchart-views" />
+      <path d="${line("visitors")}" class="nb-vchart-visitors" />` : ""}
+      ${ticks.map((i) => `<text x="${x(i)}" y="${H - 3}" text-anchor="${i === 0 ? "start" : i === daily.length - 1 ? "end" : "middle"}" class="nb-vchart-axis">${fmt(daily[i].day)}</text>`).join("")}
+      ${daily.map((d, i) => `<rect x="${x(i) - (W - pad) / daily.length / 2}" y="0" width="${(W - pad) / daily.length}" height="${H - 16}" class="nb-vchart-hit"><title>${fmt(d.day)}: ${d.views} view${d.views === 1 ? "" : "s"}, ${d.visitors} reader${d.visitors === 1 ? "" : "s"}</title></rect>`).join("")}
+    </svg>
+    <div class="nb-vchart-key"><span class="is-views">Views</span><span class="is-visitors">Unique readers</span></div>`;
+  }
+
+  /** Puts saved content (a draft or a version) into the page. */
+  function applyContent(c) {
+    Object.assign(post, contentOf(c));
+    post.authors = postAuthors(post).map((a) => authorOf((a.id && team.find((t) => t.id === a.id)) || a));
+    titleEl.textContent = post.title || "";
+    $("[data-crumb]").textContent = post.title || "Untitled";
+    loadBody(post.body);
+    paintCover();
+    paintIcon();
+    delete $("[data-props]").dataset.built;
+    paintProps();
+    paintPageStyle();
+    refreshDerived();
   }
 
   async function importMarkdown(file) {
@@ -2953,6 +3463,7 @@ export function openBlogEditor(opts) {
       return opts.toast("Unlocked. Lock it again from the ⋯ menu.", "info");
     }
     if (t.closest("[data-preview]")) return togglePreview();
+    if (t.closest("[data-updates]")) return toggleSide();
     if (t.closest("[data-authors]")) return openAuthorPicker(t.closest("[data-authors]"));
     if (t.closest("[data-whoami]")) return opts.whoami(t.closest("[data-whoami]"), onLinked);
     if (t.closest("[data-find-close]")) return closeFind();
@@ -3003,7 +3514,10 @@ export function openBlogEditor(opts) {
       if (menu) menu.synthetic = true;
       return;
     }
-    if (t.closest(".nb-drag")) return openBlockMenu(t.closest(".nb-block"), t.closest(".nb-drag"));
+    if (t.closest(".nb-drag")) {
+      if (suppressHandleClick) { suppressHandleClick = false; return; }
+      return openBlockMenu(t.closest(".nb-block"), t.closest(".nb-drag"));
+    }
     if (t.closest("[data-row-handle]")) return openRowMenu(block, t.closest("[data-row-handle]"));
     if (t.closest("[data-col-handle]")) return openColMenu(block, t.closest("[data-col-handle]"));
     if (t.closest(".nb-anchor")) return copyAnchor(t.closest(".nb-block"));
@@ -3183,26 +3697,195 @@ export function openBlogEditor(opts) {
     $("[data-scroll]").hidden = !showing;
     ed.classList.toggle("is-previewing", !showing);
     $("[data-preview] span").textContent = showing ? "Preview" : "Back to editing";
+    if (unmountRail) { unmountRail(); unmountRail = null; }
     if (!showing) {
       const v = values();
-      pane.innerHTML = `<div class="blog-page nb-preview-page">${postArticleHTML({ ...v, title: v.title || "Untitled", published_at: post.published_at || new Date().toISOString() })}</div>`;
+      const shown = { ...v, link_meta: Object.fromEntries(linkMeta), title: v.title || "Untitled", published_at: post.published_at || new Date().toISOString() };
+      // The reading rail too, as on the published page: its contents come from the headings.
+      pane.innerHTML = `<div class="blog-page nb-preview-page">${postArticleHTML(shown)}${railHTML(shown, "")}</div>`;
+      unmountRail = mountRail(pane.querySelector("[data-rail]"), { scroller: pane, root: pane });
     }
   }
+  let unmountRail = null;
 
-  /* ---- drag to reorder ---------------------------------------------------- */
+  /* ---- drag to move, as in Notion ---------------------------------------------
+   * Hold the ⋮⋮ handle and move: the block stays where it is, dimmed, while a
+   * see-through copy follows the pointer and a blue line shows exactly where
+   * it will land, between blocks, or at a block's left or right edge to put
+   * the two side by side in columns. The page scrolls near its edges; Escape
+   * cancels; a drop that would lose the block (into itself, or a column row
+   * into a column) is not offered. A plain click on the handle still opens
+   * the block menu. */
+  const DRAG_START = 4;     // px of movement before a press becomes a drag
+  const EDGE = 64;          // px from the scroller's edge where it starts scrolling
+  let drag = null;
+  let suppressHandleClick = false;
 
-  function initSortable(container) {
-    if (!window.Sortable) return;
-    sortables.push(new window.Sortable(container, {
-      group: "nb-blocks",
-      handle: ".nb-drag",
-      draggable: ".nb-block",
-      animation: 150,
-      fallbackOnBody: true,
-      swapThreshold: 0.6,
-      ghostClass: "is-ghost",
-      onEnd: () => changed({ structural: true }),
-    }));
+  function onHandleDown(e) {
+    const handle = e.target.closest(".nb-drag");
+    if (!handle || e.button !== 0 || post.locked) return;
+    suppressHandleClick = false; // a new press: only the click that ends a drag is ignored
+    const block = handle.closest(".nb-block");
+    e.preventDefault();
+    drag = { block, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, active: false, target: null };
+    addEventListener("pointermove", onDragMove);
+    addEventListener("pointerup", onDragEnd);
+    addEventListener("pointercancel", cancelDrag);
+    addEventListener("keydown", onDragKey, true);
+  }
+
+  function startDrag() {
+    const { block } = drag;
+    const r = block.getBoundingClientRect();
+    closePopover();
+    closeMenu();
+    selectBlock(null);
+    sel().removeAllRanges();
+    drag.active = true;
+    drag.dx = drag.x0 - r.left;
+    drag.dy = drag.y0 - r.top;
+    // The copy under the pointer: the block itself, see-through, at most a few lines tall.
+    const ghost = block.cloneNode(true);
+    ghost.classList.add("nb-drag-ghost");
+    ghost.querySelectorAll("[contenteditable], [id]").forEach((n) => { n.removeAttribute("contenteditable"); n.removeAttribute("id"); });
+    ghost.style.width = `${r.width}px`;
+    ed.append(ghost);
+    drag.ghost = ghost;
+    drag.line = h('<div class="nb-drop-line" aria-hidden="true"></div>');
+    ed.append(drag.line);
+    block.classList.add("is-drag-source");
+    ed.classList.add("is-dragging");
+    drag.raf = requestAnimationFrame(dragFrame);
+  }
+
+  function onDragMove(e) {
+    if (!drag) return;
+    drag.x = e.clientX;
+    drag.y = e.clientY;
+    if (!drag.active && Math.hypot(drag.x - drag.x0, drag.y - drag.y0) > DRAG_START) startDrag();
+  }
+
+  /** Where a drop at (x, y) would go: { block, where: before|after|left|right }, or null. */
+  function dropTarget(x, y) {
+    const src = drag.block;
+    const usable = [...root.querySelectorAll(".nb-block")].filter((b) =>
+      b.offsetParent !== null && b !== src && !src.contains(b)
+      // A whole column row cannot go inside a column.
+      && !(typeOf(src) === "columns" && b.closest(".nb-col")));
+    if (!usable.length) return null;
+    const pageRect = root.getBoundingClientRect();
+    const rects = usable.map((b) => ({ b, r: b.getBoundingClientRect() }));
+    // Blocks under the pointer's height (with some slack sideways); the innermost wins,
+    // so a block in a column beats its row, and the row wins in the gap under a short column.
+    const under = rects.filter(({ r }) => y >= r.top && y <= r.bottom && x >= Math.min(r.left, pageRect.left) - 80 && x <= Math.max(r.right, pageRect.right) + 80)
+      .filter(({ b, r }) => typeOf(b) !== "columns" || x >= r.left - 80);
+    let hit = under.find((c) => !under.some((o) => o !== c && c.b.contains(o.b) && o.r.left - 4 <= x && x <= o.r.right + 4)) || under[0];
+    if (!hit) {
+      // In a gap or past the ends: the nearest block on the page itself.
+      const top = rects.filter(({ b }) => b.parentElement === root);
+      hit = (top.length ? top : rects).reduce((best, cur) => {
+        const d = y < cur.r.top ? cur.r.top - y : y > cur.r.bottom ? y - cur.r.bottom : 0;
+        return !best || d < best.d ? { ...cur, d } : best;
+      }, null);
+    }
+    const { b: block, r } = hit;
+    const side = Math.min(56, r.width * 0.14);
+    const canSide = typeOf(src) !== "columns" && typeOf(block) !== "columns" && !block.closest(".nb-children");
+    // Only inside the block's edge: dragging from the handle (left of the block) stays a vertical move.
+    if (canSide && x >= r.left && x < r.left + side) return { block, where: "left" };
+    if (canSide && x <= r.right && x > r.right - side) return { block, where: "right" };
+    return { block, where: y < r.top + r.height / 2 ? "before" : "after" };
+  }
+
+  function dragFrame() {
+    if (!drag || !drag.active) return;
+    const { x, y } = drag;
+    drag.ghost.style.transform = `translate(${x - drag.dx}px, ${y - drag.dy}px)`;
+    // Scroll near the top and bottom, faster the closer you get.
+    const scroller = $("[data-scroll]");
+    const sr = scroller.getBoundingClientRect();
+    if (y < sr.top + EDGE) scroller.scrollTop -= Math.ceil(((sr.top + EDGE - y) / EDGE) * 18);
+    else if (y > sr.bottom - EDGE) scroller.scrollTop += Math.ceil(((y - (sr.bottom - EDGE)) / EDGE) * 18);
+    // The line where it would land.
+    const t = dropTarget(x, y);
+    drag.target = t;
+    const line = drag.line;
+    if (!t) { line.hidden = true; }
+    else {
+      const r = t.block.getBoundingClientRect();
+      const er = ed.getBoundingClientRect();
+      line.hidden = false;
+      line.classList.toggle("is-vertical", t.where === "left" || t.where === "right");
+      if (t.where === "before" || t.where === "after") {
+        const prev = t.where === "before" ? t.block.previousElementSibling : t.block.nextElementSibling;
+        // Halfway between this block and its neighbour, so the line sits in the gap.
+        const edgeY = t.where === "before" ? r.top : r.bottom;
+        const other = prev && prev.classList.contains("nb-block") ? prev.getBoundingClientRect() : null;
+        const ly = other ? (t.where === "before" ? (other.bottom + r.top) / 2 : (r.bottom + other.top) / 2) : edgeY + (t.where === "before" ? -1 : 1);
+        Object.assign(line.style, { left: `${r.left - er.left}px`, top: `${ly - er.top - 2}px`, width: `${r.width}px`, height: "" });
+      } else {
+        const lx = t.where === "left" ? r.left - 6 : r.right + 2;
+        Object.assign(line.style, { left: `${lx - er.left}px`, top: `${r.top - er.top}px`, height: `${r.height}px`, width: "" });
+      }
+    }
+    drag.raf = requestAnimationFrame(dragFrame);
+  }
+
+  function onDragKey(e) {
+    if (e.key === "Escape" && drag) { e.preventDefault(); e.stopPropagation(); cancelDrag(); }
+  }
+
+  function endDrag() {
+    if (!drag) return null;
+    cancelAnimationFrame(drag.raf);
+    removeEventListener("pointermove", onDragMove);
+    removeEventListener("pointerup", onDragEnd);
+    removeEventListener("pointercancel", cancelDrag);
+    removeEventListener("keydown", onDragKey, true);
+    const d = drag;
+    drag = null;
+    if (d.ghost) d.ghost.remove();
+    if (d.line) d.line.remove();
+    d.block.classList.remove("is-drag-source");
+    ed.classList.remove("is-dragging");
+    return d;
+  }
+
+  function cancelDrag() {
+    const d = endDrag();
+    if (d && d.active) suppressHandleClick = true;
+  }
+
+  function onDragEnd() {
+    const d = endDrag();
+    if (!d || !d.active) return; // a click: the handle's menu opens as usual
+    suppressHandleClick = true;
+    const t = d.target;
+    if (!t) return;
+    const src = d.block;
+    if (t.where === "before") t.block.before(src);
+    else if (t.where === "after") t.block.after(src);
+    else {
+      const col = t.block.closest(".nb-col");
+      if (col && col.parentElement.children.length >= 5) { opts.toast("Five columns is the most a row can have.", "error"); return; }
+      if (col) {
+        // Another column in the same row.
+        const fresh = h('<div class="nb-blocks nb-col"></div>');
+        fresh.append(src);
+        if (t.where === "left") col.before(fresh); else col.after(fresh);
+      } else {
+        // Two blocks side by side: a new column row in the target's place.
+        const row = blockEl({ type: "columns", cols: [[{ type: "p", text: "" }], [{ type: "p", text: "" }]] });
+        t.block.replaceWith(row);
+        const [c1, c2] = row.querySelectorAll(":scope > .nb-content > .nb-columns > .nb-col");
+        c1.replaceChildren(t.where === "left" ? src : t.block);
+        c2.replaceChildren(t.where === "left" ? t.block : src);
+      }
+    }
+    changed({ structural: true });
+    // Show where it went, briefly, as Notion does.
+    src.classList.add("is-just-dropped");
+    setTimeout(() => src.classList.remove("is-just-dropped"), 700);
   }
 
   /* ================================================================
@@ -3210,12 +3893,10 @@ export function openBlogEditor(opts) {
    * ================================================================ */
 
   function loadBody(md) {
-    sortables.splice(0).forEach((s) => s.destroy());
     root.innerHTML = "";
     const blocks = parseBlocks(md);
     if (!blocks.length) blocks.push({ type: "p", text: "" });
     blocks.forEach((b) => root.append(blockEl(b)));
-    initSortable(root);
   }
 
   function beforeUnload(e) {
@@ -3224,21 +3905,21 @@ export function openBlogEditor(opts) {
 
   async function close(force = false) {
     if (!force && dirty) {
-      if (post.status === "draft" && titleEl.textContent.trim()) {
-        if (!(await save({ quiet: true }))) return;
-      } else if (!confirmLeave()) {
-        return;
-      }
+      const saved = post.status === "published"
+        ? canDraft && (await saveDraft())
+        : titleEl.textContent.trim() && (await save({ quiet: true }));
+      if (!saved && !confirmLeave()) return false;
     }
     clearTimeout(autosaveTimer);
     clearTimeout(historyTimer);
     closeFind();
-    sortables.forEach((s) => s.destroy());
     document.removeEventListener("selectionchange", paintToolbar);
+    document.removeEventListener("selectionchange", onCaretMove);
     window.removeEventListener("beforeunload", beforeUnload);
     ed.remove();
     document.body.classList.remove("nb-open");
     opts.onClose();
+    return true;
   }
 
   const confirmLeave = () => window.confirm(post.status === "published"
@@ -3252,6 +3933,7 @@ export function openBlogEditor(opts) {
   ed.addEventListener("click", onClick);
   ed.addEventListener("mouseover", onMouseOver);
   ed.addEventListener("pointerdown", onPointerDown);
+  ed.addEventListener("pointerdown", onHandleDown);
   ed.addEventListener("paste", onPaste);
   ed.addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
   ed.addEventListener("drop", onDrop);
@@ -3271,6 +3953,7 @@ export function openBlogEditor(opts) {
   });
   $("[data-scroll]").addEventListener("scroll", () => { toolbar.hidden = true; });
   document.addEventListener("selectionchange", paintToolbar);
+  document.addEventListener("selectionchange", onCaretMove);
   window.addEventListener("beforeunload", beforeUnload);
 
   titleEl.textContent = post.title || "";
@@ -3283,11 +3966,14 @@ export function openBlogEditor(opts) {
   refreshDerived();
   paintState();
   commitHistory();
+  openedContent = values();
+  if (hasDraft) opts.toast(`Picked up your unpublished changes from ${new Date(opts.draft.updated_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}. Update puts them on the site.`, "info");
 
   document.body.append(ed);
   document.body.classList.add("nb-open");
   if (post.locked) opts.toast("This post is locked. Unlock it from the top bar to edit.", "info");
-  else if (post.title) focusBlock(allBlocks()[0], true);
+  // The first block you can type in (not a contents block or an image, which would light up as selected).
+  else if (post.title) focusBlock(allBlocks().find((b) => textEl(b)) || allBlocks()[0], true);
   else placeCaret(titleEl);
 
   return { close };

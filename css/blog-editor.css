@@ -132,7 +132,7 @@ body.nb-open { overflow: hidden; }
 .nb-blocks { display: grid; gap: 2px; }
 .nb-block { position: relative; display: flex; align-items: flex-start; border-radius: 4px; outline: none; }
 .nb-block.is-selected { background: var(--select); }
-.nb-block.is-ghost { opacity: 0.35; }
+
 .nb-gutter {
   position: absolute; left: -54px; top: 3px; width: 50px;
   display: flex; justify-content: flex-end; gap: 2px;
@@ -157,7 +157,7 @@ body.nb-open { overflow: hidden; }
 }
 .nb-tip b { color: #ececec; font-weight: 600; }
 .nb-gutter button:hover .nb-tip { opacity: 1; visibility: visible; transition-delay: 0.45s; }
-.sortable-chosen .nb-tip, .sortable-ghost .nb-tip { display: none; }
+.nb.is-dragging .nb-tip { display: none; }
 .nb-content { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
 
 .nb-text {
@@ -347,10 +347,7 @@ body.nb-open { overflow: hidden; }
 .nb-content.align-justify .nb-text { text-align: justify; }
 .nb-text u { text-underline-offset: 3px; }
 .nb-text sup, .nb-text sub { font-size: 0.75em; line-height: 0; }
-.nb-text .mention, .nb-text .mention-date, .nb-cell .mention, .nb-cell .mention-date {
-  color: var(--ink-muted); text-decoration: none; font-weight: 500; border-radius: 3px; padding: 0 2px; cursor: default;
-}
-.nb-text .mention:hover { background: var(--hover-strong); }
+/* Mentions use the site's pill (style.css .mention). */
 
 /* "/" typed with nothing after it yet. */
 .nb-text.nb-filtering::after { content: "Type to filter…"; color: var(--ink-faint); opacity: 0.7; pointer-events: none; }
@@ -518,7 +515,7 @@ body.nb-open { overflow: hidden; }
 .nb-font-ag { font-size: 1.5rem; line-height: 1.1; color: var(--ink); }
 .nb-font-default .nb-font-ag { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 .nb-font-mono .nb-font-ag { font-family: "Archivo Mono", var(--font-mono); }
-.nb-font-technical .nb-font-ag { font-family: "Latin Modern Mono", var(--font-code); }
+.nb-font-technical .nb-font-ag { font-family: "FCS Technical", var(--font-code); }
 .nb-font-garet .nb-font-ag { font-family: "Garet", var(--font-display); }
 .nb-toggle-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: 8px; background: var(--hover-strong); transition: background 0.15s; }
 .nb-toggle-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--paper-raised); box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); transition: transform 0.15s; }
@@ -596,7 +593,6 @@ body.nb-open { overflow: hidden; }
 .nb-authors-names { font-size: 0.9rem; }
 .nb-item-avatar { width: 22px; height: 22px; font-size: 0.58rem; box-shadow: none; }
 .nb-item.is-picked .nb-item-label { font-weight: 600; }
-.nb-text span.mention { color: var(--ink-muted); font-weight: 500; }
 
 /* "Which member card are you?" (js/member-picker.js), in the editor and on the Team page. */
 .nb-member-pop { z-index: 80; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -611,3 +607,144 @@ body.nb-open { overflow: hidden; }
 .nb-whoami { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; margin-left: -8px; border: 0; border-radius: 6px; background: color-mix(in srgb, var(--accent) 22%, transparent); cursor: pointer; text-align: left; }
 .nb-whoami:hover { background: color-mix(in srgb, var(--accent) 34%, transparent); }
 .nb-whoami .avatar { width: 22px; height: 22px; font-size: 0.58rem; }
+
+/* Version history (blog-editor.js openVersions), as in Notion: the page on
+ * the left, the versions on the right, Restore at the bottom. */
+.nb-versions {
+  position: fixed; inset: 32px; z-index: 75; display: flex; overflow: hidden;
+  background: var(--paper-raised); color: var(--ink); border: 1px solid var(--soft-rule); border-radius: 12px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45), 0 24px 64px rgb(0 0 0 / 0.3);
+}
+.nb-versions-preview { flex: 1; min-width: 0; overflow-y: auto; overscroll-behavior: contain; background: var(--paper); }
+.nb-versions-preview .nb-preview-page { pointer-events: none; }
+.nb-versions-side { display: flex; flex-direction: column; width: 300px; flex: none; border-left: 1px solid var(--soft-rule); }
+.nb-versions-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 16px; font-size: 0.95rem; }
+.nb-versions-list { flex: 1; overflow-y: auto; padding: 4px 8px; outline: none; }
+.nb-version {
+  display: grid; gap: 2px; width: 100%; padding: 8px 10px; border: 0; border-radius: 6px;
+  background: none; color: var(--ink); text-align: left; font: inherit; font-size: 0.875rem; cursor: pointer;
+}
+.nb-version:hover { background: var(--hover); }
+.nb-version.is-active { background: var(--hover-strong); }
+.nb-version span { display: flex; align-items: center; gap: 8px; color: var(--ink-muted); font-size: 0.8rem; }
+.nb-version-tag { font-style: normal; font-size: 0.68rem; padding: 0 6px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); }
+.nb-versions-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--soft-rule); }
+.nb-versions-foot .nb-muted { font-size: 0.75rem; }
+.nb-versions-foot button { height: 32px; padding: 0 16px; border-radius: 6px; flex: none; }
+@media (max-width: 760px) {
+  .nb-versions { inset: 8px; flex-direction: column; }
+  .nb-versions-side { width: auto; max-height: 45%; border-left: 0; border-top: 1px solid var(--soft-rule); }
+}
+
+/* Version history: a summary per version, and changes marked in the preview. */
+.nb-version small { color: var(--ink-faint); font-size: 0.74rem; line-height: 1.35; }
+.nb-vtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--ink-muted); cursor: pointer; }
+.nb-versions-preview .nb-preview-page { pointer-events: auto; }
+.vd { position: relative; margin: 0 -12px 0.9em; padding: 2px 12px; border-radius: 6px; }
+.vd > :last-child { margin-bottom: 0; }
+.vd::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; border-radius: 2px; }
+.vd-add { background: color-mix(in srgb, #2f9e5a 12%, transparent); }
+.vd-add::before { background: #2f9e5a; }
+.vd-del { background: color-mix(in srgb, #d44c47 10%, transparent); color: var(--ink-muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, #d44c47 70%, transparent); }
+.vd-del::before { background: #d44c47; }
+.vd-edit { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.vd-edit::before { background: var(--accent-deep, #c78b1d); }
+.vd-was { margin-top: 6px; font-size: 0.85em; color: var(--ink-muted); }
+.vd-was summary { cursor: pointer; font-size: 0.8rem; }
+.vd-was > :not(summary) { text-decoration: line-through; text-decoration-color: color-mix(in srgb, #d44c47 60%, transparent); }
+
+/* Updates and Analytics: Notion's side panel (blog-editor.js toggleSide). */
+.nb.has-side .nb-scroll { margin-right: 360px; }
+.nb-side {
+  position: absolute; top: 48px; right: 0; bottom: 0; z-index: 30; width: 360px; display: flex; flex-direction: column;
+  background: var(--paper-raised); border-left: 1px solid var(--soft-rule);
+}
+.nb-side-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 0 12px; border-bottom: 1px solid var(--soft-rule); }
+.nb-side-head .nb-tabs { border: 0; padding: 0; }
+.nb-side-body { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 12px 16px 20px; font-size: 0.875rem; }
+.nb-side-link { display: flex; align-items: center; gap: 8px; width: 100%; margin-bottom: 8px; padding: 6px 8px; border: 0; border-radius: 6px; background: var(--hover); color: var(--ink); font: inherit; cursor: pointer; }
+.nb-side-link:hover { background: var(--hover-strong); }
+.nb-side-link .pixel-icon { width: 15px; height: 15px; }
+.nb-update { display: grid; grid-template-columns: auto 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--soft-rule); }
+.nb-update:last-child { border-bottom: 0; }
+.nb-update p { margin: 0; line-height: 1.4; }
+.nb-update time { font-size: 0.76rem; color: var(--ink-faint); }
+.nb-update-avatar { width: 26px; height: 26px; font-size: 0.6rem; box-shadow: none; }
+.nb-stat-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.nb-stat-head p { margin: 0; }
+.nb-stat-head select { height: 28px; padding: 0 6px; border: 1px solid var(--soft-rule); border-radius: 6px; background: var(--hover); color: var(--ink); font: inherit; font-size: 0.8rem; }
+.nb-vchart { display: block; width: 100%; height: auto; aspect-ratio: 320 / 140; margin: 10px 0 4px; }
+.nb-vchart-grid { stroke: var(--soft-rule); stroke-dasharray: 3 3; }
+.nb-vchart-base { stroke: var(--soft-rule); }
+.nb-vchart-axis { font: 10px ui-sans-serif, system-ui, sans-serif; fill: var(--ink-faint); }
+.nb-vchart-area { fill: color-mix(in srgb, #337ea9 18%, transparent); }
+.nb-vchart-views { fill: none; stroke: #337ea9; stroke-width: 2; stroke-linejoin: round; }
+.nb-vchart-visitors { fill: none; stroke: #c78b1d; stroke-width: 2; stroke-linejoin: round; }
+.nb-vchart-hit { fill: transparent; }
+.nb-vchart-hit:hover { fill: color-mix(in srgb, var(--ink) 6%, transparent); }
+.nb-vchart-key { display: flex; gap: 14px; font-size: 0.74rem; color: var(--ink-muted); }
+.nb-vchart-key span::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: -1px; }
+.nb-vchart-key .is-views::before { background: #337ea9; }
+.nb-vchart-key .is-visitors::before { background: #c78b1d; }
+.nb-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0; }
+.nb-stats div { display: grid; gap: 2px; padding: 10px; border-radius: 8px; background: var(--hover); }
+.nb-stats strong { font-size: 1.2rem; }
+.nb-stats span { font-size: 0.74rem; color: var(--ink-muted); }
+.nb-side-label { margin: 16px 0 6px; font-size: 0.74rem; font-weight: 600; color: var(--ink-muted); }
+.nb-ref { display: grid; grid-template-columns: 1fr 80px auto; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.82rem; }
+.nb-ref-bar { height: 6px; border-radius: 3px; background: linear-gradient(to right, #337ea9 var(--w), var(--hover) var(--w)); }
+.nb-editor-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px; padding: 6px 0; }
+.nb-editor-row time { font-size: 0.76rem; color: var(--ink-faint); }
+@media (max-width: 900px) { .nb.has-side .nb-scroll { margin-right: 0; } .nb-side { width: min(360px, 100%); box-shadow: -12px 0 32px rgb(0 0 0 / 0.2); } }
+
+/* Undo and redo grey out when there is nothing to undo or redo. */
+.nb-top [data-undo]:disabled, .nb-top [data-redo]:disabled { opacity: 0.35; cursor: default; }
+
+/* Cover picker (blog-editor.js openCoverPicker): Notion's Gallery, Upload, Link, Unsplash. */
+.nb-cover-picker .nb-tabs .pixel-icon { width: 13px; height: 13px; margin-right: 4px; vertical-align: -1px; }
+.nb-cover-body { height: 440px; padding: 4px 14px 14px; }
+.nb-cover-body.nb-picker-short { height: auto; }
+.nb-cover-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
+.nb-cover-tile { display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; overflow: hidden; border: 0; border-radius: 4px; background: var(--hover); cursor: pointer; }
+.nb-cover-tile img { display: block; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.12s; }
+.nb-cover-tile:hover img { opacity: 0.85; }
+.nb-cover-tile:focus-visible { outline: 2px solid var(--accent-deep, #c78b1d); outline-offset: 2px; }
+.nb-cover-credit { margin: 2px 0 10px; font-size: 0.7rem; color: var(--ink-faint); }
+.nb-cover-link { display: grid; gap: 10px; padding-top: 6px; justify-items: center; }
+.nb-cover-link input { width: 100%; height: 32px; padding: 0 10px; border: 1px solid var(--soft-rule); border-radius: 6px; background: var(--hover); color: var(--ink); font: inherit; font-size: 0.875rem; }
+.nb-cover-link button { height: 30px; padding: 0 22px; border-radius: 6px; }
+.nb-unsplash-search { position: sticky; top: -4px; z-index: 1; padding: 6px 0 8px; background: var(--paper-raised); }
+.nb-cover-grid.is-unsplash { gap: 10px 8px; }
+.nb-unsplash-item { margin: 0; min-width: 0; }
+.nb-unsplash-item figcaption { margin-top: 3px; font-size: 0.7rem; color: var(--ink-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nb-unsplash-item figcaption a { color: var(--ink-muted); }
+.nb-cover-picker .unsplash-logo { width: 11px; height: 11px; margin-right: 5px; vertical-align: -1px; }
+.nb-unsplash-foot { margin: 10px 0 0; font-size: 0.72rem; color: var(--ink-faint); text-align: center; }
+.nb-unsplash-foot a { color: var(--ink-muted); }
+.nb-text a.mention, .nb-cell a.mention { color: var(--ink); text-decoration: none; cursor: default; }
+
+/* Drag to move (blog-editor.js onHandleDown), as in Notion: the block stays,
+ * dimmed; a see-through copy follows the pointer; a blue line marks the drop. */
+.nb-drag { touch-action: none; }
+.nb-drag:active { cursor: grabbing !important; }
+.nb.is-dragging, .nb.is-dragging * { cursor: grabbing !important; user-select: none; }
+.nb.is-dragging .nb-gutter, .nb.is-dragging .nb-adders, .nb.is-dragging [data-toolbar] { visibility: hidden; }
+.nb-block.is-drag-source { opacity: 0.4; }
+.nb-drag-ghost {
+  position: fixed; top: 0; left: 0; z-index: 90; max-height: 180px; overflow: hidden; pointer-events: none;
+  opacity: 0.55; border-radius: 4px; background: var(--paper);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.16), 0 0 0 1px var(--soft-rule);
+  -webkit-mask-image: linear-gradient(to bottom, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
+}
+.nb-drag-ghost .nb-gutter { display: none; }
+.nb-drop-line {
+  position: absolute; z-index: 85; height: 4px; border-radius: 2px; pointer-events: none;
+  background: color-mix(in srgb, #2383e2 55%, transparent);
+  transition: top 70ms ease-out, left 70ms ease-out, width 70ms ease-out, height 70ms ease-out;
+}
+.nb-drop-line.is-vertical { width: 4px; }
+.nb-drop-line[hidden] { display: none; }
+.nb-block.is-just-dropped { animation: nb-dropped 0.7s ease-out; }
+@keyframes nb-dropped { from { background: color-mix(in srgb, #2383e2 18%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .nb-drop-line { transition: none; } .nb-block.is-just-dropped { animation: none; } }

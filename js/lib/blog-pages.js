@@ -85,7 +85,23 @@ export function iconHTML(icon, root = "") {
  * place when a card opens its post (and back). Names are per post, so
  * every name is unique on a page. */
 const vtName = (post, part) => `vt-${part}-${String(post.slug || "").replace(/[^a-z0-9-]/gi, "-")}`;
-const vt = (post, part, extra = "") => (post.slug ? ` style="view-transition-name: ${vtName(post, part)}${extra}"` : extra ? ` style="${extra.replace(/^; /, "")}"` : "");
+// Images morph (vt-media); text travels without scaling (vt-text). See style.css.
+const VT_CLASS = { cover: "vt-media", icon: "vt-media", authors: "vt-media", title: "vt-text", summary: "vt-text", date: "vt-text" };
+const vt = (post, part) => (post.slug ? ` style="view-transition-name: ${vtName(post, part)}; view-transition-class: ${VT_CLASS[part]}"` : "");
+
+/** Unsplash's mark (from their brand page), for the cover picker's tab and credits. */
+export const UNSPLASH_LOGO = '<svg class="unsplash-logo" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 6.75V0h9v6.75h-9zm9 3.75H24V24H0V10.5h7.5v6.75h9V10.5z"/></svg>';
+export const UNSPLASH_UTM = "utm_source=the_free_code_syndicate&utm_medium=referral";
+
+/** "Photo by <name> on Unsplash", both linked, as Unsplash's API terms ask. */
+export function coverCreditHTML(credit) {
+  if (!credit || !credit.name || !/^https:\/\/unsplash\.com\/\S+$/i.test(credit.url || "")) return "";
+  return `<p class="cover-credit">Photo by <a href="${esc(credit.url)}" target="_blank" rel="noopener">${esc(credit.name)}</a> on <a href="https://unsplash.com/?${esc(UNSPLASH_UTM)}" target="_blank" rel="noopener">Unsplash</a></p>`;
+}
+
+/** The site's own images (the cover gallery's colours and textures) are stored
+ * as full addresses, as covers must be; pages load them from their own copy. */
+export const assetSrc = (url, root = "") => (url && url.startsWith(SITE) ? root + url.slice(SITE.length) : url);
 
 const coverStyle = (post) => `object-position: 50% ${Number.isFinite(post.cover_position) ? post.cover_position : 50}%`;
 
@@ -118,13 +134,14 @@ const articleTags = ({ published, modified, authors }) => [
 ].filter(Boolean).join("\n  ");
 
 /** `root` is the path back to the site's top: "../" or "../../". */
-function shell({ root, title, description, url, image, imageAlt = "", body, type = "website", math = false, article = null }) {
+function shell({ root, title, description, url, image, imageAlt = "", body, type = "website", math = false, article = null, social = [], scripts = "" }) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="${CSP}" />
   <script src="${root}js/theme-init.js"></script>
+  <script src="${root}js/page-transitions.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${esc(title)}</title>
   <meta name="description" content="${esc(description)}" />
@@ -150,20 +167,19 @@ function shell({ root, title, description, url, image, imageAlt = "", body, type
     <a href="${root}blog/">Blog</a>
   </header>
 ${body}
-  <footer class="blog-foot">
-    <p><a href="${root}blog/">All posts</a> &middot; <a href="${root}">The Free Code Syndicate</a></p>
-    <p class="blog-credit">Emoji by <a href="https://github.com/jdecked/twemoji" target="_blank" rel="noopener">Twemoji</a> (CC-BY 4.0); icons by <a href="https://pixelarticons.com" target="_blank" rel="noopener">pixelarticons</a>.</p>
-  </footer>
+${blogFooterHTML(root, social)}
   <script src="${root}js/config.js"></script>
   <script src="${root}js/track.js" defer></script>
   <script type="module" src="${root}js/link-preview.js"></script>
+  <script type="module" src="${root}js/footer-sky.js"></script>${scripts}
 </body>
 </html>
 `;
 }
 
 /** The page body shared by the public post and the editor's preview. */
-export function postArticleHTML(post, root = "") {
+/** `bodyHTML`: the body already rendered (the editor's version history marks changes in it). */
+export function postArticleHTML(post, root = "", bodyHTML = "") {
   const { minutes } = readingTime(post.body);
   const authors = postAuthors(post);
   const meta = [post.published_at && dateText(post.published_at), `${minutes} min read`].filter(Boolean).join(" · ");
@@ -173,20 +189,29 @@ export function postArticleHTML(post, root = "") {
     post.small_text && "is-small", post.full_width && "is-wide",
   ].filter(Boolean).map((c) => ` ${c}`).join("");
   return `<article class="post${style}">
-    ${post.cover_url ? `<div class="post-cover"${vt(post, "cover", "; view-transition-class: vt-media")}><img src="${esc(post.cover_url)}" alt="" style="${coverStyle(post)}" /></div>` : ""}
+    ${post.cover_url ? `<div class="post-cover"${vt(post, "cover")}><img src="${esc(assetSrc(post.cover_url, root))}" alt="" style="${coverStyle(post)}" />${coverCreditHTML(post.cover_credit)}</div>` : ""}
     <div class="post-page">
       ${post.icon ? `<div class="page-icon"${vt(post, "icon")}>${iconHTML(post.icon, root)}</div>` : ""}
       <h1 class="post-title"${vt(post, "title")}>${esc(post.title)}</h1>
       ${post.excerpt ? `<p class="post-dek"${vt(post, "summary")}>${esc(post.excerpt)}</p>` : ""}
       <div class="post-byline"><span class="post-byline-people"${vt(post, "authors")}>${bylineHTML(authors)}</span><span class="post-meta"${vt(post, "date")}>${esc(meta)}</span></div>
-      <div class="prose">${renderMarkdown(post.body)}</div>
+      <div class="prose">${bodyHTML || renderMarkdown(post.body, { links: post.link_meta })}</div>
     </div>
   </article>`;
 }
 
-export function postPage(post) {
-  const html = postArticleHTML(post, "../../");
+/**
+ * A post's page. `others`: the other published posts, newest first (the
+ * three newest become "More from the blog"); `social`: the club's links,
+ * for the footer.
+ */
+export function postPage(post, { others = [], social = [] } = {}) {
+  const root = "../../";
+  const html = postArticleHTML(post, root);
+  const more = others.filter((o) => o.slug !== post.slug).slice(0, 3);
   return shell({
+    social,
+    scripts: `\n  <script type="module" src="${root}js/post-rail.js"></script>`,
     root: "../../",
     title: `${post.title} | The Free Code Syndicate`,
     description: describe(post),
@@ -196,8 +221,103 @@ export function postPage(post) {
     article: { published: post.published_at, modified: post.updated_at, authors: postAuthors(post) },
     type: "article",
     math: html.includes('class="math'),
-    body: `  <main>${html}</main>`,
+    body: `  <main>${html}</main>
+${railHTML(post, root)}
+${more.length ? morePostsHTML(more, root) : ""}`,
   });
+}
+
+/* ---- the reading rail (js/post-rail.js) -------------------------------------
+ * On wide screens, once the title scrolls away: the post's icon, title and
+ * authors, then its contents as a tree with the current section lit, a
+ * reading-progress bar and share links, as on claude.dev's blog. The tree
+ * is built in the browser from the headings, so it always matches them. */
+export function railHTML(post, root) {
+  const authors = postAuthors(post);
+  const url = `${SITE}blog/${post.slug}/`;
+  // Plain text in a non-running script tag (& and < escaped): "Copy markdown" reads it.
+  const markdown = `# ${post.title}\n\n${post.body || ""}`;
+  const share = (key, label, href) => `<li><a ${href ? `href="${esc(href)}" target="_blank" rel="noopener"` : 'href="#" role="button"'} data-share="${key}">${label}</a></li>`;
+  return `  <aside class="post-rail" data-rail aria-label="Reading aid" data-url="${esc(url)}">
+    <div class="rail-head">
+      ${post.icon ? `<span class="rail-icon" style="--i: 0">${iconHTML(post.icon, root)}</span>` : ""}
+      <p class="rail-title" style="--i: 1">${esc(post.title)}</p>
+      ${authors.length ? `<p class="rail-byline" style="--i: 2">${avatarGroupHTML(authors, 3)}<span>${esc(authorNames(authors))}</span></p>` : ""}
+    </div>
+    <div class="rail-section" style="--i: 3" data-rail-tree-wrap hidden>
+      <p class="rail-label">Contents</p>
+      <ol class="rail-tree" data-rail-tree></ol>
+    </div>
+    <div class="rail-progress" style="--i: 4" aria-hidden="true"><span class="rail-bar"><span data-rail-fill></span></span><span class="rail-pct" data-rail-pct>00%</span></div>
+    <p class="rail-hint" style="--i: 5">Press ↑ / ↓ to scroll</p>
+    <div class="rail-section rail-share" style="--i: 6">
+      <p class="rail-label">Share</p>
+      <ul>
+        ${share("x", "X.com", `https://x.com/intent/post?url=${encodeURIComponent(url)}&text=${encodeURIComponent(post.title)}`)}
+        ${share("linkedin", "LinkedIn", `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`)}
+        ${share("email", "Email", `mailto:?subject=${encodeURIComponent(post.title)}&body=${encodeURIComponent(`${describe(post)}\n\n${url}`)}`)}
+        ${share("copy-url", "Copy URL")}
+        ${share("copy-markdown", "Copy markdown")}
+      </ul>
+      <p class="rail-status" role="status" aria-live="polite" data-rail-status></p>
+    </div>
+  </aside>
+  <script type="text/plain" id="post-markdown">${markdown.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</script>`;
+}
+
+/** "More from the blog": up to three other posts, as cards. */
+function morePostsHTML(posts, root) {
+  return `  <section class="more-posts" aria-labelledby="more-posts-title">
+    <div class="more-posts-inner">
+      <div class="sec-head-row">
+        <h2 class="more-posts-title" id="more-posts-title"><span class="blog-eyebrow">Keep reading</span>More from the blog</h2>
+        <a class="sec-more" href="../">All posts &rarr;</a>
+      </div>
+      <ul class="post-grid">
+${posts.map((p) => `        <li>${postCardHTML(p, { root, href: `../${p.slug}/` })}</li>`).join("\n")}
+      </ul>
+    </div>
+  </section>`;
+}
+
+/* ---- the blog's footer --------------------------------------------------------
+ * As on the home page: the slab, and under it the dotted Icarus sky with the
+ * club's bird (js/footer-sky.js). Above the sky, in columns as on claude.dev:
+ * the club, where to read, where to find us, and the credits. */
+const CREDITS = [
+  ["Emoji", "Twemoji", "https://github.com/jdecked/twemoji", "CC BY 4.0"],
+  ["Icons", "pixelarticons", "https://pixelarticons.com", "MIT"],
+  ["Type", "Archivo, Fira Code, Latin Modern Mono", "https://fonts.google.com/specimen/Archivo", "OFL / GUST"],
+  ["Images", "Unsplash, NASA, ESA/Webb, The Met", "", "credited on each post"],
+];
+export function blogFooterHTML(root, social = []) {
+  const links = social.filter((l) => /^https:\/\//.test(l.url || "")).slice(0, 6);
+  const connect = links.length ? links : [{ label: "GitHub", url: "https://github.com/TheFreeCodeSyndicate" }];
+  return `  <footer class="blog-footer">
+    <div class="blog-footer-grid">
+      <div class="bf-brand">
+        <a class="bf-logo" href="${root}"><img src="${root}assets/logoicon.svg" alt="" width="28" height="26" /><span>The Free Code Syndicate</span></a>
+        <p class="bf-tag">A public group for free code, study, and careful work.</p>
+        <p class="bf-legal">&copy; ${new Date().getUTCFullYear()} The Free Code Syndicate<br /><a href="${root}privacy.html">Privacy</a><a href="https://github.com/TheFreeCodeSyndicate/fcs-site" target="_blank" rel="noopener">Source</a></p>
+      </div>
+      <nav class="bf-col" aria-label="Read">
+        <p class="bf-head">Read</p>
+        <a href="${root}blog/">All posts</a>
+        <a href="${root}">Home</a>
+        <a href="${root}#events">Events</a>
+        <a href="${root}#study-groups">Study groups</a>
+      </nav>
+      <nav class="bf-col" aria-label="Connect">
+        <p class="bf-head">Connect</p>
+${connect.map((l) => `        <a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label || l.platform || "Link")}</a>`).join("\n")}
+      </nav>
+      <div class="bf-col bf-credits">
+        <p class="bf-head">Credits</p>
+${CREDITS.map(([what, who, href, licence]) => `        <p><span>${what}</span>${href ? `<a href="${href}" target="_blank" rel="noopener">${who}</a>` : who}<small>${licence}</small></p>`).join("\n")}
+      </div>
+    </div>
+    <canvas class="footer-sky" id="footer-sky" aria-hidden="true"></canvas>
+  </footer>`;
 }
 
 /* ---- cards ------------------------------------------------------------------
@@ -238,7 +358,7 @@ export function postCardHTML(post, { root = "", href = "", compact = false, eage
     </article>`;
   }
   const cover = post.cover_url
-    ? `<div class="post-card-cover"${vt(post, "cover", "; view-transition-class: vt-media")}><img src="${esc(post.cover_url)}" alt="" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" style="${coverStyle(post)}" /></div>`
+    ? `<div class="post-card-cover"${vt(post, "cover")}><img src="${esc(assetSrc(post.cover_url, root))}" alt="" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async" style="${coverStyle(post)}" /></div>`
     : `<div class="post-card-cover is-blank" style="background-color: var(--bg-${tintOf(post.slug || post.title)})">${post.icon ? `<span class="post-card-glyph"${vt(post, "icon")}>${iconHTML(post.icon, root)}</span>` : ""}</div>`;
   const overlap = Boolean(post.cover_url && post.icon);
   return `<article class="post-card${overlap ? " has-icon" : ""}">
@@ -256,7 +376,7 @@ export function postCardHTML(post, { root = "", href = "", compact = false, eage
 }
 
 /** The blog index: the three newest as full cards, the rest compact. */
-export function indexPage(posts) {
+export function indexPage(posts, { social = [] } = {}) {
   const card = (p, opts) => `      <li>${postCardHTML(p, { root: "../", href: `${p.slug}/`, ...opts })}</li>`;
   const featured = posts.slice(0, 3).map((p, i) => card(p, { eager: i === 0 })).join("\n");
   const more = posts.slice(3).map((p) => card(p, { compact: true })).join("\n");

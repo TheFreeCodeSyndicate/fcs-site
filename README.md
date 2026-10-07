@@ -175,6 +175,18 @@ public and permanent, so never upload anything private. Set once:
    **TheFreeCodeSyndicate**, only the **fcs-assets** repository,
    permission **Contents: Read and write**, nothing else.
 3. Supabase > Edge Functions > Secrets: `GITHUB_ASSETS_TOKEN` = the token.
+4. For the cover picker's **Unsplash** tab: create an app at
+   https://unsplash.com/oauth/applications (free, 50 searches an hour
+   until Unsplash approves it for production) and add its **Access Key** as
+   the secret `UNSPLASH_ACCESS_KEY`. The key stays in the `unsplash` Edge
+   Function; photos are hotlinked from Unsplash and their photographers
+   credited, as Unsplash asks.
+
+The cover picker's **Gallery** (colours, gradients, textures, Webb, NASA and
+Met Museum images) is `assets/cover-gallery.json`, made by
+`node tools/build-cover-gallery.mjs`: the colours and textures are drawn
+into `assets/covers/`; the art and space images are public domain or
+CC BY (credited in the picker) and load from their own sites.
 
 Authors are named from core-member cards. Each admin and editor links their
 own login to their card once (Team page, or the prompt in a post's Authors

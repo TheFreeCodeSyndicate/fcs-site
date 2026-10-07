@@ -2848,10 +2848,6 @@ img.emoji { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: 
 .prose table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
 .prose th, .prose td { border: 1px solid var(--rule); padding: 8px 10px; text-align: left; vertical-align: top; }
 .prose th { background: color-mix(in srgb, var(--ink) 5%, transparent); font-weight: 600; }
-.bookmark { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 6px; color: var(--ink); text-decoration: none; }
-.prose .bookmark { text-decoration: none; color: var(--ink); }
-.bookmark:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
-.bookmark span { font-size: 0.85rem; color: var(--ink-muted); overflow-wrap: anywhere; }
 .toc { display: grid; gap: 4px; padding: 4px 0 4px 2px; }
 .toc a { color: var(--ink-muted); text-decoration: underline; text-decoration-color: var(--rule); cursor: pointer; }
 .toc .toc-3 { padding-left: 1.2em; }
@@ -2873,17 +2869,18 @@ img.emoji { display: inline-block; width: 1.2em; height: 1.2em; vertical-align: 
 [data-theme="dark"] .hljs-title, [data-theme="dark"] .hljs-title.function_, [data-theme="dark"] .hljs-section { color: #8ab8ff; }
 [data-theme="dark"] .hljs-type, [data-theme="dark"] .hljs-title.class_ { color: #c9a2ff; }
 
-/* Latin Modern Mono: the brand's technical face (GUST Font License,
-   assets/fonts). Until now --font-code named it without loading it. */
-@font-face { font-family: "Latin Modern Mono"; src: url("../assets/fonts/lmmono10-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: "Latin Modern Mono"; src: url("../assets/fonts/lmmono10-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: "Latin Modern Mono"; src: url("../assets/fonts/lmmonolt10-bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+/* Latin Modern Mono (GUST Font License, assets/fonts), for posts set in the
+   editor's "Technical" font only. Its own family name keeps it out of the
+   site's --font-mono / --font-code stacks, which fall back to Fira Code. */
+@font-face { font-family: "FCS Technical"; src: url("../assets/fonts/lmmono10-regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "FCS Technical"; src: url("../assets/fonts/lmmono10-italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "FCS Technical"; src: url("../assets/fonts/lmmonolt10-bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
 
 /* Page styles from the editor's "..." menu: font, small text, full width. */
 .post.font-mono, .nb.font-mono { --font-read: "Archivo Mono", var(--font-mono); }
-.post.font-technical, .nb.font-technical { --font-read: "Latin Modern Mono", var(--font-code); }
+.post.font-technical, .nb.font-technical { --font-read: "FCS Technical", var(--font-code); }
 .post.font-mono .post-title, .nb.font-mono .nb-title { font-family: "Archivo Mono", var(--font-mono); letter-spacing: -0.02em; }
-.post.font-technical .post-title, .nb.font-technical .nb-title { font-family: "Latin Modern Mono", var(--font-code); }
+.post.font-technical .post-title, .nb.font-technical .nb-title { font-family: "FCS Technical", var(--font-code); }
 .post.is-small .prose { font-size: 0.92rem; }
 .post.is-wide { --read-width: min(1200px, 100%); }
 
@@ -2907,8 +2904,6 @@ span[class*="bg-"] { padding: 0 2px; border-radius: 3px; }
 .align-center { text-align: center; } .align-right { text-align: right; } .align-justify { text-align: justify; }
 .prose u { text-underline-offset: 3px; }
 .prose sup, .prose sub { font-size: 0.75em; line-height: 0; }
-.prose .mention, .prose .mention-date { color: var(--ink-muted); text-decoration: none; font-weight: 500; }
-.prose .mention:hover { color: var(--ink); text-decoration: underline; }
 
 /* Columns, toggle headings, images, tables. */
 .prose .columns { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 24px; margin: 1em 0; }
@@ -2957,21 +2952,227 @@ span[class*="bg-"] { padding: 0 2px; border-radius: 3px; }
 .post-byline .post-meta { margin: 0; }
 .post-authors { font-size: 0.9rem; font-weight: 500; }
 .post-authors a { color: inherit; text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
-.prose span.mention { color: var(--ink-muted); font-weight: 500; }
 
-/* ---- card -> post page: a cross-document view transition. Each part of a
- * card (cover, icon, title, summary, authors, date) has the same
- * view-transition-name as on the post page (blog-pages.js vt()), so the
- * browser moves it into place. Browsers without support just navigate. */
+/* ---- card <-> post page: cross-document view transitions ----------------
+ * Each part of a card (cover, icon, title, summary, authors, date) has the
+ * same view-transition-name as on the post page (blog-pages.js vt()), so it
+ * travels to its place: "same thing, going deeper". Following Vercel's view
+ * transitions guide:
+ * - images morph (cover, icon, avatars), with a light blur mid-way;
+ * - text never scales a snapshot (a small card title blown up to a heading
+ *   ghosts): the old one hides and the new one travels at full sharpness;
+ * - the rest of the page slides by depth, never just fades under a morph:
+ *   into a post slides left ("forward"), back out slides right ("back").
+ *   js/page-transitions.js names the direction;
+ * - exit 150ms, enter 210ms after it, morph 400ms; none with reduced motion.
+ * Browsers without support simply navigate. */
 @view-transition { navigation: auto; }
-::view-transition-group(*) { animation-duration: 0.45s; animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1); }
-::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.3s; }
-/* Covers change shape (16:9 card to a wide banner): crop, never stretch. */
-::view-transition-old(*.vt-media), ::view-transition-new(*.vt-media) { width: 100%; height: 100%; object-fit: cover; }
+:root { --vt-exit: 150ms; --vt-enter: 210ms; --vt-move: 400ms; --vt-ease: cubic-bezier(0.2, 0, 0, 1); }
+@keyframes vt-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes vt-slide { from { translate: var(--vt-offset); } to { translate: 0; } }
+@keyframes vt-via-blur { 30% { filter: blur(3px); } }
+
+/* The page around the moving parts: slides by depth; a quick cross-fade otherwise. */
+::view-transition-old(root) { animation: var(--vt-exit) ease-in both vt-fade reverse; }
+::view-transition-new(root) { animation: var(--vt-enter) ease-out var(--vt-exit) both vt-fade; }
+html:active-view-transition-type(nav-forward)::view-transition-old(root) {
+  --vt-offset: -60px;
+  animation: var(--vt-exit) ease-in both vt-fade reverse, var(--vt-move) ease-in-out both vt-slide reverse;
+}
+html:active-view-transition-type(nav-forward)::view-transition-new(root) {
+  --vt-offset: 60px;
+  animation: var(--vt-enter) ease-out var(--vt-exit) both vt-fade, var(--vt-move) ease-in-out both vt-slide;
+}
+html:active-view-transition-type(nav-back)::view-transition-old(root) {
+  --vt-offset: 60px;
+  animation: var(--vt-exit) ease-in both vt-fade reverse, var(--vt-move) ease-in-out both vt-slide reverse;
+}
+html:active-view-transition-type(nav-back)::view-transition-new(root) {
+  --vt-offset: -60px;
+  animation: var(--vt-enter) ease-out var(--vt-exit) both vt-fade, var(--vt-move) ease-in-out both vt-slide;
+}
+
+/* Images: one morph, cropped (a 16:9 card cover becomes a wide banner), never stretched. */
+::view-transition-group(.vt-media) { animation-duration: var(--vt-move); animation-timing-function: var(--vt-ease); }
+::view-transition-image-pair(.vt-media) { animation-name: vt-via-blur; animation-duration: var(--vt-move); }
+::view-transition-old(.vt-media), ::view-transition-new(.vt-media) { width: 100%; height: 100%; object-fit: cover; }
+
+/* Text: the new words travel into place, sharp; the old snapshot is hidden. */
+::view-transition-group(.vt-text) { animation-duration: var(--vt-move); animation-timing-function: var(--vt-ease); }
+::view-transition-old(.vt-text) { display: none; }
+/* Opacity only, so it stays sharp; it settles in as the card fades away. */
+::view-transition-new(.vt-text) { animation: var(--vt-enter) ease-out both vt-fade; object-fit: none; object-position: left top; }
+
 @media (prefers-reduced-motion: reduce) {
-  @view-transition { navigation: none; }
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*),
+  ::view-transition-image-pair(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 }
 
 /* The post's own summary, under its title. */
 .post-dek { margin: -2px 0 16px; max-width: 60ch; font-size: 1.15rem; line-height: 1.5; color: var(--ink-muted); }
 .post-byline-people { display: inline-flex; align-items: center; gap: 10px; }
+
+/* "Photo by <name> on Unsplash" on a cover (blog-pages.js coverCreditHTML). Kept
+ * quiet: it shows when the cover first appears, fades after a few seconds,
+ * and comes back while the cover is hovered (with the editor's cover tools)
+ * or a credit link has keyboard focus. Touch screens cannot hover, so there
+ * it stays, as Unsplash's guidelines ask for a visible credit. */
+.post-cover, .nb-cover { position: relative; }
+.cover-credit {
+  position: absolute; top: 12px; right: 12px; margin: 0; padding: 3px 9px; border-radius: 6px;
+  font: 500 0.72rem/1.5 ui-sans-serif, system-ui, sans-serif; color: #fff; background: rgb(0 0 0 / 0.5);
+  backdrop-filter: blur(6px);
+  /* Shown while the intro runs or the cover is hovered: each fades on its own. */
+  opacity: max(var(--credit-intro), var(--credit-hover));
+  animation: cover-credit-intro 4s ease forwards; transition: --credit-hover 0.25s ease;
+}
+@property --credit-intro { syntax: "<number>"; inherits: false; initial-value: 0; }
+@property --credit-hover { syntax: "<number>"; inherits: false; initial-value: 0; }
+.cover-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+@keyframes cover-credit-intro { 0% { --credit-intro: 0; } 8%, 75% { --credit-intro: 1; } 100% { --credit-intro: 0; } }
+:is(.post-cover, .nb-cover):hover .cover-credit, .cover-credit:focus-within { --credit-hover: 1; }
+@media (hover: none) { .cover-credit { --credit-hover: 1; } }
+
+/* People and dates in text, as in Notion (markdown.js mentionHTML). A soft
+ * pill, so they read as different from the words around them. */
+.mention, .mention-date {
+  display: inline-flex; align-items: center; gap: 0.3em; vertical-align: -0.12em; margin: 0 0.05em;
+  padding: 0.05em 0.45em 0.05em 0.2em; border-radius: 999px; line-height: 1.35;
+  background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); font-weight: 500;
+  text-decoration: none; white-space: nowrap; transition: background 0.15s;
+}
+a.mention:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
+.prose a.mention { color: var(--ink); text-decoration: none; background-image: none; }
+.mention-avatar { width: 1.15em; height: 1.15em; border-radius: 50%; object-fit: cover; flex: none; }
+.mention-initials { display: inline-grid; place-items: center; font-size: 0.55em; font-weight: 700; color: #fff; }
+.mention-date { padding-left: 0.45em; color: var(--ink-muted); }
+.mention-at { opacity: 0.55; margin-right: -0.15em; }
+
+/* Web bookmarks, as in Notion: text on the left, the page's image on the right. */
+.bookmark {
+  display: flex; min-height: 104px; overflow: hidden; border: 1px solid var(--rule); border-radius: 8px;
+  color: var(--ink); text-decoration: none; background: var(--paper-raised); transition: background 0.15s, border-color 0.15s;
+}
+.prose .bookmark { color: var(--ink); text-decoration: none; }
+.bookmark:hover { background: color-mix(in srgb, var(--ink) 3%, var(--paper-raised)); border-color: color-mix(in srgb, var(--ink) 25%, transparent); }
+.bookmark-body { display: flex; flex-direction: column; justify-content: center; gap: 4px; flex: 1 1 auto; min-width: 0; padding: 12px 16px; }
+.bookmark-title { font-size: 0.95rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-desc { font-size: 0.8rem; line-height: 1.45; color: var(--ink-muted); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+.bookmark-url { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 0.75rem; color: var(--ink-muted); min-width: 0; }
+.bookmark-url span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-favicon { width: 14px; height: 14px; flex: none; margin: 0; border-radius: 3px; }
+.bookmark-thumb { flex: 0 0 min(34%, 240px); position: relative; border-left: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 4%, transparent); }
+.bookmark-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; object-fit: cover; }
+@media (max-width: 520px) { .bookmark-thumb { display: none; } }
+.prose .mention-avatar { height: 1.15em; } .prose .bookmark-favicon { height: 14px; }
+
+/* ---- the reading rail (js/post-rail.js), after claude.dev's blog ----------
+ * Fixed in the left margin on wide screens. Its parts arrive one after
+ * another (icon, title, authors, contents, progress, share): each rises 6px
+ * out of a light blur over 400ms, 60ms apart, on a strong ease-out; leaving
+ * is quicker and all at once. Hidden for full-width posts and on narrow
+ * screens, where the post's own contents block does the job. */
+.post-rail { display: none; }
+@media (min-width: 1240px) {
+  .post-rail {
+    display: flex; flex-direction: column; gap: 22px;
+    position: fixed; z-index: 5; top: 88px; bottom: 32px; left: max(24px, calc((100vw - var(--read-width)) / 2 - 360px));
+    width: min(300px, calc((100vw - var(--read-width)) / 2 - 72px));
+    overflow: hidden auto; scrollbar-width: none; pointer-events: none;
+    font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-muted);
+  }
+  .post-rail::-webkit-scrollbar { display: none; }
+  .post-rail.is-shown { pointer-events: auto; }
+  .post-rail > *, .rail-head > * {
+    opacity: 0; transform: translateY(6px); filter: blur(4px);
+    transition: opacity 150ms ease-in, transform 150ms ease-in, filter 150ms ease-in;
+  }
+  .post-rail.is-shown > *, .post-rail.is-shown .rail-head > * {
+    opacity: 1; transform: none; filter: none;
+    transition: opacity 400ms var(--rail-ease), transform 400ms var(--rail-ease), filter 400ms var(--rail-ease);
+    transition-delay: calc(var(--i, 0) * 60ms);
+  }
+  .rail-head { transform: none !important; filter: none !important; opacity: 1 !important; }
+  .rail-share { margin-top: auto; }
+}
+:root { --rail-ease: cubic-bezier(0.23, 1, 0.32, 1); }
+.rail-head { display: grid; gap: 10px; }
+.rail-icon { display: flex; font-size: 2rem; line-height: 1; }
+.rail-icon .page-icon-svg, .rail-icon img { width: 1em; height: 1em; }
+.rail-title { margin: 0; font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; line-height: 1.25; color: var(--ink); text-wrap: balance; }
+.rail-byline { display: flex; align-items: center; gap: 8px; margin: 0; font-family: var(--font-read, inherit); font-size: 0.82rem; color: var(--ink-muted); }
+.rail-byline .avatar { width: 22px; height: 22px; font-size: 0.55rem; box-shadow: 0 0 0 2px var(--paper); }
+.rail-label { margin: 0 0 10px; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-faint, var(--ink-muted)); }
+.rail-tree { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.rail-tree li { padding-left: calc(var(--depth, 0) * 18px); }
+.rail-tree a { display: flex; gap: 8px; color: var(--ink-muted); text-decoration: none; line-height: 1.45; transition: color 0.2s; }
+.rail-tree a:hover { color: var(--ink); }
+.rail-tree a.is-current { color: var(--ink); font-weight: 700; }
+.rail-branch { flex: none; opacity: 0.45; }
+.rail-progress { display: flex; align-items: center; gap: 12px; }
+.rail-bar {
+  position: relative; flex: 0 1 170px; height: 12px; overflow: hidden;
+  background: repeating-linear-gradient(90deg, color-mix(in srgb, var(--ink) 30%, transparent) 0 1px, transparent 1px 3px);
+}
+.rail-bar > span { position: absolute; inset: 0; background: var(--ink); transform: scaleX(0); transform-origin: left; transition: transform 120ms linear; }
+.rail-pct { font-variant-numeric: tabular-nums; color: var(--ink); }
+.rail-hint { margin: -8px 0 0; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: color-mix(in srgb, var(--ink-muted) 75%, transparent); }
+.rail-share ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.rail-share a { color: var(--ink-muted); text-decoration: none; }
+.rail-share a::before { content: "└ "; opacity: 0.45; }
+.rail-share a:hover, .rail-share a:focus-visible { color: var(--ink); }
+.rail-share a.is-copied { color: var(--accent-text); }
+.rail-status { min-height: 1.2em; margin: 8px 0 0; color: var(--accent-text); }
+.post.is-wide ~ .post-rail { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .post-rail > *, .rail-head > *, .post-rail.is-shown > *, .post-rail.is-shown .rail-head > * { transition-duration: 0s !important; transition-delay: 0s !important; filter: none; transform: none; }
+}
+
+/* ---- "More from the blog" under a post -------------------------------------- */
+.more-posts { padding: 56px 0 72px; border-top: 1px solid var(--rule); background: color-mix(in srgb, var(--ink) 2%, var(--paper)); }
+.more-posts-inner { width: min(1160px, 100% - 48px); margin: 0 auto; }
+.more-posts-title { display: grid; gap: 8px; margin: 0 0 24px; font-family: var(--font-display); font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 800; letter-spacing: -0.01em; }
+.more-posts-title .blog-eyebrow { margin: 0; }
+
+/* ---- the blog's footer: the slab, credits in columns, the Icarus sky ---------- */
+.blog-footer {
+  --ink: var(--slab-ink); --ink-muted: #b3ad9f; --rule-strong: var(--slab-ink); --accent-text: var(--slab-accent); --focus: var(--slab-accent);
+  background: var(--slab); color: var(--ink-muted); border-top: var(--border-w) solid var(--accent);
+  padding: 48px var(--page-pad, 24px) 0; font-size: 0.85rem;
+}
+.blog-footer-grid {
+  display: grid; gap: 32px 40px; width: min(1160px, 100%); margin: 0 auto;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(140px, 1fr));
+}
+.bf-logo { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-family: var(--font-display); font-size: 1.15rem; font-weight: 800; }
+.bf-tag { margin: 12px 0 0; max-width: 30ch; line-height: 1.5; }
+.bf-legal { margin: 28px 0 0; font-size: 0.75rem; line-height: 1.9; }
+.bf-legal a { margin-right: 14px; color: var(--ink-muted); text-underline-offset: 3px; }
+.bf-col { display: grid; align-content: start; gap: 9px; }
+.bf-head { margin: 0 0 4px; font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-muted); opacity: 0.8; }
+.bf-col a { color: var(--ink); text-decoration: none; font-size: 0.95rem; width: fit-content; }
+.bf-col a:hover, .bf-col a:focus-visible { color: var(--accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.bf-credits p:not(.bf-head) { display: grid; margin: 0; line-height: 1.35; }
+.bf-credits p > span { font-family: var(--font-mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.7; }
+.bf-credits p:not(.bf-head), .bf-credits p a { font-size: 0.85rem; color: var(--ink); }
+.bf-credits small { font-size: 0.72rem; color: var(--ink-muted); }
+.blog-footer .footer-sky { margin-top: 40px; }
+@media (max-width: 860px) { .blog-footer-grid { grid-template-columns: 1fr 1fr; } .bf-brand { grid-column: 1 / -1; } }
+@media (max-width: 480px) { .blog-footer-grid { grid-template-columns: 1fr; } }
+.post-dek { font-family: var(--font-read, inherit); }
+
+/* The rail's contents: sections, with their subheadings folded until you
+ * reach that section (they open with a short height animation). */
+.rail-tree > li { padding-left: 0; }
+.rail-sub { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 320ms var(--rail-ease), opacity 200ms ease; }
+.rail-sub > ol { min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 0 0 16px; display: grid; gap: 7px; }
+.rail-sub > ol > li { padding-left: calc(var(--depth, 0) * 14px); }
+.rail-sub > ol > li:first-child { margin-top: 7px; }
+.rail-tree > li.is-open > .rail-sub { grid-template-rows: 1fr; opacity: 1; }
+.rail-tree > li.is-active > a { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .rail-sub { transition: none; } }

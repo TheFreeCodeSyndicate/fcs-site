@@ -15,7 +15,7 @@ const post = {
 test("a post page escapes the title and carries its own preview tags", () => {
   const html = postPage(post);
   assert.ok(!html.includes("<b>"));
-  assert.match(html, /<h1 class="post-title" style="view-transition-name: vt-title-hello-world">Hello &lt;b&gt;&quot;world&quot;&lt;\/b&gt;<\/h1>/);
+  assert.match(html, /<h1 class="post-title" style="view-transition-name: vt-title-hello-world; view-transition-class: vt-text">Hello &lt;b&gt;&quot;world&quot;&lt;\/b&gt;<\/h1>/);
   // The preview is the drawn card (tools/og.mjs), stamped with when the post last changed.
   assert.match(html, /<meta property="og:image" content="https:\/\/thefreecodesyndicate\.github\.io\/fcs-site\/blog\/hello-world\/og\.jpg\?v=[a-z0-9]+" \/>/);
   for (const tag of ['og:image:width" content="1200"', 'og:image:height" content="630"', 'og:image:type" content="image/jpeg"', 'twitter:card" content="summary_large_image"', 'article:author" content="Ada"', 'article:published_time']) {
@@ -23,7 +23,7 @@ test("a post page escapes the title and carries its own preview tags", () => {
   }
   assert.notEqual(postPage({ ...post, updated_at: "2026-10-07T10:00:00Z" }).match(/og\.jpg\?v=([a-z0-9]+)/)[1], html.match(/og\.jpg\?v=([a-z0-9]+)/)[1], "an edit changes the stamp");
   assert.match(html, /rel="canonical" href="https:\/\/thefreecodesyndicate\.github\.io\/fcs-site\/blog\/hello-world\/"/);
-  assert.match(html, /<span class="post-authors">Ada<\/span><\/span><span class="post-meta" style="view-transition-name: vt-date-hello-world">6 October 2026 · 1 min read<\/span>/);
+  assert.match(html, /<span class="post-authors">Ada<\/span><\/span><span class="post-meta" style="view-transition-name: vt-date-hello-world; view-transition-class: vt-text">6 October 2026 · 1 min read<\/span>/);
   assert.match(html, /<em>post<\/em>/);
   assert.match(html, /href="\.\.\/\.\.\/css\/style\.css"/);
 });
@@ -81,7 +81,7 @@ test("post cards: cover with the icon over it, a tint without one, compact for o
   assert.match(withIcon, /Ada <span class="post-card-more">\+1<\/span>/);
   assert.match(withIcon, /<time datetime="2026-10-06T10:00:00Z">6 October 2026<\/time><\/span>/);
   const bare = postCardHTML({ ...post, cover_url: "", icon: "icon:code" });
-  assert.match(bare, /class="post-card-cover is-blank" style="background-color: var\(--bg-[a-z]+\)"><span class="post-card-glyph" style="view-transition-name: vt-icon-hello-world"><svg/);
+  assert.match(bare, /class="post-card-cover is-blank" style="background-color: var\(--bg-[a-z]+\)"><span class="post-card-glyph" style="view-transition-name: vt-icon-hello-world; view-transition-class: vt-media"><svg/);
   // The card and the post page share names, so the browser can move each part across.
   for (const part of ["cover", "icon", "title", "authors", "date"]) {
     assert.ok(withIcon.includes(`view-transition-name: vt-${part}-hello-world`), part);
@@ -95,4 +95,10 @@ test("post cards: cover with the icon over it, a tint without one, compact for o
   assert.equal((indexPage(posts).match(/class="post-card is-compact"/g) || []).length, 2);
   assert.equal((latestFragment(posts).match(/<li>/g) || []).length, 3);
   assert.match(latestFragment(posts), /href="blog\/p1\/"/);
+});
+
+test("an Unsplash cover credits its photographer and Unsplash, both linked", () => {
+  const html = postPage({ ...post, cover_credit: { name: "Annie <Spratt>", url: "https://unsplash.com/@anniespratt?utm_source=x" } });
+  assert.match(html, /<p class="cover-credit">Photo by <a href="https:\/\/unsplash\.com\/@anniespratt\?utm_source=x" target="_blank" rel="noopener">Annie &lt;Spratt&gt;<\/a> on <a href="https:\/\/unsplash\.com\/\?utm_source=the_free_code_syndicate&amp;utm_medium=referral"/);
+  assert.ok(!postPage({ ...post, cover_credit: { name: "x", url: "javascript:alert(1)" } }).includes("cover-credit"));
 });

@@ -441,11 +441,40 @@ export async function linkMemberCard(userId, memberId) {
     .then((rows) => assertChanged(rows, "Linking your member card"));
 }
 
+/* ---- blog autosave and version history (migration 029) ------------ */
+
+/** A published post's unpublished edits, or null. */
+export async function getBlogDraft(postId) {
+  const { data, error } = await getClientOrThrow().from("blog_drafts").select("content, updated_at").eq("post_id", postId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
+export const saveBlogDraft = (postId, content) =>
+  write((s) => s.from("blog_drafts").upsert({ post_id: postId, content, updated_at: new Date().toISOString() }).select());
+
+export const clearBlogDraft = (postId) => write((s) => s.from("blog_drafts").delete().eq("post_id", postId).select());
+
+export const addBlogVersion = (postId, content, kind = "edit") =>
+  write((s) => s.from("blog_versions").insert({ post_id: postId, content, kind }).select("id, created_at"));
+
+/** Versions of a post, newest first, with their content. */
+export async function listBlogVersions(postId, limit = 100) {
+  const { data, error } = await getClientOrThrow()
+    .from("blog_versions")
+    .select("id, content, kind, created_at, created_by")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
 /** One row's history, newest first (the blog editor's version history). */
 export async function listRowHistory(table, rowId, limit = 30) {
   const { data, error } = await getClientOrThrow()
     .from("activity_log")
-    .select("at, actor_email, action, changed")
+    .select("at, actor_id, actor_email, action, changed")
     .eq("table_name", table)
     .eq("row_id", String(rowId))
     .order("at", { ascending: false })
@@ -538,3 +567,16 @@ export const saveRepoKind = (repoName, patch) =>
 export const deleteRepoKind = (repoName) =>
   write((s) => s.from("repo_kinds").delete(WRITE_OPTS).eq("repo_name", repoName).select())
     .then((rows) => assertChanged(rows, "Deleting the repository kind"));
+
+/** One post's views, visitors, reading time and referrers (migration 031). */
+export async function postAnalytics(slug, days = 28) {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  const { data, error } = await getClientOrThrow().rpc("blog_post_analytics", { post_slug: slug, days, tz });
+  if (error) throw error;
+  return data;
+}
+
+/* ---- Unsplash, for the cover picker (supabase/functions/unsplash) ---- */
+export const searchUnsplash = (query, page = 1) => invokeFunction("unsplash", { action: "search", query, page });
+/** Unsplash's rules: report each photo that is actually used. */
+export const trackUnsplash = (download) => invokeFunction("unsplash", { action: "download", download });

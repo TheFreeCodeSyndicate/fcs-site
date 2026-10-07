@@ -16,7 +16,8 @@
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { indexPage, latestFragment, postPage, sitemap, postAuthors } from "../js/lib/blog-pages.js";
-import { plainSummary, readingTime } from "../js/lib/markdown.js";
+import { plainSummary, readingTime, bookmarkURLs } from "../js/lib/markdown.js";
+import { linkMetaFor } from "./link-meta.mjs";
 import { postCard, siteCard } from "./og.mjs";
 
 const config = readFileSync("js/config.js", "utf8");
@@ -32,13 +33,20 @@ const res = await fetch(
 const posts = res.status === 404 ? [] : res.ok ? await res.json() : null;
 if (!posts) throw new Error(`blog_posts -> ${res.status}`);
 
+// The club's links, for the footer's Connect column (published ones only).
+const socialRes = await fetch(`${url}/rest/v1/social_links?select=label,platform,url,is_published&order=sort_order`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+const social = socialRes.ok ? (await socialRes.json()).filter((l) => l.is_published !== false) : [];
+
+// Bookmark cards: each linked page's title, description and image.
+for (const post of posts) post.link_meta = await linkMetaFor(bookmarkURLs(post.body));
+
 rmSync("blog", { recursive: true, force: true });
 mkdirSync("blog", { recursive: true });
-writeFileSync("blog/index.html", indexPage(posts));
+writeFileSync("blog/index.html", indexPage(posts, { social }));
 writeFileSync("blog/latest.html", latestFragment(posts));
 for (const post of posts) {
   mkdirSync(`blog/${post.slug}`, { recursive: true });
-  writeFileSync(`blog/${post.slug}/index.html`, postPage(post));
+  writeFileSync(`blog/${post.slug}/index.html`, postPage(post, { others: posts, social }));
 }
 writeFileSync("sitemap.xml", sitemap(posts));
 console.log(`Blog: ${posts.length} post${posts.length === 1 ? "" : "s"}`);
