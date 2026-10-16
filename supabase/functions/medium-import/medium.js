@@ -404,3 +404,556 @@ export function textOf(nodes) {
   if (typeof nodes.text === "string") return nodes.text;
   return "";
 }
+
+/**
+ * Parses an iframe's attributes and returns the decoded url query parameter
+ * when the src is a cdn.embedly.com/widgets/media.html address, else null.
+ * Decoding handles &amp; entity escaping and percent-encoding.
+ * @param {object|string} attrs
+ * @returns {string|null}
+ */
+export function embedTarget(attrs) {
+  if (!attrs) return null;
+  const src = typeof attrs === "string" ? attrs : (attrs.src || attrs.SRC || "");
+  if (!src) return null;
+  const cleanSrc = decodeEntities(src);
+  if (!cleanSrc.includes("cdn.embedly.com/widgets/media.html")) return null;
+
+  let rawUrl = null;
+  try {
+    const u = new URL(cleanSrc, "https://cdn.embedly.com");
+    rawUrl = u.searchParams.get("url");
+  } catch {}
+
+  if (!rawUrl) {
+    const m = /[?&]url=([^&#]+)/.exec(cleanSrc);
+    if (m) rawUrl = m[1];
+  }
+  if (!rawUrl) return null;
+
+  try {
+    return decodeURIComponent(rawUrl);
+  } catch {
+    return rawUrl;
+  }
+}
+
+const ONE_LINE_RE = /\s*\n\s*/g;
+function oneLine(s) {
+  return String(s || "").replace(ONE_LINE_RE, " ").trim();
+}
+
+function isListBlock(b) {
+  return b && (b.type === "bullet" || b.type === "number" || b.type === "todo");
+}
+
+function startsBlock(line) {
+  return (
+    /^(#{1,4}\s|>|\+\+\+|:::|```|\$\$|---+$\s*|\[\[toc\]\]\s*|\|)/.test(line) ||
+    /^( *)(?:([-*])\s+\[( |x|X)\]|([-*])|(\d+)[.)])\s+(.*)$/.test(line) ||
+    /^!\[((?:\\.|[^\]\\])*)\]\((https:\/\/[^\s)]+)\)\s*$/.test(line) ||
+    /^@\[(video|bookmark)\]\((https:\/\/[^\s)]+)\)\s*$/.test(line)
+  );
+}
+
+function guard(line) {
+  return startsBlock(line) ? `\\${line}` : line;
+}
+
+/**
+ * Serializes an array of block objects into Markdown suitable for the FCS site editor.
+ * @param {Array<object>|object} blocks
+ * @returns {string}
+ */
+export function serializeSection(blocks) {
+  if (!blocks) return "";
+  const list = Array.isArray(blocks) ? blocks : [blocks];
+  const parts = [];
+  const counters = [];
+  let prev = null;
+
+  for (const b of list) {
+    if (!b) continue;
+    let text = "";
+    if (isListBlock(b)) {
+      const indent = Math.max(0, Math.min(b.indent || 0, 6));
+      counters.length = indent + 1;
+      counters[indent] =
+        b.type === "number" && prev && prev.type === "number" && (prev.indent || 0) >= indent
+          ? (counters[indent] || 0) + 1
+          : b.type === "number"
+          ? 1
+          : 0;
+      const pad = "  ".repeat(indent);
+      const marker =
+        b.type === "todo" ? `- [${b.checked ? "x" : " "}]` : b.type === "number" ? `${counters[indent]}.` : "-";
+      const lines = String(b.text || "")
+        .split(/\n+/)
+        .map((l) => l.trim())
+        .filter((l, n) => l || n === 0);
+      text = `${pad}${marker} ${lines.join(`\n${pad}${" ".repeat(marker.length + 1)}`)}`;
+    } else {
+      counters.length = 0;
+      switch (b.type) {
+        case "h1":
+        case "h2":
+        case "h3":
+        case "h4":
+          text = `${"#".repeat(Number(b.type[1]))} ${oneLine(b.text)}`;
+          break;
+        case "quote":
+          text = String(b.text || "")
+            .split("\n")
+            .map((l) => (l ? `> ${l}` : ">"))
+            .join("\n");
+          if (!b.text) text = ">";
+          break;
+        case "code": {
+          const longest = Math.max(2, ...(String(b.code || "").match(/^`+/gm) || []).map((f) => f.length));
+          const fence = "`".repeat(longest + 1);
+          text = `${fence}${b.lang || ""}\n${b.code || ""}\n${fence}`;
+          break;
+        }
+        case "divider":
+          text = "---";
+          break;
+        case "image":
+          text = b.url ? `![${oneLine(b.caption).replace(/([\\\]\[])/g, "\\$1")}](${b.url})` : "";
+          break;
+        case "video":
+        case "bookmark":
+          text = b.url ? `@[${b.type}](${b.url})` : "";
+          break;
+        default:
+          text = String(b.text || "")
+            .split("\n")
+            .map(guard)
+            .join("\n");
+      }
+    }
+    if (text) {
+      parts.push((parts.length ? (isListBlock(b) && isListBlock(prev) ? "\n" : "\n\n") : "") + text);
+    }
+    prev = b;
+  }
+  return parts.join("");
+}
+
+function isYouTubeUrl(url) {
+  return /^https:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/i.test(
+    String(url || "").trim()
+  );
+}
+
+function inlineMarkdown(nodes) {
+  if (nodes == null) return "";
+  if (typeof nodes === "string") return nodes;
+  if (Array.isArray(nodes)) return nodes.map(inlineMarkdown).join("");
+  if (nodes.type === "text") return nodes.text || "";
+  if (nodes.tag === "br") return "\n";
+
+  const inner = inlineMarkdown(nodes.children);
+  switch (nodes.tag) {
+    case "strong":
+    case "b":
+      return inner ? `**${inner}**` : "";
+    case "em":
+    case "i":
+      return inner ? `*${inner}*` : "";
+    case "code":
+      return inner ? `\`${inner}\`` : "";
+    case "a": {
+      const href = (nodes.attrs && (nodes.attrs.href || nodes.attrs.HREF)) || "";
+      if (isYouTubeUrl(href)) {
+        return `@[video](${href})`;
+      }
+      return href ? `[${inner || href}](${href})` : inner;
+    }
+    case "img": {
+      const src = (nodes.attrs && (nodes.attrs.src || nodes.attrs.SRC)) || "";
+      const alt = (nodes.attrs && (nodes.attrs.alt || nodes.attrs.ALT)) || "";
+      return src ? `![${alt}](${src})` : "";
+    }
+    default:
+      return inner;
+  }
+}
+
+function collectListItems(listNode, indent = 0) {
+  const items = [];
+  const type = listNode.tag === "ol" ? "number" : "bullet";
+
+  for (const child of listNode.children || []) {
+    if (child.type === "text" && !child.text.trim()) continue;
+
+    if (child.tag === "li") {
+      const inlineChildren = [];
+      const nestedLists = [];
+
+      for (const grandChild of child.children || []) {
+        if (grandChild.tag === "ul" || grandChild.tag === "ol") {
+          nestedLists.push(grandChild);
+        } else {
+          inlineChildren.push(grandChild);
+        }
+      }
+
+      const text = inlineMarkdown(inlineChildren).trim();
+      if (text) {
+        items.push({ type, indent, text });
+      }
+
+      for (const nested of nestedLists) {
+        items.push(...collectListItems(nested, indent + 1));
+      }
+    } else if (child.tag === "ul" || child.tag === "ol") {
+      items.push(...collectListItems(child, indent + 1));
+    }
+  }
+  return items;
+}
+
+function findTag(node, tag) {
+  if (!node) return null;
+  if (node.tag === tag) return node;
+  for (const child of node.children || []) {
+    const found = findTag(child, tag);
+    if (found) return found;
+  }
+  return null;
+}
+
+function flattenElements(nodes) {
+  const flat = [];
+  for (const node of nodes || []) {
+    if (node.type === "text") {
+      if (node.text.trim()) {
+        flat.push(node);
+      }
+    } else if (["div", "section", "article", "main"].includes(node.tag)) {
+      flat.push(...flattenElements(node.children));
+    } else {
+      flat.push(node);
+    }
+  }
+  return flat;
+}
+
+function makeLabel(kind, text) {
+  const clean = oneLine(text || "");
+  if (!clean) {
+    if (kind === "divider") return "---";
+    if (kind === "image") return "Image";
+    if (kind === "code") return "Code";
+    if (kind === "video") return "Video";
+    if (kind === "list") return "List";
+    return kind;
+  }
+  return clean.length <= 60 ? clean : clean.slice(0, 59) + "…";
+}
+
+/**
+ * Converts Medium story HTML into an array of editable section objects.
+ * @param {string} html
+ * @param {{ dropped?: boolean }} [opts]
+ * @returns {Array<object>|{ sections: Array<object>, dropped: Array<object> }}
+ */
+export function htmlToSections(html, opts = {}) {
+  const cleanHtml = stripBoilerplate(html);
+  const parsed = parseHTML(cleanHtml);
+  const elements = flattenElements(parsed);
+  const dropped = [];
+  const rawSections = [];
+
+  let i = 0;
+  while (i < elements.length) {
+    const el = elements[i];
+
+    // 1. Merge consecutive <pre> runs
+    if (el.tag === "pre") {
+      const preRun = [];
+      while (i < elements.length && elements[i].tag === "pre") {
+        preRun.push(elements[i]);
+        i++;
+      }
+      const code = preRun
+        .map((p) => textOf(p).replace(/\r\n?/g, "\n").replace(/\n+$/, ""))
+        .join("\n");
+      const blocks = [{ type: "code", lang: "", code }];
+      rawSections.push({
+        kind: "code",
+        blocks,
+        label: makeLabel("code", code),
+        images: [],
+      });
+      continue;
+    }
+
+    // 2. Lists (ul/ol)
+    if (el.tag === "ul" || el.tag === "ol") {
+      const listItems = [];
+      while (i < elements.length && (elements[i].tag === "ul" || elements[i].tag === "ol")) {
+        listItems.push(...collectListItems(elements[i], 0));
+        i++;
+      }
+      if (listItems.length > 0) {
+        rawSections.push({
+          kind: "list",
+          blocks: listItems,
+          label: makeLabel("list", listItems[0]?.text),
+          images: [],
+        });
+      }
+      continue;
+    }
+
+    // 3. Iframe (direct)
+    if (el.tag === "iframe") {
+      const target = embedTarget(el.attrs);
+      if (target) {
+        if (isYouTubeUrl(target)) {
+          const blocks = [{ type: "video", url: target }];
+          rawSections.push({
+            kind: "video",
+            blocks,
+            label: makeLabel("video", target),
+            images: [],
+          });
+        } else {
+          const blocks = [{ type: "p", text: `[${target}](${target})` }];
+          rawSections.push({
+            kind: "p",
+            blocks,
+            label: makeLabel("p", target),
+            images: [],
+          });
+        }
+      } else {
+        dropped.push({ kind: "embed" });
+      }
+      i++;
+      continue;
+    }
+
+    // 4. Figure
+    if (el.tag === "figure") {
+      const iframe = findTag(el, "iframe");
+      if (iframe) {
+        const target = embedTarget(iframe.attrs);
+        if (target) {
+          if (isYouTubeUrl(target)) {
+            const blocks = [{ type: "video", url: target }];
+            rawSections.push({
+              kind: "video",
+              blocks,
+              label: makeLabel("video", target),
+              images: [],
+            });
+          } else {
+            const blocks = [{ type: "p", text: `[${target}](${target})` }];
+            rawSections.push({
+              kind: "p",
+              blocks,
+              label: makeLabel("p", target),
+              images: [],
+            });
+          }
+        } else {
+          dropped.push({ kind: "embed" });
+        }
+        i++;
+        continue;
+      }
+
+      const img = findTag(el, "img");
+      if (img) {
+        const url = (img.attrs && (img.attrs.src || img.attrs.SRC)) || "";
+        const figcaption = findTag(el, "figcaption");
+        const caption = figcaption
+          ? textOf(figcaption).trim()
+          : (img.attrs && (img.attrs.alt || img.attrs.ALT)) || "";
+        if (url) {
+          const blocks = [{ type: "image", url, caption }];
+          rawSections.push({
+            kind: "image",
+            blocks,
+            label: makeLabel("image", caption),
+            images: [url],
+          });
+        }
+        i++;
+        continue;
+      }
+
+      const pre = findTag(el, "pre");
+      if (pre) {
+        const code = textOf(pre).replace(/\r\n?/g, "\n").replace(/\n+$/, "");
+        const blocks = [{ type: "code", lang: "", code }];
+        rawSections.push({
+          kind: "code",
+          blocks,
+          label: makeLabel("code", code),
+          images: [],
+        });
+        i++;
+        continue;
+      }
+
+      const text = inlineMarkdown(el.children).trim();
+      if (text) {
+        rawSections.push({
+          kind: "p",
+          blocks: [{ type: "p", text }],
+          label: makeLabel("p", text),
+          images: [],
+        });
+      }
+      i++;
+      continue;
+    }
+
+    // 5. Headings
+    if (/^h[1-6]$/.test(el.tag)) {
+      let kind = "h1";
+      if (el.tag === "h4") kind = "h2";
+      else if (el.tag === "h5") kind = "h3";
+      else if (el.tag === "h6") kind = "h4";
+      const text = inlineMarkdown(el.children).trim();
+      if (text) {
+        rawSections.push({
+          kind,
+          blocks: [{ type: kind, text }],
+          label: makeLabel(kind, text),
+          images: [],
+        });
+      }
+      i++;
+      continue;
+    }
+
+    // 6. Blockquote
+    if (el.tag === "blockquote") {
+      const text = inlineMarkdown(el.children).trim();
+      if (text) {
+        rawSections.push({
+          kind: "quote",
+          blocks: [{ type: "quote", text }],
+          label: makeLabel("quote", text),
+          images: [],
+        });
+      }
+      i++;
+      continue;
+    }
+
+    // 7. Divider (<hr>)
+    if (el.tag === "hr") {
+      rawSections.push({
+        kind: "divider",
+        blocks: [{ type: "divider" }],
+        label: "---",
+        images: [],
+      });
+      i++;
+      continue;
+    }
+
+    // 8. Paragraph (<p>) or other tags
+    const iframeInP = findTag(el, "iframe");
+    if (iframeInP) {
+      const target = embedTarget(iframeInP.attrs);
+      if (target) {
+        if (isYouTubeUrl(target)) {
+          rawSections.push({
+            kind: "video",
+            blocks: [{ type: "video", url: target }],
+            label: makeLabel("video", target),
+            images: [],
+          });
+        } else {
+          rawSections.push({
+            kind: "p",
+            blocks: [{ type: "p", text: `[${target}](${target})` }],
+            label: makeLabel("p", target),
+            images: [],
+          });
+        }
+      } else {
+        dropped.push({ kind: "embed" });
+      }
+      i++;
+      continue;
+    }
+
+    const imgInP = findTag(el, "img");
+    if (imgInP && textOf(el).trim() === "") {
+      const url = (imgInP.attrs && (imgInP.attrs.src || imgInP.attrs.SRC)) || "";
+      const caption = (imgInP.attrs && (imgInP.attrs.alt || imgInP.attrs.ALT)) || "";
+      if (url) {
+        rawSections.push({
+          kind: "image",
+          blocks: [{ type: "image", url, caption }],
+          label: makeLabel("image", caption),
+          images: [url],
+        });
+      }
+      i++;
+      continue;
+    }
+
+    const text = (el.type === "text" ? el.text : inlineMarkdown(el.children || el)).trim();
+    if (text) {
+      if (text.includes("@[video](")) {
+        const parts = text.split(/(@\[video\]\([^\)]+\))/g);
+        const pBlocks = [];
+        let videoUrl = "";
+        for (const part of parts) {
+          const m = /^@\[video\]\(([^\)]+)\)$/.exec(part);
+          if (m) {
+            pBlocks.push({ type: "video", url: m[1] });
+            videoUrl = m[1];
+          } else {
+            const t = part.trim();
+            if (t) pBlocks.push({ type: "p", text: t });
+          }
+        }
+        if (pBlocks.length > 0) {
+          rawSections.push({
+            kind: "video",
+            blocks: pBlocks,
+            label: makeLabel("video", videoUrl || text),
+            images: [],
+          });
+        }
+      } else {
+        rawSections.push({
+          kind: "p",
+          blocks: [{ type: "p", text }],
+          label: makeLabel("p", text),
+          images: [],
+        });
+      }
+    }
+    i++;
+  }
+
+  const sections = rawSections.map((s, idx) => {
+    const markdown = serializeSection(s.blocks);
+    const images = [...(s.images || [])];
+    const imgMatches = markdown.matchAll(/!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g);
+    for (const m of imgMatches) {
+      if (!images.includes(m[1])) {
+        images.push(m[1]);
+      }
+    }
+    return {
+      id: `s${idx + 1}`,
+      kind: s.kind,
+      label: s.label,
+      markdown,
+      images,
+    };
+  });
+
+  return opts && opts.dropped ? { sections, dropped } : sections;
+}
