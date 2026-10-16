@@ -117,8 +117,24 @@ function unwrapCdata(str) {
 /**
  * Decodes basic XML / HTML entities.
  */
-function decodeEntities(str) {
+export function decodeEntities(str) {
   return String(str || "")
+    .replace(/&#(\d+);/g, (match, dec) => {
+      try {
+        const code = parseInt(dec, 10);
+        return Number.isFinite(code) && code >= 0 ? String.fromCodePoint(code) : match;
+      } catch {
+        return match;
+      }
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) => {
+      try {
+        const code = parseInt(hex, 16);
+        return Number.isFinite(code) && code >= 0 ? String.fromCodePoint(code) : match;
+      } catch {
+        return match;
+      }
+    })
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&lt;/g, "<")
@@ -272,4 +288,119 @@ export function stripBoilerplate(html) {
   text = text.replace(/<hr\s*\/?>\s*<p\b[^>]*>[\s\S]*?on Medium, where people are continuing the conversation[\s\S]*?<\/p>\s*$/i, "");
   text = text.replace(/<hr\s*\/?>\s*$/i, "");
   return text;
+}
+
+const VOID_ELEMENTS = new Set(["br", "hr", "img", "meta", "link", "input"]);
+
+/**
+ * Parses an HTML tag attribute string quote-aware.
+ * Values are entity-decoded.
+ * @param {string} attrsStr
+ * @returns {Record<string, string>}
+ */
+function parseAttrs(attrsStr) {
+  const attrs = {};
+  if (!attrsStr) return attrs;
+  const attrRegex = /([a-zA-Z][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+  let m;
+  while ((m = attrRegex.exec(attrsStr)) !== null) {
+    const name = m[1].toLowerCase();
+    const val = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : (m[4] !== undefined ? m[4] : ""));
+    attrs[name] = decodeEntities(val);
+  }
+  return attrs;
+}
+
+/**
+ * A quote-aware HTML tokeniser for the RSS/Medium subset.
+ * Uses a stack to build an element tree, treats void elements properly,
+ * and decodes entities in text nodes and attribute values.
+ * @param {string} html
+ * @returns {Array<object>} Root nodes
+ */
+export function parseHTML(html) {
+  const root = { children: [] };
+  const stack = [root];
+  const tagRegex = /<\/?([a-zA-Z][\w-]*)((?:\s+[\w-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*\/?>/g;
+  let lastIndex = 0;
+  let match;
+  const str = String(html || "");
+
+  while ((match = tagRegex.exec(str)) !== null) {
+    if (match.index > lastIndex) {
+      const rawText = str.slice(lastIndex, match.index);
+      if (rawText) {
+        if (stack.length > 1 || rawText.trim().length > 0) {
+          const parent = stack[stack.length - 1];
+          parent.children.push({
+            type: "text",
+            text: decodeEntities(rawText),
+          });
+        }
+      }
+    }
+    lastIndex = tagRegex.lastIndex;
+
+    const fullTag = match[0];
+    const isClosing = fullTag.startsWith("</");
+    const tagName = match[1].toLowerCase();
+
+    if (isClosing) {
+      let idx = -1;
+      for (let i = stack.length - 1; i > 0; i--) {
+        if (stack[i].tag === tagName) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx !== -1) {
+        stack.length = idx;
+      }
+    } else {
+      const attrs = parseAttrs(match[2]);
+      const isVoid = VOID_ELEMENTS.has(tagName) || /\/\s*>$/.test(fullTag);
+      const node = {
+        tag: tagName,
+        attrs,
+        children: [],
+      };
+      const parent = stack[stack.length - 1];
+      parent.children.push(node);
+      if (!isVoid) {
+        stack.push(node);
+      }
+    }
+  }
+
+  if (lastIndex < str.length) {
+    const rawText = str.slice(lastIndex);
+    if (rawText) {
+      if (stack.length > 1 || rawText.trim().length > 0) {
+        const parent = stack[stack.length - 1];
+        parent.children.push({
+          type: "text",
+          text: decodeEntities(rawText),
+        });
+      }
+    }
+  }
+
+  return root.children;
+}
+
+/**
+ * Recursively extracts plain text from a node or array of nodes.
+ * Maps <br> elements to "\n".
+ * @param {any} nodes
+ * @returns {string}
+ */
+export function textOf(nodes) {
+  if (nodes == null) return "";
+  if (typeof nodes === "string") return nodes;
+  if (Array.isArray(nodes)) return nodes.map(textOf).join("");
+  if (nodes.tag === "br") return "\n";
+  if (nodes.type === "text") return nodes.text || "";
+  if (nodes.children) return textOf(nodes.children);
+  if (typeof nodes.text === "string") return nodes.text;
+  return "";
 }
