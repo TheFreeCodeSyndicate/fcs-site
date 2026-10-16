@@ -256,3 +256,20 @@ export function parseFeed(xml) {
 
   return { author, stories };
 }
+
+/**
+ * Strips Medium tracking pixels and trailing publication footer boilerplate.
+ * Order of operations:
+ * 1. Drop every <img> whose src starts with https://medium.com/_/stat
+ * 2. Drop trailing footer: <hr>\s*<p>...on Medium, where people are continuing the conversation...</p>
+ * 3. Drop any dangling rule (<hr>) left at the very end.
+ * @param {string} html
+ * @returns {string}
+ */
+export function stripBoilerplate(html) {
+  let text = String(html || "");
+  text = text.replace(/<img\b[^>]*?\bsrc=["']https:\/\/medium\.com\/_\/stat[^"']*["'][^>]*\/?>/gi, "");
+  text = text.replace(/<hr\s*\/?>\s*<p\b[^>]*>[\s\S]*?on Medium, where people are continuing the conversation[\s\S]*?<\/p>\s*$/i, "");
+  text = text.replace(/<hr\s*\/?>\s*$/i, "");
+  return text;
+}
