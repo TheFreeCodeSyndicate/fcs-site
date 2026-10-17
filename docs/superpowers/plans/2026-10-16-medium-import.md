@@ -1,7 +1,14 @@
 # Import from Medium — implementation plan
 
 - **Date:** 2026-10-16
-- **Status:** Not started
+- **Status:** Implementation complete on `feat/medium-import`, reviewed task by task;
+  the evidence for each task is in the SDD ledger,
+  `.superpowers/sdd/2026-10-16-medium-import/progress.md`. The boxes below were
+  ticked at hand-off to match the delivered tasks. **Twenty-two boxes stay open
+  because only a human can close them**: Task 0.1 Steps 2–3 (run migration 033),
+  Task 2.1 Steps 3–4 (deploy the function; smoke it from the browser), the four
+  in-browser verifications (3.1 Step 6, 4.1 Step 4, 4.2 Step 3, 4.3 Step 4), all
+  seven steps of Task 6.2, and the three external gates at the end of this file.
 - **Spec:** `docs/superpowers/specs/2026-10-16-medium-import-design.md`
 - **Builds on:** `2026-09-28-fcs-cms-dashboard.md` (the admin panel, the blog
   editor, `js/lib/markdown.js`, the `upload-asset` Edge Function and its
@@ -137,7 +144,7 @@ The address of the story a post came from. Nothing reads it until Phase 5, but
 `values()` will start sending it, and an unknown column would fail the write — so
 this lands before any code.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 `supabase/migrations/033_blog_source_url.sql`:
 
@@ -187,7 +194,7 @@ testable, exactly like `asset.js` before `upload-asset` was wired to the editor.
 
 The tests are only as good as the input they use. Capture one for real.
 
-- [ ] **Step 1: Fetch a feed and lift one item's content**
+- [x] **Step 1: Fetch a feed and lift one item's content**
 
 ```bash
 curl -s -A "Mozilla/5.0" "https://medium.com/feed/@theyasser" -o feed.xml
@@ -198,7 +205,7 @@ several `<pre>` siblings**, a `<figure>` with a `<figcaption>`, a
 `<blockquote>`, a `<ul>`, an `<hr>`, the `/_/stat` pixel and the footer. Paste
 its content into the test as `STORY_HTML` (Task 1.4).
 
-- [ ] **Step 2: Note what the fixture proves**
+- [x] **Step 2: Note what the fixture proves**
 
 Expected inside `STORY_HTML`, from live observation on 2026-10-16:
 `<pre>` runs where 28 of 50 `<pre>` are immediately followed by another,
@@ -213,7 +220,7 @@ and a closing
 - Create: `supabase/functions/medium-import/medium.js`
 - Create: `js/lib/medium.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `js/lib/medium.test.js`:
 
@@ -277,12 +284,12 @@ test("feed addresses follow from the input", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npm test`
 Expected: `Cannot find module '…/medium.js'`.
 
-- [ ] **Step 3: Write the module**
+- [x] **Step 3: Write the module**
 
 `supabase/functions/medium-import/medium.js` — the header comment matters, because
 it is the rule that keeps this file testable:
@@ -330,12 +337,12 @@ Implementation notes that the tests pin down:
   Medium address is junk (`null`), so `https://example.com/x` is refused.
 - `NOT_A_PUBLICATION` stops `medium.com/tag/react` being read as a publication.
 
-- [ ] **Step 4: Run the tests until they pass**
+- [x] **Step 4: Run the tests until they pass**
 
 Run: `npm test`
 Expected: `pass` increases by 9, `fail 0`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/functions/medium-import/medium.js js/lib/medium.test.js
@@ -348,7 +355,7 @@ git commit -m "feat(medium): recognise handles and story addresses"
 - Modify: `supabase/functions/medium-import/medium.js`
 - Modify: `js/lib/medium.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add a trimmed real feed as `FEED_XML`: two items, one with
 `<content:encoded>`, one member-only without it (it says "Continue reading on").
@@ -374,11 +381,11 @@ test("a member-only story is listed but not importable", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `npm test`
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Requirements the tests pin down:
 
@@ -401,7 +408,7 @@ Requirements the tests pin down:
 - Modify: `supabase/functions/medium-import/medium.js`
 - Modify: `js/lib/medium.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 test("the tracking pixel is dropped", () => {
@@ -419,9 +426,9 @@ test("a real divider in the article is kept", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Three removals, in this order: every `<img>` whose `src` starts
 `https://medium.com/_/stat`; a trailing
@@ -436,7 +443,7 @@ on **both** sides survives, which is the test that stops this becoming a blunt
 - Modify: `supabase/functions/medium-import/medium.js`
 - Modify: `js/lib/medium.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 test("entities are decoded", () => {
@@ -458,9 +465,9 @@ test("void elements do not swallow the rest", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 A small tokeniser, not a parser for the web: split on tags with a regex that
 walks attributes quote-aware (`/<\/?([a-zA-Z][\w-]*)((?:\s+[\w-]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+))?)*)\s*\/?>/`),
@@ -479,7 +486,7 @@ and the converter uses it for labels and captions.
 
 This is the task that decides whether the import looks like the article.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 The important assertion is the **round-trip through the site's own parser**:
 
@@ -555,9 +562,9 @@ test("an empty frame with no recoverable target is still a reported loss", () =>
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 Section boundaries: a new section starts at a block that is not
 `bullet`/`number` (a list run is one section), not a `<pre>` that follows another
@@ -583,7 +590,7 @@ Watchers, in order of how much they matter:
 - Anything unrecognised contributes its text to the current paragraph rather than
   being dropped, so no prose is ever silently lost.
 
-- [ ] **Step 4: Run the tests until they pass**
+- [x] **Step 4: Run the tests until they pass**
 
 Run: `npm test`
 Expected: `fail 0`.
@@ -594,7 +601,7 @@ Expected: `fail 0`.
 - Modify: `supabase/functions/medium-import/medium.js`
 - Modify: `js/lib/medium.test.js`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 test("text is clipped by code points, not UTF-16 units", () => {
@@ -629,9 +636,9 @@ test("a Medium image's asset id survives both address shapes", () => {
 });
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 - `clipText(text, max)` counts with `[...text].length` so an emoji-heavy title is
   not cut short, and appends `…` only when it actually cut.
@@ -652,7 +659,7 @@ test("a Medium image's asset id survives both address shapes", () => {
   address, else `null`. Decoding must handle `&amp;` entity escaping and
   percent-encoding.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add supabase/functions/medium-import/medium.js js/lib/medium.test.js
@@ -683,7 +690,7 @@ functions) and note in both headers that they are mirrors. `js/lib/asset.test.js
 keeps testing the original; add `supabase/functions/medium-import/asset.js` to the
 same test's imports so the copy cannot drift.
 
-- [ ] **Step 1: Copy the asset helpers and pin the copy with a test**
+- [x] **Step 1: Copy the asset helpers and pin the copy with a test**
 
 ```bash
 cp supabase/functions/upload-asset/asset.js supabase/functions/medium-import/asset.js
@@ -700,7 +707,7 @@ test("the importer's copy of asset.js still agrees with upload-asset's", async (
 });
 ```
 
-- [ ] **Step 2: Write the function**
+- [x] **Step 2: Write the function**
 
 Routes on `action`, and answers everything as JSON with a useful `error` string,
 because `invokeFunction` surfaces it verbatim:
@@ -769,7 +776,7 @@ Expected: ten rows, one with `importable: false`.
 **Files:**
 - Modify: `js/supabase.js`
 
-- [ ] **Step 1: Add the wrappers beside the other `invokeFunction` calls**
+- [x] **Step 1: Add the wrappers beside the other `invokeFunction` calls**
 
 Near `searchUnsplash` (which is the same pattern):
 
@@ -780,7 +787,7 @@ export const mediumStory = (url, handle) => invokeFunction("medium-import", { ac
 export const mediumImport = (url, ids, handle) => invokeFunction("medium-import", { action: "import", url, ids, handle });
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add supabase/functions/medium-import js/supabase.js js/lib/medium.test.js
@@ -814,7 +821,7 @@ moved into the dialog and returned on close.
 export function openMediumImport(opts) { /* … */ }
 ```
 
-- [ ] **Step 1: Step 1 — Find**
+- [x] **Step 1: Step 1 — Find**
 
 One field, submitted on Enter or a button (never per keystroke — a feed is
 ~130 KB). Render the returned list as cards. Member-only stories are greyed out
@@ -837,7 +844,7 @@ nothing to click. Render it whenever a list is shown, including a short one;
 omit it on the empty, no-feed and unrecognisable-input states, whose copy already
 says what to try instead.
 
-- [ ] **Step 2: Step 2 — Choose**
+- [x] **Step 2: Step 2 — Choose**
 
 The story card, then the section checklist (all ticked), each row showing its
 kind, its `label`, and — for images — a thumbnail of `images[0]`. Shortcuts: All,
@@ -852,7 +859,7 @@ inside the CSP's existing `frame-src https://www.youtube-nocookie.com`, and the
 still-original Medium images render under `img-src 'self' data: https:`. Re-render
 on every tick change, debounced with `requestAnimationFrame`.
 
-- [ ] **Step 3: Step 3 — Confirm**
+- [x] **Step 3: Step 3 — Confirm**
 
 The copyright warning verbatim from spec §8, the required checkbox (which gates
 the Submit button), and the optional attribution checkbox, ticked by default.
@@ -879,7 +886,7 @@ hosted here) in both modes; the section picker only decides which ids are sent.
 The submit button enters a busy state with *"Copying images… this can take a
 minute"* — the request is one round trip, so there is no finer progress to show.
 
-- [ ] **Step 4: The duplicate warning (before Submit, not after)**
+- [x] **Step 4: The duplicate warning (before Submit, not after)**
 
 ```js
 const clash = (opts.existing || []).find((p) => p.source_url === source.url);
@@ -888,7 +895,7 @@ const clash = (opts.existing || []).find((p) => p.source_url === source.url);
 If there is one, replace the submit row with *"You already imported this story
 as **<title>**"* and two buttons: *Open that post* and *Import anyway*.
 
-- [ ] **Step 5: Styles**
+- [x] **Step 5: Styles**
 
 A `.mi-` prefixed block in `css/admin.css`. Reuse the admin panel's existing
 tokens, `.btn` classes, `.chip` for the picker shortcuts and `.badge` for
@@ -915,7 +922,7 @@ required box is ticked.
 **Files:**
 - Modify: `js/admin.js`
 
-- [ ] **Step 1: Add the slot**
+- [x] **Step 1: Add the slot**
 
 `pageHead` (line 733) gains `extra = ""`, rendered inside `.page-actions`
 **before** the New button so the primary action stays rightmost:
@@ -937,14 +944,14 @@ function pageHead(page, { count, newLabel, search = true, extra = "" } = {}) {
 
 Every other caller is unaffected — the option is additive.
 
-- [ ] **Step 2: Pass it from `renderBlogPage`**
+- [x] **Step 2: Pass it from `renderBlogPage`**
 
 ```js
 ${pageHead(page, { count: all.length, newLabel: "New post",
   extra: `<button type="button" class="btn btn-quiet" id="page-import">${icon("download")}<span>Import from Medium</span></button>` })}
 ```
 
-- [ ] **Step 3: Bind it**
+- [x] **Step 3: Bind it**
 
 ```js
 import { openMediumImport } from "./medium-import.js";
@@ -973,7 +980,7 @@ cover, and nothing published.
 - Modify: `js/blog-editor.js`
 - Modify: `js/admin.js`
 
-- [ ] **Step 1: Accept the option**
+- [x] **Step 1: Accept the option**
 
 In `openBlogEditor`'s doc comment (289–307) add:
 
@@ -992,7 +999,7 @@ That is enough: the initial render reads `post.title` (3982), `loadBody(post.bod
 (3984) and `paintProps()` (3987), so the title, body, summary and cover all
 appear, and `post.id` stays null because `initial` never carries one.
 
-- [ ] **Step 2: Thread it through `openEditor` / `openPostEditor`**
+- [x] **Step 2: Thread it through `openEditor` / `openPostEditor`**
 
 `openEditor(id, row)` (1630) gains a third parameter, passed to
 `openPostEditor(row, { initial })`, which forwards it into `openBlogEditor({ row,
@@ -1011,7 +1018,7 @@ post appears in the list.
 - Modify: `js/blog-editor.js`
 - Modify: `js/admin.js`
 
-- [ ] **Step 1: Let the admin supply the wizard**
+- [x] **Step 1: Let the admin supply the wizard**
 
 The editor already receives `save`, `uploadImage`, `unsplash` and `duplicate` as
 callbacks and knows nothing about Supabase. Follow that: add
@@ -1029,7 +1036,7 @@ importMedium: (insert) => openMediumImport({
 }),
 ```
 
-- [ ] **Step 2: Add the menu item**
+- [x] **Step 2: Add the menu item**
 
 Next to the existing *Import Markdown* entry in the ⋯ menu's Actions section,
 call `opts.importMedium(insertBlocksAtCaret)` — guarded, so an older caller
@@ -1040,7 +1047,7 @@ without the option still works:
   run: () => opts.importMedium ? opts.importMedium(insertBlocksAtCaret) : opts.toast("Importing from Medium is not available here.", "error") },
 ```
 
-- [ ] **Step 3: Insert at the cursor, additively**
+- [x] **Step 3: Insert at the cursor, additively**
 
 `importMarkdown` appends. A near-copy that inserts after the caret's block is the
 whole change, and the one-line `changed({ structural: true })` is what makes the
