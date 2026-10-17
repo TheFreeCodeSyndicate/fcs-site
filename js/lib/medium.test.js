@@ -215,7 +215,7 @@ test("sections are kept whole or dropped from the end", () => {
 
 test("the attribution line links the original", () => {
   assert.equal(attributionLine({ url: "https://medium.com/@a/x-1a2b3c4d5e6f" }),
-    "Originally published on [Medium](https://medium.com/@a/x-1a2b3c4d5e6f)");
+    "> Originally published on [Medium](https://medium.com/@a/x-1a2b3c4d5e6f)");
 });
 
 test("a Medium image's asset id survives both address shapes", () => {

@@ -1039,13 +1039,16 @@ export function fitSections(sections, opts = {}) {
 }
 
 /**
- * Emits the canonical attribution line linking the original Medium story.
+ * Emits the canonical attribution block: a block quote holding the link to
+ * the original Medium story. The importer appends it as the post's last
+ * block; the editor knows the same line (js/lib/attribution.js) and gives it
+ * a checkbox that takes it in and out of the body.
  * @param {{ url?: string }|string} story
  * @returns {string}
  */
 export function attributionLine(story) {
   const url = typeof story === "string" ? story : (story && story.url) || "";
-  return `Originally published on [Medium](${url})`;
+  return `> Originally published on [Medium](${url})`;
 }
 
 /**

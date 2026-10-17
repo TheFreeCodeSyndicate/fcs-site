@@ -126,7 +126,7 @@ test("assembleImport appends attributionLine only when attributionUrl is provide
   const withAttr = assembleImport(sections, { attributionUrl: "https://medium.com/@author/story-1a2b3c4d5e6f" });
   assert.equal(
     withAttr.markdown,
-    "Hello world\n\nOriginally published on [Medium](https://medium.com/@author/story-1a2b3c4d5e6f)"
+    "Hello world\n\n> Originally published on [Medium](https://medium.com/@author/story-1a2b3c4d5e6f)"
   );
 });
 
