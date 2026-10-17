@@ -39,6 +39,7 @@ import { deriveEventState } from "./lib/derive.js";
 import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./lib/forms.js";
 import { iconHTML, avatarHTML, avatarGroupHTML, postAuthors, authorNames, postCardHTML } from "./lib/blog-pages.js";
 import { openBlogEditor } from "./blog-editor.js";
+import { openMediumImport } from "./medium-import.js";
 import { openMemberPicker, memberCard } from "./member-picker.js";
 import { guessMember } from "./lib/member-match.js";
 import {
@@ -730,7 +731,7 @@ function renderPage() {
   else renderListPage(page);
 }
 
-function pageHead(page, { count, newLabel, search = true } = {}) {
+function pageHead(page, { count, newLabel, search = true, extra = "" } = {}) {
   return `
     <div class="page-head">
       <h1 tabindex="-1">${escapeHTML(page.label)}${count != null ? ` <span class="page-count">${count}</span>` : ""}</h1>
@@ -741,6 +742,7 @@ function pageHead(page, { count, newLabel, search = true } = {}) {
             <span class="visually-hidden">Search ${escapeHTML(page.label)}</span>
             <input type="search" id="page-search" placeholder="Search  /" value="${escapeAttr(state.search)}" autocomplete="off" />
           </label>` : ""}
+        ${extra}
         ${page.site ? `<a class="btn btn-quiet" href="./${page.site}" target="_blank" rel="noopener">${icon("eye")}<span>View on site</span></a>` : ""}
         ${newLabel ? `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>` : ""}
       </div>
@@ -1435,7 +1437,11 @@ function renderBlogPage(page) {
     </ul>`;
 
   root().innerHTML = `
-    ${pageHead(page, { count: all.length, newLabel: "New post" })}
+    ${pageHead(page, {
+      count: all.length,
+      newLabel: "New post",
+      extra: `<button type="button" class="btn btn-quiet" id="page-import">${icon("download")}<span>Import from Medium</span></button>`,
+    })}
     <p class="page-intro">${escapeHTML(editor.intro)}</p>
     <div class="blog-toolbar">
       <div class="page-filters" role="group" aria-label="Status">
@@ -1455,6 +1461,17 @@ function renderBlogPage(page) {
 
   const openNew = () => openEditor("blog", null);
   root().querySelector("#page-new").addEventListener("click", openNew);
+  const openImport = () => openMediumImport({
+    mode: "new",
+    existing: state.data.blog_posts,
+    toast,
+    onCreate: (draft) => openEditor("blog", null, draft),
+    onOpenPost: (clash) => {
+      const row = (state.data.blog_posts || []).find((p) => p.id === clash.id) || clash;
+      openEditor("blog", row);
+    },
+  });
+  root().querySelector("#page-import").addEventListener("click", openImport);
   const emptyNew = root().querySelector("[data-empty-new]");
   if (emptyNew) emptyNew.addEventListener("click", openNew);
   bindSearch();
