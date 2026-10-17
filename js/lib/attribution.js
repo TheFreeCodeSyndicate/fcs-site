@@ -2,7 +2,8 @@
  * js/lib/attribution.js
  * ------------------------------------------------------------------
  * Recognition, generation and normalisation of the Medium attribution
- * line. Pure client module with no side effects or external dependencies.
+ * line. Pure: no DOM, no network, no stored state; the only import is the
+ * sibling ./markdown.js, used to re-serialise a body that changes.
  * ------------------------------------------------------------------
  */
 

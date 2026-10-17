@@ -44,14 +44,12 @@ test("normaliseAttribution rewrites top-level paragraphs and leaves other blocks
     "Centred text {: align=center color=red}",
   ].join("\n\n");
   assert.equal(normaliseAttribution(untouched), untouched);
-  assert.ok(normaliseAttribution(untouched) === untouched);
 
   const converted = normaliseAttribution("Body\n\nOriginally published on [Medium](https://x.example/y)");
   assert.equal(converted, "Body\n\n> Originally published on [Medium](https://x.example/y)");
 
   const alreadyQuote = "Body\n\n> Originally published on [Medium](https://x.example/y)";
   assert.equal(normaliseAttribution(alreadyQuote), alreadyQuote);
-  assert.ok(normaliseAttribution(alreadyQuote) === alreadyQuote);
 
   const onlyLine = "Originally published on [Medium](https://x.example/y)";
   assert.equal(normaliseAttribution(onlyLine), `> ${onlyLine}`);
