@@ -1085,12 +1085,12 @@ function insertBlocksAtCaret(markdown) {
 **Files:**
 - Modify: `js/blog-editor.js`
 
-- [ ] **Step 1: Add it to the snapshot keys**
+- [x] **Step 1: Add it to the snapshot keys**
 
 `CONTENT_KEYS` (244) gains `"source_url"`, so drafts and versions keep it and a
 restore brings it back.
 
-- [ ] **Step 2: Add it to the write payload**
+- [x] **Step 2: Add it to the write payload**
 
 In `values()` (1005), after `locked`:
 
@@ -1098,7 +1098,7 @@ In `values()` (1005), after `locked`:
 source_url: post.source_url || null,
 ```
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Import a story, publish-check nothing, save the draft, reload the admin, reopen
 the post. `select source_url from blog_posts where id = …` still shows the
@@ -1110,7 +1110,7 @@ address. Undo a version restore and it survives.
 - Modify: `js/blog-editor.js`
 - Modify: `css/admin.css`
 
-- [ ] **Step 1: A read-only Source row**
+- [x] **Step 1: A read-only Source row**
 
 In `paintProps()` (1123), when `post.source_url` is set, add one row to the Post
 properties:
@@ -1126,7 +1126,7 @@ properties:
 Read-only: the address is a record, not a setting. The visible attribution line,
 if the writer wants one, is a normal paragraph they can edit or delete.
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 The row appears on an imported post, links out, and does not appear on a
 hand-written one.
@@ -1137,12 +1137,12 @@ hand-written one.
 
 ### Task 6.1: The suite
 
-- [ ] **Step 1: Run everything**
+- [x] **Step 1: Run everything**
 
 Run: `npm test`
 Expected: `fail 0`, and a total well above the current 140 (roughly 175+).
 
-- [ ] **Step 2: Confirm nothing else moved**
+- [x] **Step 2: Confirm nothing else moved**
 
 The only pre-existing files edited are `js/admin.js`, `js/blog-editor.js`,
 `js/supabase.js`, `css/admin.css` and `README.md`. `js/lib/markdown.js`,
@@ -1218,7 +1218,7 @@ scrolls; the preview stays readable.
 
 ### Task 6.3: README
 
-- [ ] **Step 1: Document it**
+- [x] **Step 1: Document it**
 
 One section under the blog/asset material:
 
@@ -1233,7 +1233,7 @@ One section under the blog/asset material:
   upload, so no new secret and no CSP change were needed
 - that migration 033 adds `source_url`
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md docs/superpowers

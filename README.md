@@ -192,6 +192,21 @@ Authors are named from core-member cards. Each admin and editor links their
 own login to their card once (Team page, or the prompt in a post's Authors
 row; the card is guessed from their email). Only they can change it.
 
+### Medium import
+
+Admin > **Blog** has an **Import from Medium** button in the header, and the editor's **⋯** menu has **Import from Medium**. There is no Medium account or OAuth involved: Medium's API is closed, so the importer reads only the public RSS feed (`medium.com/feed/@handle`) and the public story address.
+
+A feed carries only the author's ten newest stories (Medium does not paginate feeds). To import an older story, paste its address directly into the input bar. Member-only stories are refused with the reason; stories from authors in the Partner Program are published as teasers in the RSS feed and are also refused.
+
+**Fidelity:**
+- **Lost:** code block language tags (Medium feeds emit plain `<pre>`), GitHub gists (the `<script>` is stripped by feed cleaners), native Medium embeds, and LaTeX equations (Medium turns math into SVG or raster images).
+- **Preserved:** headings, paragraphs, blockquotes, lists, dividers, inline formatting (bold, italic, links, inline code), and Embedly third-party embeds (YouTube videos become video blocks; X, Vimeo, and CodeSandbox become web bookmarks).
+- **Images:** re-hosted to `TheFreeCodeSyndicate/fcs-assets` through the `upload-asset` function and served from `cdn.jsdelivr.net`. Images larger than 2 MB, GIFs, SVGs, or images beyond the 30-image story cap remain hotlinked to Medium.
+
+An optional attribution paragraph ("Originally published on Medium" linked to the story URL) is ticked by default, appended at the end of the post, and can be edited or deleted. Regardless of whether attribution is included, the story's canonical address is saved in `source_url` for provenance and duplicate detection, and shown read-only under **Properties > Source**.
+
+Import requires confirming that you hold the rights to publish the story. Every import lands as an unpublished draft.
+
 ## Analytics
 
 Admin > **Analytics** shows how the public site is used, over the last
