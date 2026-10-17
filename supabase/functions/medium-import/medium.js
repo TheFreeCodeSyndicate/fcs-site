@@ -647,8 +647,8 @@ function stripMarkdown(text) {
     .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/`([^`]+)`/g, "$1")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2");
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*(.*?)\*/g, "$1");
 }
 
 function makeLabel(kind, text) {
@@ -970,13 +970,17 @@ export function htmlToSections(html, opts = {}) {
         images.push(m[1]);
       }
     }
-    return {
+    const section = {
       id: `s${idx + 1}`,
       kind: s.kind,
       label: s.label,
       markdown,
       images,
     };
+    if (opts && opts.blocks) {
+      section.blocks = s.blocks;
+    }
+    return section;
   });
 
   return opts && opts.dropped ? { sections, dropped } : sections;
