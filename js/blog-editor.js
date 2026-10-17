@@ -294,6 +294,7 @@ function downloadFile(name, type, text) {
  * @param {(values, {id, wasLive}) => Promise<object>} opts.save  create or update; returns the saved row
  * @param {(id, wasLive) => Promise<void>} opts.remove
  * @param {(file: File) => Promise<string>} opts.uploadImage      returns the image's address
+ * @param {(insert: (markdown: string) => void) => void} [opts.importMedium]
  * @param {(values) => Promise<void>} [opts.duplicate]           saves a copy as a new draft
  * @param {(id) => Promise<Array>} [opts.history]                 this post's activity log (used when versions are unavailable)
  * @param {{content, updated_at}|null} [opts.draft]              a published post's saved, unpublished edits
@@ -2782,6 +2783,7 @@ export function openBlogEditor(opts) {
         ${act("find", "Find and replace", "search", "Ctrl+F")}
         <hr />
         ${act("import", "Import Markdown", "upload")}
+        ${act("import-medium", "Import from Medium", "download")}
         ${act("export-md", "Export as Markdown", "download")}
         ${act("export-html", "Export as HTML", "file-text")}
         ${act("export-pdf", "Print or save as PDF", "printer")}
@@ -2846,6 +2848,14 @@ export function openBlogEditor(opts) {
       } else if (a === "undo") undo();
       else if (a === "find") openFind();
       else if (a === "import") $("[data-import]").click();
+      else if (a === "import-medium") {
+        if (opts.importMedium) {
+          insertCaretBlock = blockOfCaret();
+          opts.importMedium(insertBlocksAtCaret);
+        } else {
+          opts.toast("Importing from Medium is not available here.", "error");
+        }
+      }
       else if (a === "export-md") downloadFile(`${fileBase}.md`, "text/markdown", `# ${v.title}\n\n${v.body}\n`);
       else if (a === "export-html") downloadFile(`${fileBase}.html`, "text/html", exportHTML(v));
       else if (a === "export-pdf") printPost();
@@ -3173,6 +3183,26 @@ export function openBlogEditor(opts) {
     blocks.forEach((b) => root.append(blockEl(b)));
     changed({ structural: true });
     opts.toast(`Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} at the end of the post.`, "info");
+  }
+
+  let insertCaretBlock = null;
+
+  function insertBlocksAtCaret(markdown) {
+    const blocks = parseBlocks(markdown);
+    if (!blocks.length) return opts.toast("Nothing was chosen to insert.", "error");
+    const caret = (insertCaretBlock && root.contains(insertCaretBlock)) ? insertCaretBlock : blockOfCaret();
+    insertCaretBlock = null;
+    let ref = (caret && root.contains(caret)) ? caret : root.lastElementChild;
+    let last = null;
+    blocks.forEach((b) => {
+      const el = blockEl(b);
+      if (ref) ref.after(el); else root.append(el);
+      ref = el;
+      last = el;
+    });
+    changed({ structural: true });
+    if (last) focusBlock(last, true);
+    opts.toast(`Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} into the post.`, "info");
   }
 
   /* ---- floating format toolbar ----------------------------------------------- */

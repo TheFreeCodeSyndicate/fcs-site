@@ -1044,6 +1044,16 @@ async function openPostEditor(row, { replace = false, initial = null } = {}) {
     isAdmin: isAdmin(),
     toast,
     uploadImage: async (file) => uploadBlogImage(await shrinkForBlog(file)),
+    importMedium: (insert) => openMediumImport({
+      mode: "insert",
+      existing: state.data.blog_posts,
+      toast,
+      onInsert: insert,
+      onOpenPost: (clash) => {
+        const row = (state.data.blog_posts || []).find((p) => p.id === clash.id) || clash;
+        openEditor("blog", row);
+      },
+    }),
     save: async (values, { id, wasLive }) => {
       const saved = id ? await updateBlogPost(id, values) : await createBlogPost(values);
       // The rebuild runs on its own: the save (and clearing the draft) need not wait for it.
