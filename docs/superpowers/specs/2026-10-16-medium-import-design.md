@@ -537,7 +537,7 @@ against a real handle and a real story link (Phase 6).
    decides whether it is written at all; the editor then gives the line its own
    box, which takes it out of the body and puts it back, faded, as the way home.
    The address that rebuilds it comes from `source_url`, so the box only exists
-   for a post that carries one.
+   for a post whose address the body can read back.
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member
