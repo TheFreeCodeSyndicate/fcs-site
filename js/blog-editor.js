@@ -2822,7 +2822,7 @@ export function openBlogEditor(opts) {
         ${act("find", "Find and replace", "search", "Ctrl+F")}
         <hr />
         ${act("import", "Import Markdown", "upload")}
-        ${act("import-medium", "Import from Medium", "download")}
+        ${act("import-medium", "Import from Medium", "medium")}
         ${act("export-md", "Export as Markdown", "download")}
         ${act("export-html", "Export as HTML", "file-text")}
         ${act("export-pdf", "Print or save as PDF", "printer")}

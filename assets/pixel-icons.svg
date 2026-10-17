@@ -705,4 +705,5 @@
 <symbol id="p-zap-off" viewBox="0 0 24 24"><path d="M10 13h2v10h-2z"/><path d="M2 13h10v2H2zM12 1h2v6h-2zm4 8h6v2h-6zm4 2h2v2h-2zm-4 4h2v2h-2zm-2 2h2v2h-2zm-2 2h2v2h-2zM2 11h2v2H2zm2-2h2v2H4zm2-2h2v2H6zm4-4h2v2h-2zM2 1h2v2H2zm2 2h2v2H4zm2 2h2v2H6zm2 2h2v2H8zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2z"/><path d="M16 15h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2z"/></symbol>
 <symbol id="p-zoom-in" viewBox="0 0 24 24"><path d="M22 22h-2v-2h2v2Zm-2-2h-2v-2h2v2Zm-6-2H6v-2h8v2Zm4 0h-2v-2h2v2ZM6 16H4v-2h2v2Zm10 0h-2v-2h2v2ZM4 14H2V6h2v8Zm7-5h3v2h-3v3H9v-3H6V9h3V6h2v3Zm7 5h-2V6h2v8ZM6 6H4V4h2v2Zm10 0h-2V4h2v2Zm-2-2H6V2h8v2Z"/></symbol>
 <symbol id="p-zoom-out" viewBox="0 0 24 24"><path d="M22 22h-2v-2h2v2Zm-2-2h-2v-2h2v2Zm-6-2H6v-2h8v2Zm4 0h-2v-2h2v2ZM6 16H4v-2h2v2Zm10 0h-2v-2h2v2ZM4 14H2V6h2v8Zm14 0h-2V6h2v8Zm-4-5v2H6V9h8ZM6 6H4V4h2v2Zm10 0h-2V4h2v2Zm-2-2H6V2h8v2Z"/></symbol>
+<symbol id="p-medium" viewBox="0 0 24 24"><path d="M4 6h6v1H4zM3 7h8v1H3zM2 8h10v8H2zM3 16h8v1H3zM4 17h6v1H4zM15 6h3v2h-3zM14 8h5v8h-5zM15 16h3v2h-3zM20 6h1v1h-1zM20 7h2v10h-2zM20 17h1v1h-1z"/></symbol>
 </svg>

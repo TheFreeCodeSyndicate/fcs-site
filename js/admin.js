@@ -731,7 +731,7 @@ function renderPage() {
   else renderListPage(page);
 }
 
-function pageHead(page, { count, newLabel, search = true, extra = "" } = {}) {
+function pageHead(page, { count, newLabel, search = true, extra = "", newPre = "" } = {}) {
   return `
     <div class="page-head">
       <h1 tabindex="-1">${escapeHTML(page.label)}${count != null ? ` <span class="page-count">${count}</span>` : ""}</h1>
@@ -744,7 +744,11 @@ function pageHead(page, { count, newLabel, search = true, extra = "" } = {}) {
           </label>` : ""}
         ${extra}
         ${page.site ? `<a class="btn btn-quiet" href="./${page.site}" target="_blank" rel="noopener">${icon("eye")}<span>View on site</span></a>` : ""}
-        ${newLabel ? `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>` : ""}
+        ${newLabel ? (newPre ? `
+          <div class="btn-group">
+            ${newPre}
+            <button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>
+          </div>` : `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>`) : ""}
       </div>
     </div>`;
 }
@@ -1459,7 +1463,7 @@ function renderBlogPage(page) {
     ${pageHead(page, {
       count: all.length,
       newLabel: "New post",
-      extra: `<button type="button" class="btn btn-quiet" id="page-import">${icon("arrow-down")}<span>Import from Medium</span></button>`,
+      newPre: `<button type="button" class="btn btn-quiet" id="page-import">${icon("medium")}<span>Import from Medium</span></button>`,
     })}
     <p class="page-intro">${escapeHTML(editor.intro)}</p>
     <div class="blog-toolbar">

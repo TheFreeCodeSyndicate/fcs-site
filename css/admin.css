@@ -67,6 +67,54 @@
 .btn-danger:hover { box-shadow: 4px 4px 0 var(--live); }
 .btn[disabled] { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
 
+.btn-group {
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid var(--rule-strong);
+  box-shadow: 3px 3px 0 var(--ink);
+  background: var(--paper-raised);
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.btn-group:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--ink); }
+.btn-group:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.btn-group .btn {
+  border: 0;
+  box-shadow: none;
+  transform: none;
+}
+.btn-group .btn:hover {
+  box-shadow: none;
+  transform: none;
+}
+.btn-group .btn:active {
+  box-shadow: none;
+  transform: none;
+}
+.btn-group .btn + .btn {
+  border-left: 2px solid var(--rule-strong);
+}
+.btn-group .btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  position: relative;
+  z-index: 1;
+}
+.btn-group .btn-quiet {
+  background: var(--paper-raised);
+  color: var(--ink);
+}
+.btn-group .btn-quiet:hover {
+  background: var(--paper);
+}
+.btn-group .btn-primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-group .btn-primary:hover {
+  filter: brightness(1.06);
+}
+
+
 
 /* -------------------------------------------------------------- kanban */
 .board {
