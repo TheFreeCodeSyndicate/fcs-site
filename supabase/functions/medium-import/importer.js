@@ -55,15 +55,14 @@ export function selectSections(sections, ids, { maxBody = 200000 } = {}) {
  *
  * @param {Array<object>} sections
  * @param {{
- *   fetchBytes?: (url: string) => Promise<Uint8Array|{ bytes: Uint8Array, type?: string }>,
+ *   fetchBytes?: (url: string) => Promise<Uint8Array|{ bytes: Uint8Array, type?: string }|null>,
  *   putAsset?: (bytes: Uint8Array, ext: string, path: string) => Promise<{ sha: string, path?: string }>,
  *   limit?: number,
  *   maxBytes?: number,
  *   now?: Date,
  *   newID?: () => string
  * }} deps
- * @returns {Promise<{ sections: Array<object>, copied: number, left: Array<{ url: string, why: string }>, warnings: Array<string> }>}
- */
+ * @returns {Promise<{ sections: Array<object>, copied: number, left: Array<{ url: string, why: string }>, warnings: Array<string> }>} */
 export async function rehostImages(sections, deps = {}) {
   const {
     fetchBytes,
@@ -102,7 +101,16 @@ export async function rehostImages(sections, deps = {}) {
 
       try {
         const fetched = await fetchBytes(b.url);
+        if (!fetched) {
+          left.push({ url: b.url, why: "That image could not be fetched." });
+          continue;
+        }
+
         let bytes = fetched instanceof Uint8Array || Array.isArray(fetched) ? fetched : fetched.bytes;
+        if (!bytes) {
+          left.push({ url: b.url, why: "That image could not be fetched." });
+          continue;
+        }
 
         if (bytes.length > maxBytes) {
           const imgId = mediumImageID(b.url);
@@ -110,11 +118,13 @@ export async function rehostImages(sections, deps = {}) {
             try {
               const resizeTarget = resizeURL(imgId, 1400);
               const resizedFetched = await fetchBytes(resizeTarget);
-              const resizedBytes = resizedFetched instanceof Uint8Array || Array.isArray(resizedFetched)
-                ? resizedFetched
-                : resizedFetched.bytes;
-              if (resizedBytes && resizedBytes.length < bytes.length) {
-                bytes = resizedBytes;
+              if (resizedFetched) {
+                const resizedBytes = resizedFetched instanceof Uint8Array || Array.isArray(resizedFetched)
+                  ? resizedFetched
+                  : resizedFetched.bytes;
+                if (resizedBytes && resizedBytes.length < bytes.length) {
+                  bytes = resizedBytes;
+                }
               }
             } catch (_) {
               // Proceed with original bytes
@@ -264,7 +274,7 @@ async function fetchFeedWithRetry(fetchText, url) {
  * @param {{ action: string, input?: string, url?: string, handle?: string, ids?: Array<string>, attribution?: boolean|string }} body
  * @param {{
  *   fetchText: (url: string) => Promise<string>,
- *   fetchBytes?: (url: string) => Promise<Uint8Array|{ bytes: Uint8Array, type?: string }>,
+ *   fetchBytes?: (url: string) => Promise<Uint8Array|{ bytes: Uint8Array, type?: string }|null>,
  *   putAsset?: (bytes: Uint8Array, ext: string, path: string) => Promise<{ sha: string, path?: string }>,
  *   limit?: number,
  *   maxBytes?: number,
@@ -275,6 +285,9 @@ async function fetchFeedWithRetry(fetchText, url) {
  */
 export async function handleAction(body, deps = {}) {
   const action = body && body.action;
+  if (!action) {
+    return { status: 400, body: { error: "Missing action." } };
+  }
 
   if (action === "feed") {
     const input = body.input;
@@ -392,8 +405,14 @@ export async function handleAction(body, deps = {}) {
     }
     const { author, stories } = parseFeed(xml);
     const storyHtml = extractStoryContent(xml, parsed.postId);
-    if (storyHtml === undefined || storyHtml === null) {
+    if (storyHtml === undefined) {
       return { status: 409, body: { error: "That story left the feed while you were choosing. Open it again." } };
+    }
+    if (storyHtml === null) {
+      return {
+        status: 400,
+        body: { error: "Medium publishes only a teaser for member-only stories. Import it from the original document instead." },
+      };
     }
 
     const storyMeta = stories.find((s) => s.id === parsed.postId) || {};
@@ -401,11 +420,35 @@ export async function handleAction(body, deps = {}) {
     const { kept, warnings: selectWarnings } = selectSections(sections, body.ids, { maxBody: 200000 });
     const { sections: rehosted, copied, left, warnings: rehostWarnings } = await rehostImages(kept, deps);
 
+    let recoveredEmbeds = 0;
+    for (const s of kept) {
+      if (s.blocks) {
+        for (const b of s.blocks) {
+          if (b.type === "video" || b.type === "bookmark") {
+            recoveredEmbeds++;
+          }
+        }
+      }
+    }
+    const embedWarnings = [];
+    if (recoveredEmbeds > 0) {
+      const sWord = recoveredEmbeds === 1 ? "embed" : "embeds";
+      embedWarnings.push(`${recoveredEmbeds} ${sWord} came through as a link rather than the original player.`);
+    }
+
     let attributionUrl = null;
     if (body.attribution === true) {
       attributionUrl = storyMeta.url || url;
-    } else if (typeof body.attribution === "string" && body.attribution) {
-      attributionUrl = body.attribution;
+    } else if (typeof body.attribution === "string") {
+      const trimmed = body.attribution.trim();
+      try {
+        const u = new URL(trimmed);
+        if (u.protocol === "https:") {
+          attributionUrl = trimmed;
+        }
+      } catch (_) {
+        // Stray string or invalid URL: omit attribution
+      }
     }
 
     const { markdown, cover } = assembleImport(rehosted, { attributionUrl });
@@ -413,6 +456,7 @@ export async function handleAction(body, deps = {}) {
     const allWarnings = [
       ...selectWarnings,
       ...rehostWarnings,
+      ...embedWarnings,
     ];
     if (dropped && dropped.length > 0) {
       const sWord = dropped.length === 1 ? "embed was" : "embeds were";

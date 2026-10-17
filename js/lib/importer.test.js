@@ -6,7 +6,29 @@ import {
   assembleImport,
   handleAction,
 } from "../../supabase/functions/medium-import/importer.js";
-import { FEED_XML } from "./medium.test.js";
+
+const FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title><![CDATA[Stories by Yasser El-Sayed on Medium]]></title>
+    <link>https://medium.com/@theyasser</link>
+    <item>
+      <title><![CDATA[The Hidden Cost of AI Code Assistants]]></title>
+      <link>https://levelup.gitconnected.com/the-hidden-cost-of-ai-code-assistants-5123886e38bd</link>
+      <guid isPermaLink="false">https://medium.com/p/5123886e38bd</guid>
+      <dc:creator><![CDATA[Yasser El-Sayed]]></dc:creator>
+      <pubDate>Wed, 23 Apr 2025 16:31:38 GMT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[Visualizing React Memoization]]></title>
+      <link>https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7</link>
+      <guid isPermaLink="false">https://medium.com/p/d734574ed2e7</guid>
+      <dc:creator><![CDATA[Yasser El-Sayed]]></dc:creator>
+      <pubDate>Thu, 19 Sep 2024 21:02:20 GMT</pubDate>
+      <content:encoded><![CDATA[<p>One of the most useful features in React is memoization.</p><figure><img src="https://cdn-images-1.medium.com/max/1024/1*J0Sbi0sScfce1S1c-pv3hw.png" /><figcaption>Simple list</figcaption></figure>]]></content:encoded>
+    </item>
+  </channel>
+</rss>`;
 
 // --- Step 1: Copy-agreement test ---
 test("the importer copy of asset.js still agrees with upload-asset copy", async () => {
@@ -263,11 +285,43 @@ test("rehostImages caps at limit and leaves remaining images hotlinked", async (
   assert.ok(result.warnings.some((w) => w.includes("Only 2 images can be imported per post")));
 });
 
+// A1: an image that cannot be fetched must not report a JavaScript error
+test("rehostImages handles fetchBytes returning null with readable why", async () => {
+  const deps = {
+    fetchBytes: async () => null,
+    putAsset: async () => ({ sha: "sha", path: "path" }),
+  };
+  const sections = [
+    {
+      id: "s1",
+      markdown: "![Img](https://miro.medium.com/max/800/1*a.png)",
+      blocks: [{ type: "image", url: "https://miro.medium.com/max/800/1*a.png", caption: "Img" }],
+    },
+  ];
+  const result = await rehostImages(sections, deps);
+  assert.equal(result.copied, 0);
+  assert.equal(result.left.length, 1);
+  assert.equal(result.left[0].url, "https://miro.medium.com/max/800/1*a.png");
+  assert.ok(!result.left[0].why.includes("Cannot read properties"));
+  assert.equal(result.left[0].why, "That image could not be fetched.");
+});
+
 // --- Function 4: handleAction ---
 test("handleAction returns 400 for unknown action", async () => {
   const res = await handleAction({ action: "unknown" }, {});
   assert.equal(res.status, 400);
   assert.ok(res.body.error.includes("Unknown action"));
+});
+
+// A5: a missing action should say so
+test("handleAction reports missing action or unknown action accurately", async () => {
+  const missing = await handleAction({}, {});
+  assert.equal(missing.status, 400);
+  assert.equal(missing.body.error, "Missing action.");
+
+  const unrec = await handleAction({ action: "nope" }, {});
+  assert.equal(unrec.status, 400);
+  assert.ok(unrec.body.error.includes("nope"));
 });
 
 test("handleAction feed action fetches feed and returns source and stories", async () => {
@@ -354,6 +408,119 @@ test("handleAction import action returns 409 with exact message when story leave
   assert.equal(res.body.error, "That story left the feed while you were choosing. Open it again.");
 });
 
+// A4: a member-only story has not "left the feed"
+test("handleAction import action returns 400 teaser error for member-only story instead of 409", async () => {
+  const deps = {
+    fetchText: async () => FEED_XML,
+  };
+  // Item 5123886e38bd has no content:encoded in FEED_XML
+  const res = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/the-hidden-cost-of-ai-code-assistants-5123886e38bd",
+      ids: ["s1"],
+    },
+    deps
+  );
+  assert.equal(res.status, 400);
+  assert.notEqual(res.status, 409);
+  assert.equal(res.body.error, "Medium publishes only a teaser for member-only stories. Import it from the original document instead.");
+});
+
+// A2: attribution must be a boolean, or a real URL, or nothing
+test("handleAction validates attribution parameter strictly", async () => {
+  const deps = {
+    fetchText: async () => FEED_XML,
+  };
+  // 1. attribution "true" (string) -> omitted
+  const resStrTrue = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+      ids: ["s1"],
+      attribution: "true",
+    },
+    deps
+  );
+  assert.equal(resStrTrue.status, 200);
+  assert.ok(!resStrTrue.body.markdown.includes("Originally published on [Medium]"));
+
+  // 2. attribution true (boolean) -> uses story address
+  const resBoolTrue = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+      ids: ["s1"],
+      attribution: true,
+    },
+    deps
+  );
+  assert.equal(resBoolTrue.status, 200);
+  assert.ok(resBoolTrue.body.markdown.includes("Originally published on [Medium](https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7)"));
+
+  // 3. attribution "https://x.example/y" -> uses that address
+  const resCustomUrl = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+      ids: ["s1"],
+      attribution: "https://x.example/y",
+    },
+    deps
+  );
+  assert.equal(resCustomUrl.status, 200);
+  assert.ok(resCustomUrl.body.markdown.includes("Originally published on [Medium](https://x.example/y)"));
+
+  // 4. attribution "on" or stray string -> omitted
+  const resOn = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+      ids: ["s1"],
+      attribution: "on",
+    },
+    deps
+  );
+  assert.equal(resOn.status, 200);
+  assert.ok(!resOn.body.markdown.includes("Originally published on [Medium]"));
+});
+
+// A3: recovered third-party embeds must be noted
+test("handleAction import action notes recovered third-party embeds in warnings without reporting image loss", async () => {
+  const youtubeFeedXml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Embed Stories</title>
+    <link>https://medium.com/@author</link>
+    <item>
+      <title>Video Story</title>
+      <link>https://medium.com/@author/video-story-111111111111</link>
+      <guid>https://medium.com/p/111111111111</guid>
+      <dc:creator>Author</dc:creator>
+      <pubDate>Thu, 19 Sep 2024 21:02:20 GMT</pubDate>
+      <content:encoded><![CDATA[<p><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">Watch this video</a></p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>`;
+
+  const deps = {
+    fetchText: async () => youtubeFeedXml,
+  };
+
+  const res = await handleAction(
+    {
+      action: "import",
+      url: "https://medium.com/@author/video-story-111111111111",
+      ids: ["s1"],
+    },
+    deps
+  );
+
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.body.images.left, []);
+  assert.ok(res.body.warnings.some((w) => w.includes("embed came through as a link rather than the original player")));
+});
+
 test("handleAction import action completes full flow with rehosting, assembly, and attribution", async () => {
   const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   const deps = {
@@ -368,7 +535,7 @@ test("handleAction import action completes full flow with rehosting, assembly, a
     {
       action: "import",
       url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
-      ids: ["s1", "s8"], // s8 is the figure with image
+      ids: ["s1", "s2"],
       attribution: true,
     },
     deps
