@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isAttributionLine, attributionLine, normaliseAttribution } from "./attribution.js";
+import { attributionLine, isAttributionLine, isSourceURL, normaliseAttribution } from "./attribution.js";
 import { attributionLine as serverAttributionLine } from "../../supabase/functions/medium-import/medium.js";
 
 test("isAttributionLine recognises the exact line and rejects invalid shapes", () => {
@@ -28,10 +28,51 @@ test("client and server attribution lines match", () => {
     "https://medium.com/@who/story-1a2b",
     "https://example.com/story-123",
     "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+    "https://medium.com/@who/a-story-(part-one)-1a2b",
+    "https://medium.com/@who/story?source=friends_link&sk=abc123",
+    "  https://medium.com/@who/padded-1a2b  ",
   ];
   for (const u of urls) {
     assert.equal(`> ${attributionLine(u)}`, serverAttributionLine(u));
   }
+});
+
+test("any address the editor offers a box for is an address the line reads back", () => {
+  // The two ends of one invariant: isSourceURL() decides whether a box exists,
+  // and isAttributionLine decides whether the body carries the line. If they
+  // disagree, the line can be written without being recognised - which showed
+  // up as the restore row never going away and offering a second copy.
+  const take = [
+    "https://medium.com/@who/story-1a2b",
+    "https://medium.com/@who/a-story-(part-one)-1a2b",
+    "https://medium.com/@who/story?source=friends_link&sk=abc123",
+    "https://medium.com/@who/trailing/punctuation-1a2b.",
+  ];
+  for (const u of take) {
+    assert.equal(isSourceURL(u), true, u);
+    assert.equal(isAttributionLine(attributionLine(u)), true, u);
+    assert.equal(isAttributionLine(`> ${attributionLine(u)}`), false, "the marker stays in the block");
+    assert.equal(normaliseAttribution(attributionLine(u)), `> ${attributionLine(u)}`, u);
+  }
+  // Refused: no box is offered, and a line written with one is left exactly as
+  // it is. The markdown dialect only linkifies a lowercase scheme, so an
+  // uppercase one could never be read back.
+  const refuse = [
+    "",
+    null,
+    undefined,
+    "medium.com/@who/story-1a2b",
+    "http://medium.com/@who/s-1a2b",
+    "HTTPS://Medium.com/@who/shouty-1a2b",
+    "https://medium.com/@who/a story",
+    42,
+  ];
+  for (const bad of refuse) {
+    assert.equal(isSourceURL(bad), false, JSON.stringify(bad));
+  }
+  const shouty = attributionLine("HTTPS://Medium.com/@who/shouty-1a2b");
+  assert.equal(isAttributionLine(shouty), false, "a shouty address is not read back");
+  assert.equal(normaliseAttribution(shouty), shouty, "and its line is left alone");
 });
 
 test("normaliseAttribution rewrites top-level paragraphs and leaves other blocks alone", () => {

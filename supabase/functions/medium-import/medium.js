@@ -1047,7 +1047,7 @@ export function fitSections(sections, opts = {}) {
  * @returns {string}
  */
 export function attributionLine(story) {
-  const url = typeof story === "string" ? story : (story && story.url) || "";
+  const url = String(typeof story === "string" ? story : (story && story.url) || "").trim();
   return `> Originally published on [Medium](${url})`;
 }
 

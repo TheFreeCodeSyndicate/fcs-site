@@ -30,7 +30,7 @@ import {
   mentionHTML, dateMentionHTML, bookmarkHTML,
 } from "./lib/markdown.js";
 import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
-import { attributionLine, isAttributionLine, normaliseAttribution } from "./lib/attribution.js";
+import { attributionLine, isAttributionLine, isSourceURL, normaliseAttribution } from "./lib/attribution.js";
 import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
 import { mountRail } from "./post-rail.js";
 import { slugify, uniqueSlug } from "./lib/forms.js";
@@ -814,7 +814,7 @@ export function openBlogEditor(opts) {
    * source_url, which is kept whether or not the line is in the body. */
   const sourceURL = () => {
     const raw = String(post.source_url || "").trim();
-    return /^https:\/\/\S+$/i.test(raw) ? raw : "";
+    return isSourceURL(raw) ? raw : "";
   };
 
   /* The line a block shows, or "" for a block with no text at all - a code
