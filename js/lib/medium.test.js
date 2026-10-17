@@ -264,3 +264,26 @@ test("a label keeps underscores inside identifiers", () => {
   const [s] = htmlToSections("<p>call set_loading_state(x) then read a_b_c</p>");
   assert.equal(s.label, "call set_loading_state(x) then read a_b_c");
 });
+
+test("parseFeed exposes each story own author, and leaves it \"\" for an item with no dc:creator", () => {
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
+  <channel>
+    <title>Test Feed</title>
+    <dc:creator><![CDATA[Feed Author]]></dc:creator>
+    <item>
+      <title>Story One</title>
+      <guid>https://medium.com/p/111111111111</guid>
+      <dc:creator><![CDATA[Story One Author]]></dc:creator>
+    </item>
+    <item>
+      <title>Story Two</title>
+      <guid>https://medium.com/p/222222222222</guid>
+    </item>
+  </channel>
+</rss>`;
+  const { author, stories } = parseFeed(xml);
+  assert.equal(author, "Feed Author");
+  assert.equal(stories[0].author, "Story One Author");
+  assert.equal(stories[1].author, "");
+});

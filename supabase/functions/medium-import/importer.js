@@ -342,11 +342,11 @@ export async function handleAction(body, deps = {}) {
     const { author, stories } = parseFeed(xml);
     const storyHtml = extractStoryContent(xml, parsed.postId);
     if (storyHtml === undefined) {
-      const handleOrAuthor = parsed.handle ? `@${parsed.handle}` : (author ? `@${author}` : "this author");
+      const label = parsed.handle ? "@" + parsed.handle : parsed.publication ? parsed.publication : parsed.host ? parsed.host : (author ? "@" + author : "this feed");
       return {
         status: 404,
         body: {
-          error: `That story isn't in the newest ten for ${handleOrAuthor}. Here is what is.`,
+          error: "That story isn't in the newest ten for " + label + ". Medium's feed stops at ten and does not paginate, so pasting the link again won't reach it. Here is what is.",
           stories,
         },
       };
@@ -373,7 +373,7 @@ export async function handleAction(body, deps = {}) {
         source: {
           url: storyMeta.url || url,
           title: storyMeta.title || "",
-          author: author || "",
+          author: storyMeta.author || author || "",
           publication: storyMeta.publication || "",
           publishedAt: storyMeta.publishedAt || "",
           postId: parsed.postId,

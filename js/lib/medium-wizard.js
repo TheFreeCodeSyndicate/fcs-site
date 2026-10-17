@@ -133,3 +133,18 @@ export function storyAddress(input) {
     return null;
   }
 }
+
+/** The hint under a list that came from an author handle's own feed. */
+export const HINT_FEED = "Can't see the article you want? Medium's feed only publishes the ten most recent stories. Open the one you want on Medium, copy its link, and paste it into the field above.";
+
+/** The hint under a list shown because a pasted story address was out of the feed's reach. */
+export const HINT_MISSED_STORY = "To bring it in anyway: open the story on Medium, copy the article text, and either paste it in the editor or save it as a .md/.txt file and use Import Markdown in the ••• menu.";
+
+/**
+ * The hint to show below a story list. A list reached by pasting a story address says how to
+ * bring the story in by hand; a list from a handle keeps the "paste the link" wording.
+ *
+ * @param {{ missedStory?: boolean }} [opts]
+ * @returns {string}
+ */
+export function listHint({ missedStory = false } = {}) { return missedStory ? HINT_MISSED_STORY : HINT_FEED; }

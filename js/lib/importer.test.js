@@ -30,6 +30,29 @@ const FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
+const PUBLICATION_FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title><![CDATA[Medium.design - Medium]]></title>
+    <link>https://medium.design</link>
+    <item>
+      <title><![CDATA[Newest Design Story]]></title>
+      <link>https://medium.design/newest-design-story-111111111111</link>
+      <guid isPermaLink="false">https://medium.com/p/111111111111</guid>
+      <dc:creator><![CDATA[Desiree Garcia]]></dc:creator>
+      <pubDate>Wed, 23 Apr 2025 16:31:38 GMT</pubDate>
+    </item>
+    <item>
+      <title><![CDATA[Design System Guidelines]]></title>
+      <link>https://medium.design/design-system-guidelines-f1a01a733591</link>
+      <guid isPermaLink="false">https://medium.com/p/f1a01a733591</guid>
+      <dc:creator><![CDATA[Jason Combs]]></dc:creator>
+      <pubDate>Thu, 19 Sep 2024 21:02:20 GMT</pubDate>
+      <content:encoded><![CDATA[<p>Content of the design system story.</p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>`;
+
 // --- Step 1: Copy-agreement test ---
 test("the importer copy of asset.js still agrees with upload-asset copy", async () => {
   const a = await import("../../supabase/functions/upload-asset/asset.js");
@@ -549,4 +572,30 @@ test("handleAction import action completes full flow with rehosting, assembly, a
   });
   assert.equal(res.body.images.copied, 1);
   assert.ok(Array.isArray(res.body.warnings));
+});
+
+test("handleAction story action returns 404 for unlisted story on custom domain publication feed without misattributing author", async () => {
+  const deps = {
+    fetchText: async () => PUBLICATION_FEED_XML,
+  };
+  const res = await handleAction(
+    { action: "story", url: "https://medium.design/logos-and-brand-guidelines-f1a01a733592" },
+    deps
+  );
+  assert.equal(res.status, 404);
+  assert.ok(res.body.error.includes("medium.design"));
+  assert.ok(!res.body.error.includes("Desiree Garcia"));
+  assert.ok(Array.isArray(res.body.stories) && res.body.stories.length > 0);
+});
+
+test("handleAction story action returns 200 for listed story on publication feed with story own author", async () => {
+  const deps = {
+    fetchText: async () => PUBLICATION_FEED_XML,
+  };
+  const res = await handleAction(
+    { action: "story", url: "https://medium.design/design-system-guidelines-f1a01a733591" },
+    deps
+  );
+  assert.equal(res.status, 200);
+  assert.equal(res.body.source.author, "Jason Combs");
 });

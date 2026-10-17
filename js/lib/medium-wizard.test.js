@@ -7,6 +7,9 @@ import {
   summarise,
   findDuplicate,
   storyAddress,
+  HINT_FEED,
+  HINT_MISSED_STORY,
+  listHint,
 } from "./medium-wizard.js";
 
 test("clipTitle collapses whitespace and trims", () => {
@@ -181,4 +184,12 @@ test("storyAddress normalises schemeless story links and rejects non-story input
   assert.equal(storyAddress(undefined), null);
   assert.equal(storyAddress("ordinary prose"), null);
   assert.equal(storyAddress("have you seen this article"), null);
+});
+
+test("listHint equals HINT_FEED by default and HINT_MISSED_STORY when missedStory is true", () => {
+  assert.equal(listHint(), HINT_FEED);
+  assert.equal(listHint({ missedStory: false }), HINT_FEED);
+  assert.equal(listHint({ missedStory: true }), HINT_MISSED_STORY);
+  assert.notEqual(HINT_FEED, HINT_MISSED_STORY);
+  assert.ok(HINT_MISSED_STORY.includes("Import Markdown"));
 });

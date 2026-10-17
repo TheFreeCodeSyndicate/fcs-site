@@ -154,7 +154,7 @@ function stripHtml(str) {
 /**
  * Parse a Medium RSS feed string into an author name and story summaries.
  * @param {string} xml
- * @returns {{ author: string, stories: Array<{ id: string, title: string, url: string, publishedAt: string, importable: boolean, publication: string, excerpt: string, thumbnail: string, reason?: string }> }}
+ * @returns {{ author: string, stories: Array<{ id: string, title: string, author: string, url: string, publishedAt: string, importable: boolean, publication: string, excerpt: string, thumbnail: string, reason?: string }> }}
  */
 export function parseFeed(xml) {
   const text = String(xml || "");
@@ -183,6 +183,10 @@ export function parseFeed(xml) {
     // Title from <title>
     const titleMatch = itemXml.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
     const title = titleMatch ? decodeEntities(unwrapCdata(titleMatch[1])).trim() : "";
+
+    // Author from <dc:creator>
+    const itemAuthorMatch = itemXml.match(/<dc:creator\b[^>]*>([\s\S]*?)<\/dc:creator>/i);
+    const itemAuthor = itemAuthorMatch ? decodeEntities(unwrapCdata(itemAuthorMatch[1])).trim() : "";
 
     // URL from <link>, strip tracking query (?source=rss...)
     const linkMatch = itemXml.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i);
@@ -256,6 +260,7 @@ export function parseFeed(xml) {
     const story = {
       id,
       title,
+      author: itemAuthor,
       url,
       publishedAt,
       importable,

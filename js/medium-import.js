@@ -21,6 +21,7 @@ import {
   summarise,
   findDuplicate,
   storyAddress,
+  listHint,
 } from "./lib/medium-wizard.js";
 import { escapeHTML, escapeAttr, safeURL } from "./render.js";
 
@@ -149,7 +150,7 @@ export function openMediumImport(opts = {}) {
       }
     };
 
-    const paintStories = (stories, authorHandle = null) => {
+    const paintStories = (stories, authorHandle = null, { missedStory = false } = {}) => {
       if (!Array.isArray(stories) || stories.length === 0) {
         resultsBox.innerHTML = `<div class="mi-empty"><p>No stories found for that author.</p></div>`;
         return;
@@ -179,7 +180,7 @@ export function openMediumImport(opts = {}) {
 
       resultsBox.innerHTML = `
         <div class="mi-story-list">${cardsHtml}</div>
-        <p class="mi-hint">Can't see the article you want? Medium's feed only publishes the ten most recent stories. Open the one you want on Medium, copy its link, and paste it into the field above.</p>
+        <p class="mi-hint">${escapeHTML(listHint({ missedStory }))}</p>
       `;
 
       // Event listeners for story selection
@@ -194,7 +195,7 @@ export function openMediumImport(opts = {}) {
             if (Array.isArray(storyRes.stories)) {
               showLoading(false);
               showError(storyRes.error || "That story could not be loaded.");
-              paintStories(storyRes.stories, authorHandle);
+              paintStories(storyRes.stories, authorHandle, { missedStory: true });
               return;
             }
             currentStoryData = storyRes;
@@ -240,7 +241,7 @@ export function openMediumImport(opts = {}) {
           if (Array.isArray(storyRes.stories)) {
             // Not in newest ten: server error sentence + stories list + ten-story hint
             showError(storyRes.error || "That story is not in the newest ten.");
-            paintStories(storyRes.stories);
+            paintStories(storyRes.stories, null, { missedStory: true });
             return;
           }
           currentStoryData = storyRes;
