@@ -463,7 +463,7 @@ Everything else reuses what exists:
 | Situation | What happens |
 |---|---|
 | Handle has no feed, or the feed is empty | *"No stories found for `@handle`. Check the spelling, or paste a story link instead."* |
-| The story is not among the ten newest | *"That story isn't in the newest ten for `@author`. Here is what is."* — with the list |
+| The story is not among the ten newest | *"That story isn't in the newest ten for `medium.design`. Medium's feed stops at ten and does not paginate, so pasting the link again won't reach it. Here is what is."* — with the list, and a hint saying how to bring the story in by hand. The feed is named by what the writer gave: the handle, else the publication, else the domain |
 | The address is not recognisable | *"That doesn't look like a Medium address or handle."* |
 | A member-paywalled story, or any story in a Partner-Program publication | Shown greyed out: *"Medium publishes only a teaser for member-only stories. Import it from the original document instead."* |
 | Feed fetch fails or times out | *"Medium didn't answer. Try again in a moment."* — one retry server-side first |
