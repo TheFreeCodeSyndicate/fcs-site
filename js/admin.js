@@ -1032,10 +1032,18 @@ async function openPostEditor(row, { replace = false, initial = null } = {}) {
     clearDraft: (id) => clearBlogDraft(id),
     snapshot: (id, values, kind) => addBlogVersion(id, values, kind),
     versions: (id) => listBlogVersions(id),
+    otherSlugs: (currentId) => (state.data.blog_posts || [])
+      .filter((p) => (!currentId || p.id !== currentId) && p.slug)
+      .map((p) => p.slug),
     onSaved: (saved) => {
       if (!entry.id && saved.id) {
         entry.id = saved.id;
         showInAddress(saved.id);
+      }
+      if (saved && Array.isArray(state.data.blog_posts)) {
+        const idx = state.data.blog_posts.findIndex((p) => p.id === saved.id);
+        if (idx >= 0) state.data.blog_posts[idx] = { ...state.data.blog_posts[idx], ...saved };
+        else state.data.blog_posts.unshift(saved);
       }
     },
     // Until linked, the Authors row asks "Which member card are you?".

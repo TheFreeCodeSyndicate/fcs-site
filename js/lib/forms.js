@@ -59,3 +59,20 @@ export function slugify(text) {
     .slice(0, 80)
     .replace(/-+$/, "");
 }
+
+/** Returns base if free, else base-2, base-3, ... truncated to fit within max (default 80). */
+export function uniqueSlug(base, taken, { max = 80 } = {}) {
+  if (!base) return "";
+  const takenSet = taken instanceof Set ? taken : new Set(taken || []);
+  const initial = String(base).slice(0, max).replace(/-+$/, "");
+  if (!initial) return "";
+  if (!takenSet.has(initial)) return initial;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const allowed = Math.max(0, max - suffix.length);
+    const prefix = initial.slice(0, allowed).replace(/-+$/, "");
+    if (!prefix) return "";
+    const candidate = `${prefix}${suffix}`;
+    if (!takenSet.has(candidate)) return candidate;
+  }
+}

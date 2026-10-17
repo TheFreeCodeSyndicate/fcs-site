@@ -32,7 +32,7 @@ import {
 import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
 import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
 import { mountRail } from "./post-rail.js";
-import { slugify } from "./lib/forms.js";
+import { slugify, uniqueSlug } from "./lib/forms.js";
 import { escapeHTML, escapeAttr, icon, safeURL } from "./render.js";
 import "./link-preview.js";
 import "./image-zoom.js";
@@ -1006,9 +1006,20 @@ export function openBlogEditor(opts) {
   function values() {
     const title = titleEl.textContent.replace(/\s+/g, " ").trim();
     const slugInput = ed.querySelector("[data-prop=slug]");
+    const rawSlug = slugInput ? slugInput.value.trim() : "";
+    const otherSlugs = typeof opts.otherSlugs === "function" ? opts.otherSlugs(post.id) : (opts.otherSlugs || []);
+    const taken = new Set(otherSlugs || []);
+    let slug = "";
+    if (post.published_at) {
+      slug = post.slug;
+    } else if (rawSlug) {
+      slug = slugify(rawSlug);
+    } else {
+      slug = uniqueSlug(slugify(title), taken);
+    }
     return {
       title,
-      slug: post.published_at ? post.slug : slugify(slugInput.value) || slugify(title),
+      slug,
       status: post.status,
       authors: post.authors,
       author_name: authorNames(post.authors) || null,
@@ -1051,6 +1062,19 @@ export function openBlogEditor(opts) {
       }
       return false;
     }
+    const slugInput = ed.querySelector("[data-prop=slug]");
+    const rawSlug = slugInput ? slugInput.value.trim() : "";
+    if (!post.published_at && rawSlug) {
+      const otherSlugs = typeof opts.otherSlugs === "function" ? opts.otherSlugs(post.id) : (opts.otherSlugs || []);
+      const taken = new Set(otherSlugs || []);
+      if (v.slug && taken.has(v.slug)) {
+        if (!quiet) {
+          opts.toast("That address is already used by another post. Edit the Address field.", "error");
+          if (slugInput) slugInput.focus();
+        }
+        return false;
+      }
+    }
     if (!v.slug) {
       if (!quiet) opts.toast("Use some letters or numbers in the title or address.", "error");
       return false;
@@ -1077,7 +1101,13 @@ export function openBlogEditor(opts) {
       return true;
     } catch (err) {
       dirty = dirty || was;
-      opts.toast(err.message || "Could not save.", "error");
+      const isDuplicate = /blog_posts_slug_key|duplicate key/i.test(err && err.message ? err.message : "");
+      if (isDuplicate) {
+        opts.toast("That address is already used by another post. Edit the Address field.", "error");
+        if (slugInput) slugInput.focus();
+      } else {
+        opts.toast(err.message || "Could not save.", "error");
+      }
       paintState("Save failed");
       return false;
     } finally {
