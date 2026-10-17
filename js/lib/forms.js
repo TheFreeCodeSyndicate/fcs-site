@@ -76,3 +76,20 @@ export function uniqueSlug(base, taken, { max = 80 } = {}) {
     if (!takenSet.has(candidate)) return candidate;
   }
 }
+
+/**
+ * The address for a duplicated post: "<slug>-copy", then -2, -3, ... within max (default 80).
+ * Room is left for the marker and a counter so neither is cut in half on a long address.
+ *
+ * @param {string} slug
+ * @param {Iterable<string>|Set<string>} [taken]
+ * @param {{ max?: number }} [opts]
+ * @returns {string}
+ */
+export function duplicateSlug(slug, taken, { max = 80 } = {}) {
+  const base = String(slug || "").trim().replace(/-+$/, "") || "post";
+  const marker = "-copy";
+  const room = Math.max(1, max - marker.length - 3);
+  const stem = base.slice(0, room).replace(/-+$/, "") || "post";
+  return uniqueSlug(stem + marker, taken, { max });
+}

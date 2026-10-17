@@ -36,7 +36,7 @@ import {
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./lib/forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify, duplicateSlug } from "./lib/forms.js";
 import { iconHTML, avatarHTML, avatarGroupHTML, postAuthors, authorNames, postCardHTML } from "./lib/blog-pages.js";
 import { openBlogEditor } from "./blog-editor.js";
 import { openMediumImport } from "./medium-import.js";
@@ -1078,9 +1078,8 @@ async function openPostEditor(row, { replace = false, initial = null } = {}) {
       if (wasLive) await rebuildSite();
     },
     duplicate: async (values) => {
-      const taken = new Set(state.data.blog_posts.map((p) => p.slug));
-      let slug = `${values.slug}-copy`;
-      for (let n = 2; taken.has(slug); n++) slug = `${values.slug}-copy-${n}`;
+      const taken = new Set((state.data.blog_posts || []).map((p) => p.slug));
+      const slug = duplicateSlug(values.slug, taken);
       await createBlogPost({ ...values, title: `Copy of ${values.title}`, slug, status: "draft", locked: false });
       await reload("blog_posts");
       toast(`Saved a copy as a draft: “Copy of ${values.title}”.`, "info");

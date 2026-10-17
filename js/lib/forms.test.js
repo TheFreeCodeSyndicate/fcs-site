@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify, uniqueSlug } from "./forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify, uniqueSlug, duplicateSlug } from "./forms.js";
 
 const DB_SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -107,4 +107,39 @@ test("uniqueSlug truncates long base to fit 80 chars, avoids trailing dash, and 
   assert.equal(s10.length, 80);
   assert.match(s10, DB_SLUG_REGEX);
   assert.ok(!s10.endsWith("-"));
+});
+
+test("duplicateSlug returns copy address with -copy suffix", () => {
+  assert.equal(duplicateSlug("hello-world"), "hello-world-copy");
+});
+
+test("duplicateSlug handles collisions with numbered suffixes", () => {
+  assert.equal(duplicateSlug("hello-world", ["hello-world-copy"]), "hello-world-copy-2");
+  assert.equal(duplicateSlug("hello-world", ["hello-world-copy", "hello-world-copy-2"]), "hello-world-copy-3");
+});
+
+test("duplicateSlug keeps an 80-character slug within limit and ends with -copy", () => {
+  const slug80 = "a".repeat(80);
+  const result = duplicateSlug(slug80);
+  assert.ok(result.length <= 80);
+  assert.ok(result.endsWith("-copy"));
+});
+
+test("duplicateSlug collision on an 80-character slug stays within limit", () => {
+  const slug80 = "a".repeat(80);
+  const first = duplicateSlug(slug80);
+  const second = duplicateSlug(slug80, [first]);
+  assert.ok(second.length <= 80);
+});
+
+test("duplicateSlug treats omitted taken parameter as empty", () => {
+  assert.equal(duplicateSlug("hello-world"), "hello-world-copy");
+  assert.equal(duplicateSlug("hello-world", undefined), "hello-world-copy");
+});
+
+test("duplicateSlug falls back to post-copy for empty or whitespace-only slug", () => {
+  assert.equal(duplicateSlug(""), "post-copy");
+  assert.equal(duplicateSlug("   "), "post-copy");
+  assert.equal(duplicateSlug(null), "post-copy");
+  assert.equal(duplicateSlug(undefined), "post-copy");
 });
