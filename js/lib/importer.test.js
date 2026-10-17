@@ -53,6 +53,25 @@ const PUBLICATION_FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
   </channel>
 </rss>`;
 
+// A publication whose stories are addressed over plain http (an old site's
+// feed), used to pin what the attribution line does with an address the
+// markdown dialect cannot linkify.
+const HTTP_FEED_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title><![CDATA[Stories by Old Site]]></title>
+    <link>http://old.example.com/@author</link>
+    <item>
+      <title><![CDATA[An Old Story]]></title>
+      <link>http://old.example.com/an-old-story-111111111111</link>
+      <guid isPermaLink="false">http://old.example.com/an-old-story-111111111111</guid>
+      <dc:creator><![CDATA[Author]]></dc:creator>
+      <pubDate>Thu, 19 Sep 2024 21:02:20 GMT</pubDate>
+      <content:encoded><![CDATA[<p>An old story.</p>]]></content:encoded>
+    </item>
+  </channel>
+</rss>`;
+
 // --- Step 1: Copy-agreement test ---
 test("the importer copy of asset.js still agrees with upload-asset copy", async () => {
   const a = await import("../../supabase/functions/upload-asset/asset.js");
@@ -506,6 +525,46 @@ test("handleAction validates attribution parameter strictly", async () => {
   );
   assert.equal(resOn.status, 200);
   assert.ok(!resOn.body.markdown.includes("Originally published on [Medium]"));
+
+  // 5. an address the dialect cannot linkify (no https) -> no line, and the
+  // omission is reported rather than passing silently
+  const resHttp = await handleAction(
+    {
+      action: "import",
+      url: "https://levelup.gitconnected.com/visualizing-react-memoization-d734574ed2e7",
+      ids: ["s1"],
+      attribution: "http://x.example/y",
+    },
+    deps
+  );
+  assert.equal(resHttp.status, 200);
+  assert.ok(!resHttp.body.markdown.includes("Originally published on [Medium]"));
+  assert.ok(resHttp.body.warnings.some((w) => /attribution line was left out/.test(w)));
+});
+
+// The story's own address is preferred for the line, but only when it is one the
+// dialect can linkify: otherwise the address the writer gave is used, and if
+// that is no good either the line is left out and said so.
+test("handleAction falls back to the address the writer gave for the attribution line", async () => {
+  const deps = { fetchText: async () => HTTP_FEED_XML };
+
+  const fellBack = await handleAction(
+    { action: "import", url: "https://medium.com/@author/old-story-111111111111", ids: ["s1"], attribution: true },
+    deps
+  );
+  assert.equal(fellBack.status, 200);
+  assert.ok(
+    fellBack.body.markdown.includes("Originally published on [Medium](https://medium.com/@author/old-story-111111111111)"),
+    "the https address the writer gave is used when the story's own is not"
+  );
+
+  const neither = await handleAction(
+    { action: "import", url: "http://old.example.com/an-old-story-111111111111", ids: ["s1"], attribution: true },
+    deps
+  );
+  assert.equal(neither.status, 200);
+  assert.ok(!neither.body.markdown.includes("Originally published on [Medium]"));
+  assert.ok(neither.body.warnings.some((w) => /attribution line was left out/.test(w)));
 });
 
 // A3: recovered third-party embeds must be noted

@@ -436,19 +436,24 @@ export async function handleAction(body, deps = {}) {
       embedWarnings.push(`${recoveredEmbeds} ${sWord} came through as a link rather than the original player.`);
     }
 
+    // Which address the attribution line points at: the story's own address,
+    // so the reader can reach the original. Only an https address can be put in
+    // the line - the markdown dialect linkifies nothing else - so anything else
+    // leaves the line out rather than writing one that would not read back.
+    const asHttpsAddress = (value) => {
+      const trimmed = String(value == null ? "" : value).trim();
+      return /^https:\/\/\S+$/i.test(trimmed) ? trimmed : null;
+    };
+    const wantedAttribution = body.attribution === true || (typeof body.attribution === "string" && body.attribution.trim() !== "");
     let attributionUrl = null;
     if (body.attribution === true) {
-      attributionUrl = storyMeta.url || url;
+      attributionUrl = asHttpsAddress(storyMeta.url) || asHttpsAddress(url);
     } else if (typeof body.attribution === "string") {
-      const trimmed = body.attribution.trim();
-      try {
-        const u = new URL(trimmed);
-        if (u.protocol === "https:") {
-          attributionUrl = trimmed;
-        }
-      } catch (_) {
-        // Stray string or invalid URL: omit attribution
-      }
+      attributionUrl = asHttpsAddress(body.attribution);
+    }
+    const attributionWarnings = [];
+    if (wantedAttribution && !attributionUrl) {
+      attributionWarnings.push("The story's address is not an https link, so the attribution line was left out of the draft.");
     }
 
     const { markdown, cover } = assembleImport(rehosted, { attributionUrl });
@@ -457,6 +462,7 @@ export async function handleAction(body, deps = {}) {
       ...selectWarnings,
       ...rehostWarnings,
       ...embedWarnings,
+      ...attributionWarnings,
     ];
     if (dropped && dropped.length > 0) {
       const sWord = dropped.length === 1 ? "embed was" : "embeds were";

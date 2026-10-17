@@ -537,7 +537,15 @@ against a real handle and a real story link (Phase 6).
    decides whether it is written at all; the editor then gives the line its own
    box, which takes it out of the body and puts it back, faded, as the way home.
    The address that rebuilds it comes from `source_url`, so the box only exists
-   for a post whose address the body can read back.
+   for a post whose address the body can read back. The address *in the line* is
+   encoded (`lineAddress` in `js/lib/attribution.js`): the scheme lowercased,
+   since the dialect links nothing else, and the few characters it would
+   otherwise cut the link at or eat as formatting percent-encoded, so a story
+   address that holds one still makes a whole link and a body that is unchanged
+   by every save. A story addressed over plain `http` gets no line at all - the
+   dialect links nothing but `https` - and that omission is reported on the
+   import screen; the address the writer gave is used when the story's own
+   cannot be.
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member
@@ -562,6 +570,18 @@ against a real handle and a real story link (Phase 6).
   Embedly frame.
 - **A very image-heavy story takes a minute.** Each image is a separate commit.
   The writer waits once, then edits.
+- **Some characters in a story's address are stored encoded, in the line only.**
+  The markdown dialect cuts a link at its first `)` and reads a *pair* of `*`,
+  `` ` ``, `~`, `^`, `$` inside one as formatting - even inside the address of a
+  link - and a `)` or an unbalanced bracket typed raw cannot sit in an address at
+  all. Measured one character per run in `.shots/url-charset-probe.html`, which
+  mounts the editor and reads the rendered link and the saved body back. Rather
+  than lose the attribution for such an address, or rewrite the site's shared
+  renderer alongside this feature, the line carries the address with those
+  characters percent-encoded and a lowercased scheme. The link points at the
+  same page - `%29` and `)` are the same octet to any server - and the body is
+  unchanged by every save. `source_url` keeps the address exactly as it was
+  given.
 - **A post imported before the line became a quote shows its paragraph on the
   live page until it is next saved.** The editor opens it as the quote it is now
   and writes it back as one, so the page catches up on the next save; no

@@ -1039,6 +1039,30 @@ export function fitSections(sections, opts = {}) {
 }
 
 /**
+ * The characters the markdown dialect would eat, and the ones that cannot sit
+ * raw in a link. Measured, not guessed: see .shots/url-charset-probe.html. A
+ * lone "*" is fine, but a pair becomes <em> - inside the href and inside the
+ * saved markdown - and a lone ")" cuts the link at that point, leaving the rest
+ * of the address loose in the article. Mirrors js/lib/attribution.js, and a
+ * test holds the two together.
+ */
+const HOSTILE = /[)*`~^$\\[\]<>"{}|]/g;
+
+/**
+ * The address as the attribution line carries it: the scheme lowercased, so
+ * the dialect linkifies it, and the characters above percent-encoded, so the
+ * link comes out whole. Lossless for the reader: %29 and ")" are the same
+ * octet to any server.
+ * @param {string} url
+ * @returns {string}
+ */
+export function lineAddress(url) {
+  const raw = String(url == null ? "" : url).trim();
+  const scheme = raw.replace(/^[A-Za-z][A-Za-z0-9+.-]*:/, (s) => s.toLowerCase());
+  return scheme.replace(HOSTILE, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+}
+
+/**
  * Emits the canonical attribution block: a block quote holding the link to
  * the original Medium story. The importer appends it as the post's last
  * block; the editor knows the same line (js/lib/attribution.js) and gives it
@@ -1048,7 +1072,7 @@ export function fitSections(sections, opts = {}) {
  */
 export function attributionLine(story) {
   const url = String(typeof story === "string" ? story : (story && story.url) || "").trim();
-  return `> Originally published on [Medium](${url})`;
+  return `> Originally published on [Medium](${lineAddress(url)})`;
 }
 
 /**
