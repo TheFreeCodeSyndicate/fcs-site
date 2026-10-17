@@ -11,6 +11,10 @@ node_modules/
 Thumbs.db
 .shots/
 
+# Written by the Supabase CLI (`supabase functions deploy`): link state,
+# version stamps. Not part of the function source or the site.
+supabase/.temp/
+
 # Built by tools/blog-build.mjs on every deploy
 blog/
 sitemap.xml
