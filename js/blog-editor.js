@@ -30,6 +30,7 @@ import {
   mentionHTML, dateMentionHTML, bookmarkHTML,
 } from "./lib/markdown.js";
 import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
+import { attributionLine, isAttributionLine, normaliseAttribution } from "./lib/attribution.js";
 import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
 import { mountRail } from "./post-rail.js";
 import { slugify, uniqueSlug } from "./lib/forms.js";
@@ -392,6 +393,7 @@ export function openBlogEditor(opts) {
           <h1 class="nb-title" contenteditable="true" spellcheck="true" data-placeholder="Untitled" data-title aria-label="Title"></h1>
           <div class="nb-props" data-props></div>
           <div class="nb-blocks" data-root></div>
+          <div class="nb-attribution" data-attribution hidden></div>
           <div class="nb-tail" data-tail aria-hidden="true"></div>
         </div>
       </div>
@@ -519,6 +521,15 @@ export function openBlogEditor(opts) {
         <button type="button" class="nb-drag" tabindex="-1" aria-label="Drag to move, click for options">${GUTTER_GRIP}<span class="nb-tip" role="tooltip"><b>Drag</b> to move<br /><b>Click</b> or <b>Ctrl+/</b> to open menu</span></button>
       </div>`;
 
+  const INCLUDE_LABEL = "Include the link to the original Medium story";
+  const RESTORE_LABEL = "Put the link to the original Medium story back";
+
+  const attributionBox = (checked, label, cls) => {
+    const box = h(`<input type="checkbox" class="${cls}" aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}" />`);
+    box.checked = checked;
+    return box;
+  };
+
   function blockEl(b) {
     const el = h(`<div class="nb-block" data-type="${b.type}">${gutterHTML}<div class="nb-content"></div></div>`);
     const content = el.querySelector(".nb-content");
@@ -543,6 +554,7 @@ export function openBlogEditor(opts) {
         content.append(h(`<button type="button" class="nb-caret" aria-label="Open or close" aria-expanded="true">${pixelIcon("chevron-right")}</button>`));
         el.classList.add("is-open");
       }
+      if (isAttributionLine(b.text)) content.append(attributionBox(true, INCLUDE_LABEL, "nb-attr-check"));
       content.append(text);
       if (/^h\d$/.test(b.type)) content.append(h(`<button type="button" class="nb-anchor" contenteditable="false" tabindex="-1" title="Copy link to this heading" aria-label="Copy link to this heading">${pixelIcon("link")}</button>`));
       if (b.type === "toggle") {
@@ -791,6 +803,51 @@ export function openBlogEditor(opts) {
     $("[data-words]").textContent = words ? `${words} words · ${minutes} min read` : "";
   }
 
+  /* ---- the attribution line -------------------------------------------
+   * A post imported from Medium ends with "> Originally published on
+   * [Medium](url)". One box swaps that line in and out of the body: ticked it
+   * is an ordinary quote block, unticked the block leaves the body - so it
+   * goes from the Preview and from the published page - and the same line
+   * stays on screen, faded, as the way back. The address comes from the post's
+   * source_url, which is kept whether or not the line is in the body. */
+  const sourceURL = () => {
+    const raw = String(post.source_url || "").trim();
+    return /^https:\/\/\S+$/i.test(raw) ? raw : "";
+  };
+
+  const attributionBlocks = () => [...root.querySelectorAll(":scope > .nb-block")]
+    .filter((b) => isAttributionLine(textOf(textEl(b), false)));
+
+  function syncAttribution() {
+    for (const b of root.querySelectorAll(":scope > .nb-block")) {
+      const is = isAttributionLine(textOf(textEl(b), false));
+      const box = b.querySelector(":scope > .nb-content > .nb-attr-check");
+      if (is && !box) {
+        // Typed by hand into a paragraph: the line is a quote from here on.
+        if (typeOf(b) === "p") b.dataset.type = "quote";
+        b.querySelector(":scope > .nb-content").prepend(attributionBox(true, INCLUDE_LABEL, "nb-attr-check"));
+      } else if (!is && box) {
+        box.remove();
+      }
+    }
+    const row = $("[data-attribution]");
+    const url = sourceURL();
+    if (!url || attributionBlocks().length) {
+      if (!row.hidden) { row.hidden = true; row.innerHTML = ""; }
+      return;
+    }
+    if (!row.hidden) return;   // already on screen: this runs on every keystroke
+    const b = blockEl({ type: "quote", text: attributionLine(url) });
+    b.classList.add("is-attribution-off");
+    b.querySelector(":scope > .nb-content > .nb-text").removeAttribute("contenteditable");
+    const box = b.querySelector(".nb-attr-check");
+    box.checked = false;
+    box.setAttribute("aria-label", RESTORE_LABEL);
+    box.title = RESTORE_LABEL;
+    row.append(b);
+    row.hidden = false;
+  }
+
   function numberIn(container) {
     const counts = [];
     const formats = [];
@@ -873,6 +930,7 @@ export function openBlogEditor(opts) {
     if (structural) tidyColumns();
     dirty = true;
     refreshDerived();
+    syncAttribution();
     paintState();
     $("[data-crumb]").textContent = titleEl.textContent.trim() || "Untitled";
     if (structural) commitHistory();
@@ -3586,6 +3644,30 @@ export function openBlogEditor(opts) {
     }
 
     const block = t.closest(".nb-block");
+    if (t.closest(".nb-attr-check")) {
+      const box = t.closest(".nb-attr-check");
+      const row = box.closest("[data-attribution]");
+      // The box in the faded row: ticking it puts the line back at the end of
+      // the body. Unticking it is not a state that exists, so nothing happens.
+      if (row) {
+        if (!box.checked) return;
+        if (selectedBlock) selectBlock(null);
+        const b = blockEl({ type: "quote", text: attributionLine(sourceURL()) });
+        root.append(b);
+        changed({ structural: true });
+        // Focus would otherwise stay on a box that is now hidden with its row.
+        const fresh = b.querySelector(".nb-attr-check");
+        if (fresh) fresh.focus();
+        return;
+      }
+      if (box.checked) return;
+      if (selectedBlock === block) selectBlock(null);
+      block.remove();
+      changed({ structural: true });
+      const fresh = $("[data-attribution]").querySelector(".nb-attr-check");
+      if (fresh) fresh.focus();
+      return;
+    }
     if (!block || !root.contains(block)) {
       if (t.closest("[data-tail]")) {
         const blocks = [...root.children];
@@ -3989,7 +4071,7 @@ export function openBlogEditor(opts) {
 
   function loadBody(md) {
     root.innerHTML = "";
-    const blocks = parseBlocks(md);
+    const blocks = parseBlocks(normaliseAttribution(md));
     if (!blocks.length) blocks.push({ type: "p", text: "" });
     blocks.forEach((b) => root.append(blockEl(b)));
   }
@@ -4054,6 +4136,7 @@ export function openBlogEditor(opts) {
   titleEl.textContent = post.title || "";
   $("[data-crumb]").textContent = post.title || "Untitled";
   loadBody(post.body);
+  syncAttribution();
   paintCover();
   paintIcon();
   paintProps();
@@ -4064,7 +4147,10 @@ export function openBlogEditor(opts) {
   openedContent = values();
   // What's on the site, to tell real edits from ones that add up to nothing.
   // The draft's page can't show it, so it comes from the row; else from the page.
-  liveKey = post.status !== "published" ? null : contentKey(hasDraft ? opts.row : openedContent);
+  /* A row as the editor reads it: the attribution paragraph, written before the
+   * line became a quote, counts as the quote it is now. */
+  const rowContent = (row) => ({ ...row, body: normaliseAttribution(row && row.body) });
+  liveKey = post.status !== "published" ? null : contentKey(hasDraft ? rowContent(opts.row) : openedContent);
   if (hasDraft && contentKey(openedContent) === liveKey) {
     // A draft identical to the live post (edits made and undone): drop it.
     hasDraft = false;

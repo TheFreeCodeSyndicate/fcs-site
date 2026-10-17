@@ -189,6 +189,29 @@ body.nb-open { overflow: hidden; }
 .nb-check { flex: none; width: 16px; height: 16px; margin: 8px 4px 0 2px; accent-color: var(--accent-deep); cursor: pointer; }
 .nb-block.is-done > .nb-content > .nb-text { text-decoration: line-through; color: var(--ink-muted); }
 
+/* ---- attribution checkbox and faded row ------------------------------ */
+.nb-attr-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 8px 4px 0 2px;
+  accent-color: var(--accent-deep);
+  cursor: pointer;
+}
+.nb-attribution {
+  margin: 0;
+  padding: 0;
+}
+.nb-attribution .nb-gutter {
+  display: none;
+}
+.nb-attribution .nb-block[data-type="quote"] > .nb-content > .nb-text {
+  opacity: 0.45;
+}
+.nb-attribution .nb-block[data-type="quote"] > .nb-content > .nb-text .link {
+  pointer-events: none;
+}
+
 .nb-block[data-type="quote"] .nb-text { border-left: 3px solid var(--ink); padding-left: 14px; }
 .nb-block[data-type="callout"] > .nb-content { padding: 12px 14px 12px 10px; border-radius: 6px; background: var(--hover); flex-wrap: nowrap; }
 .nb-callout-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 4px; background: none; font-size: 1.3rem; cursor: pointer; padding: 0; }
