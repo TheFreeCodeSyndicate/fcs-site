@@ -731,7 +731,7 @@ function renderPage() {
   else renderListPage(page);
 }
 
-function pageHead(page, { count, newLabel, search = true, extra = "", newPre = "" } = {}) {
+function pageHead(page, { count, newLabel, search = true, extra = "", newPre = "", newPreLabel = "" } = {}) {
   return `
     <div class="page-head">
       <h1 tabindex="-1">${escapeHTML(page.label)}${count != null ? ` <span class="page-count">${count}</span>` : ""}</h1>
@@ -745,7 +745,7 @@ function pageHead(page, { count, newLabel, search = true, extra = "", newPre = "
         ${extra}
         ${page.site ? `<a class="btn btn-quiet" href="./${page.site}" target="_blank" rel="noopener">${icon("eye")}<span>View on site</span></a>` : ""}
         ${newLabel ? (newPre ? `
-          <div class="btn-group">
+          <div class="btn-group" role="group" aria-label="${escapeAttr(newPreLabel || "Create")}">
             ${newPre}
             <button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>
           </div>` : `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>`) : ""}
@@ -1463,6 +1463,7 @@ function renderBlogPage(page) {
       count: all.length,
       newLabel: "New post",
       newPre: `<button type="button" class="btn btn-quiet" id="page-import">${icon("medium")}<span>Import from Medium</span></button>`,
+      newPreLabel: "Create a post",
     })}
     <p class="page-intro">${escapeHTML(editor.intro)}</p>
     <div class="blog-toolbar">
