@@ -1289,6 +1289,7 @@ body:has(.drawer.is-open) .toasts {
   .blog-row-actions { text-align: left; }
 }
 .post-card-badge .badge:not(.badge-live) { background: var(--paper-raised); }
+.nb-prop-source .nb-prop-note { color: var(--ink-muted); font-size: 0.82rem; margin-left: 8px; }
 
 /* ====================================================================
    Medium Import Wizard (.mi-)

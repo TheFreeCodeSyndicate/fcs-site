@@ -33,7 +33,7 @@ import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
 import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
 import { mountRail } from "./post-rail.js";
 import { slugify } from "./lib/forms.js";
-import { escapeHTML, escapeAttr, icon } from "./render.js";
+import { escapeHTML, escapeAttr, icon, safeURL } from "./render.js";
 import "./link-preview.js";
 import "./image-zoom.js";
 
@@ -1142,12 +1142,20 @@ export function openBlogEditor(opts) {
       <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("users")}Authors</span><span><button type="button" class="nb-authors" data-authors aria-haspopup="dialog"></button></span></div>
       ${whoamiRow()}
       <label class="nb-prop"><span class="nb-prop-label">${pixelIcon("pencil")}Summary</span><textarea data-prop="excerpt" rows="1" maxlength="300" placeholder="Empty: the start of the post is used in link previews"></textarea></label>
-      <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("calendar")}Published</span><span data-published>${post.published_at ? escapeHTML(dateText(post.published_at)) : "Not yet"}</span></div>`;
+      <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("calendar")}Published</span><span data-published>${post.published_at ? escapeHTML(dateText(post.published_at)) : "Not yet"}</span></div>
+      ${sourceRow()}`;
     props.dataset.built = "1";
     props.querySelector("[data-prop=slug]").value = locked ? post.slug : (current && current.slug) || post.slug || "";
     paintAuthors();
     props.querySelector("[data-prop=excerpt]").value = current ? current.excerpt : post.excerpt || "";
     autosize(props.querySelector("[data-prop=excerpt]"));
+  }
+
+  function sourceRow() {
+    if (!post.source_url) return "";
+    const safe = safeURL(post.source_url);
+    if (!safe) return "";
+    return `<div class="nb-prop nb-prop-source"><span class="nb-prop-label">${pixelIcon("link")}Source</span><span><a href="${safe}" target="_blank" rel="noopener">${escapeHTML(post.source_url)}</a><span class="nb-prop-note">Imported from Medium</span></span></div>`;
   }
 
   /** Until you link your login to your member card, ask (once linked, the Team page changes it). */
