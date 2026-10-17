@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg">
 <!-- pixelarticons 2.4.1 (MIT, (c) 2019 Gerrit Halfmann), https://pixelarticons.com.
-     Built by tools/build-pixel-icons.mjs; 704 icons, ids "p-<name>". -->
+     Built by tools/build-pixel-icons.mjs; 704 pixelarticons, 1 brand, ids "p-<name>". -->
 <symbol id="p-a-arrow-down" viewBox="0 0 24 24"><path d="M16 6h2v12h-2zm2 8h2v2h-2zm-4 0h2v2h-2zm4-2h4v2h-4zm-6 0h4v2h-4zM2 8h2v10H2zm6 0h2v10H8z"/><path d="M4 12h6v2H4zm0-6h4v2H4z"/></symbol>
 <symbol id="p-a-arrow-up" viewBox="0 0 24 24"><path d="M16 18h2V6h-2zm2-8h2V8h-2zm-4 0h2V8h-2zm4 2h4v-2h-4zm-6 0h4v-2h-4zM2 8h2v10H2zm6 0h2v10H8z"/><path d="M4 12h6v2H4zm0-6h4v2H4z"/></symbol>
 <symbol id="p-ai-app-mac" viewBox="0 0 24 24"><path d="M4 3h16v2H4zm0 16h6v2H4zM2 5h2v14H2zm18 0h2v8h-2zM6 7h2v2H6zm4 0h2v2h-2zm4 0h2v2h-2zm2 6h2v2h-2zm0 8h2v2h-2zm-4-4h2v2h-2zm8 0h2v2h-2zm-6-2h2v2h-2zm4 0h2v2h-2zm0 4h2v2h-2zm-4 0h2v2h-2z"/></symbol>
@@ -705,5 +705,5 @@
 <symbol id="p-zap-off" viewBox="0 0 24 24"><path d="M10 13h2v10h-2z"/><path d="M2 13h10v2H2zM12 1h2v6h-2zm4 8h6v2h-6zm4 2h2v2h-2zm-4 4h2v2h-2zm-2 2h2v2h-2zm-2 2h2v2h-2zM2 11h2v2H2zm2-2h2v2H4zm2-2h2v2H6zm4-4h2v2h-2zM2 1h2v2H2zm2 2h2v2H4zm2 2h2v2H6zm2 2h2v2H8zm2 2h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2z"/><path d="M16 15h2v2h-2zm2 2h2v2h-2zm2 2h2v2h-2z"/></symbol>
 <symbol id="p-zoom-in" viewBox="0 0 24 24"><path d="M22 22h-2v-2h2v2Zm-2-2h-2v-2h2v2Zm-6-2H6v-2h8v2Zm4 0h-2v-2h2v2ZM6 16H4v-2h2v2Zm10 0h-2v-2h2v2ZM4 14H2V6h2v8Zm7-5h3v2h-3v3H9v-3H6V9h3V6h2v3Zm7 5h-2V6h2v8ZM6 6H4V4h2v2Zm10 0h-2V4h2v2Zm-2-2H6V2h8v2Z"/></symbol>
 <symbol id="p-zoom-out" viewBox="0 0 24 24"><path d="M22 22h-2v-2h2v2Zm-2-2h-2v-2h2v2Zm-6-2H6v-2h8v2Zm4 0h-2v-2h2v2ZM6 16H4v-2h2v2Zm10 0h-2v-2h2v2ZM4 14H2V6h2v8Zm14 0h-2V6h2v8Zm-4-5v2H6V9h8ZM6 6H4V4h2v2Zm10 0h-2V4h2v2Zm-2-2H6V2h8v2Z"/></symbol>
-<symbol id="p-medium" viewBox="0 0 24 24"><path d="M4 6h6v1H4zM3 7h8v1H3zM2 8h10v8H2zM3 16h8v1H3zM4 17h6v1H4zM15 6h3v2h-3zM14 8h5v8h-5zM15 16h3v2h-3zM20 6h1v1h-1zM20 7h2v10h-2zM20 17h1v1h-1z"/></symbol>
+<symbol id="p-medium" viewBox="148.5 148.5 727 727"><path shape-rendering="geometricPrecision" d="M836.115 244.625L836.923 244.448V238.195H672.014L518.891 598.084L365.768 238.195H188.059V244.448L188.857 244.625C218.957 251.419 234.239 261.551 234.239 298.091V725.872C234.239 762.412 218.898 772.544 188.798 779.338L188 779.516V785.788H308.57V779.535L307.773 779.358C277.672 772.564 262.39 762.432 262.39 725.892V322.905L459.093 785.788H470.249L672.683 309.996V736.457C670.104 765.317 654.96 774.228 627.705 780.382L626.897 780.569V786.773H836.923V780.569L836.115 780.382C808.831 774.228 793.322 765.317 790.743 736.457L790.605 298.091H790.743C790.743 261.551 806.024 251.419 836.115 244.625Z"/></symbol>
 </svg>
