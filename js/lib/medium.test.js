@@ -231,3 +231,21 @@ test("resizeURL points to miro at the requested width", () => {
   assert.equal(resizeURL("1*abc.png"), "https://miro.medium.com/v2/resize:fit:1400/1*abc.png");
   assert.equal(resizeURL("1*abc.png", 800), "https://miro.medium.com/v2/resize:fit:800/1*abc.png");
 });
+
+test("a section label is plain text, not markdown", () => {
+  const sections = htmlToSections('<p>Here is <strong>bold</strong> and <em>italic</em> and `code` and <a href="https://x">a link</a>.</p>');
+  assert.equal(sections[0].label, "Here is bold and italic and code and a link.");
+});
+
+test("text around an inline video does not become a stray paragraph", () => {
+  const [s] = htmlToSections('<p>Watch this: <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ">video</a>. Pretty cool.</p>');
+  assert.ok(s.markdown.includes("@[video](https://www.youtube.com/watch?v=dQw4w9WgXcQ)"));
+  assert.ok(!s.markdown.includes("\n\n.\n\n") && !s.markdown.endsWith("\n\n.") && !s.markdown.includes("\n\n."));
+});
+
+test("a gist script contributes nothing, not even its URL", () => {
+  const sections = htmlToSections('<script src="https://gist.github.com/abc/123.js"></script>');
+  assert.equal(sections.length, 0);
+  const sectionsWithFig = htmlToSections('<figure><script src="https://gist.github.com/abc/123.js"></script></figure>');
+  assert.equal(sectionsWithFig.length, 0);
+});

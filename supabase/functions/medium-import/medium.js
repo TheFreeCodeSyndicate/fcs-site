@@ -398,6 +398,7 @@ export function textOf(nodes) {
   if (nodes == null) return "";
   if (typeof nodes === "string") return nodes;
   if (Array.isArray(nodes)) return nodes.map(textOf).join("");
+  if (nodes.tag === "script" || nodes.tag === "style") return "";
   if (nodes.tag === "br") return "\n";
   if (nodes.type === "text") return nodes.text || "";
   if (nodes.children) return textOf(nodes.children);
@@ -549,6 +550,7 @@ function inlineMarkdown(nodes) {
   if (nodes == null) return "";
   if (typeof nodes === "string") return nodes;
   if (Array.isArray(nodes)) return nodes.map(inlineMarkdown).join("");
+  if (nodes.tag === "script" || nodes.tag === "style") return "";
   if (nodes.type === "text") return nodes.text || "";
   if (nodes.tag === "br") return "\n";
 
@@ -626,6 +628,7 @@ function findTag(node, tag) {
 function flattenElements(nodes) {
   const flat = [];
   for (const node of nodes || []) {
+    if (node.tag === "script" || node.tag === "style") continue;
     if (node.type === "text") {
       if (node.text.trim()) {
         flat.push(node);
@@ -639,8 +642,17 @@ function flattenElements(nodes) {
   return flat;
 }
 
+function stripMarkdown(text) {
+  return String(text || "")
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2");
+}
+
 function makeLabel(kind, text) {
-  const clean = oneLine(text || "");
+  const clean = oneLine(stripMarkdown(text || ""));
   if (!clean) {
     if (kind === "divider") return "---";
     if (kind === "image") return "Image";
@@ -904,24 +916,36 @@ export function htmlToSections(html, opts = {}) {
     const text = (el.type === "text" ? el.text : inlineMarkdown(el.children || el)).trim();
     if (text) {
       if (text.includes("@[video](")) {
-        const parts = text.split(/(@\[video\]\([^\)]+\))/g);
-        const pBlocks = [];
-        let videoUrl = "";
-        for (const part of parts) {
-          const m = /^@\[video\]\(([^\)]+)\)$/.exec(part);
-          if (m) {
-            pBlocks.push({ type: "video", url: m[1] });
-            videoUrl = m[1];
-          } else {
-            const t = part.trim();
-            if (t) pBlocks.push({ type: "p", text: t });
-          }
+        const videoMatches = [...text.matchAll(/@\[video\]\(([^)]+)\)/g)];
+        const videoBlocks = videoMatches.map((m) => ({ type: "video", url: m[1] }));
+        const videoUrl = videoMatches[0]?.[1] || "";
+
+        let prose = text
+          .replace(/@\[video\]\([^)]+\)/g, "")
+          .replace(/\s+([.,!?;:])/g, "$1")
+          .replace(/[:;,]\./g, ".")
+          .trim();
+
+        if (/^[.,!?;:\s]+$/.test(prose)) {
+          prose = "";
         }
+
+        const pBlocks = [];
+        if (prose) {
+          if (text.startsWith("@[video]")) {
+            pBlocks.push(...videoBlocks, { type: "p", text: prose });
+          } else {
+            pBlocks.push({ type: "p", text: prose }, ...videoBlocks);
+          }
+        } else {
+          pBlocks.push(...videoBlocks);
+        }
+
         if (pBlocks.length > 0) {
           rawSections.push({
             kind: "video",
             blocks: pBlocks,
-            label: makeLabel("video", videoUrl || text),
+            label: makeLabel("video", videoUrl || prose || text),
             images: [],
           });
         }
