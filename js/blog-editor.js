@@ -241,7 +241,7 @@ function fillInline(el, md) {
 }
 
 /** The parts of a post a draft or a version holds (not its address, status or dates). */
-const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "authors", "author_name", "body"];
+const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "source_url", "authors", "author_name", "body"];
 const contentOf = (c) => Object.fromEntries(CONTENT_KEYS.filter((k) => c && k in c).map((k) => [k, c[k]]));
 /** Content as a comparable string: "", [] and missing all read as nothing,
  * and object keys in any order (the database's jsonb reorders them). */
@@ -1021,6 +1021,7 @@ export function openBlogEditor(opts) {
       small_text: Boolean(post.small_text),
       full_width: Boolean(post.full_width),
       locked: Boolean(post.locked),
+      source_url: post.source_url || null,
       body: bodyMarkdown(),
     };
   }
