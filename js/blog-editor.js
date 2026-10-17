@@ -554,7 +554,9 @@ export function openBlogEditor(opts) {
         content.append(h(`<button type="button" class="nb-caret" aria-label="Open or close" aria-expanded="true">${pixelIcon("chevron-right")}</button>`));
         el.classList.add("is-open");
       }
-      if (isAttributionLine(b.text)) content.append(attributionBox(true, INCLUDE_LABEL, "nb-attr-check"));
+      /* No attribution box here: a block is built detached, so it cannot know
+         whether it is top level, and only a top-level line gets one (the rule
+         lives in syncAttribution, which sees the whole body). */
       content.append(text);
       if (/^h\d$/.test(b.type)) content.append(h(`<button type="button" class="nb-anchor" contenteditable="false" tabindex="-1" title="Copy link to this heading" aria-label="Copy link to this heading">${pixelIcon("link")}</button>`));
       if (b.type === "toggle") {
@@ -815,23 +817,35 @@ export function openBlogEditor(opts) {
     return /^https:\/\/\S+$/i.test(raw) ? raw : "";
   };
 
-  const attributionBlocks = () => [...root.querySelectorAll(":scope > .nb-block")]
-    .filter((b) => isAttributionLine(textOf(textEl(b), false)));
+  /* The line a block shows, or "" for a block with no text at all - a code
+   * block, an image, a divider: there is no .nb-text to read there. */
+  const lineIn = (b) => {
+    const th = textEl(b);
+    return th ? textOf(th, false) : "";
+  };
+
+  /* Every block that shows the line, at any depth: a line inside a column or a
+     toggle is in the body just the same, so the row stays away while it is
+     there. Only a top-level line gets a checkbox, though. */
+  const attributionBlocks = () => [...root.querySelectorAll(".nb-block")]
+    .filter((b) => isAttributionLine(lineIn(b)));
 
   function syncAttribution() {
+    const url = sourceURL();
     for (const b of root.querySelectorAll(":scope > .nb-block")) {
-      const is = isAttributionLine(textOf(textEl(b), false));
+      const is = isAttributionLine(lineIn(b));
       const box = b.querySelector(":scope > .nb-content > .nb-attr-check");
-      if (is && !box) {
+      const wanted = is && Boolean(url);
+      if (wanted && !box) {
         // Typed by hand into a paragraph: the line is a quote from here on.
         if (typeOf(b) === "p") b.dataset.type = "quote";
         b.querySelector(":scope > .nb-content").prepend(attributionBox(true, INCLUDE_LABEL, "nb-attr-check"));
-      } else if (!is && box) {
+      } else if (!wanted && box) {
+        // The line left, or the post lost its address: no box, and the line stays.
         box.remove();
       }
     }
     const row = $("[data-attribution]");
-    const url = sourceURL();
     if (!url || attributionBlocks().length) {
       if (!row.hidden) { row.hidden = true; row.innerHTML = ""; }
       return;
@@ -839,11 +853,8 @@ export function openBlogEditor(opts) {
     if (!row.hidden) return;   // already on screen: this runs on every keystroke
     const b = blockEl({ type: "quote", text: attributionLine(url) });
     b.classList.add("is-attribution-off");
+    b.querySelector(":scope > .nb-content").prepend(attributionBox(false, RESTORE_LABEL, "nb-attr-check"));
     b.querySelector(":scope > .nb-content > .nb-text").removeAttribute("contenteditable");
-    const box = b.querySelector(".nb-attr-check");
-    box.checked = false;
-    box.setAttribute("aria-label", RESTORE_LABEL);
-    box.title = RESTORE_LABEL;
     row.append(b);
     row.hidden = false;
   }
@@ -4074,6 +4085,9 @@ export function openBlogEditor(opts) {
     const blocks = parseBlocks(normaliseAttribution(md));
     if (!blocks.length) blocks.push({ type: "p", text: "" });
     blocks.forEach((b) => root.append(blockEl(b)));
+    // Every path that fills the page comes through here - opening a post, a
+    // draft, a version, an undo - so the line's box is put on here, once.
+    syncAttribution();
   }
 
   function beforeUnload(e) {
@@ -4135,8 +4149,7 @@ export function openBlogEditor(opts) {
 
   titleEl.textContent = post.title || "";
   $("[data-crumb]").textContent = post.title || "Untitled";
-  loadBody(post.body);
-  syncAttribution();
+  loadBody(post.body);          // the box for the line is put on in there
   paintCover();
   paintIcon();
   paintProps();

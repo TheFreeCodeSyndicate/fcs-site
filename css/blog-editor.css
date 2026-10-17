@@ -198,17 +198,15 @@ body.nb-open { overflow: hidden; }
   accent-color: var(--accent-deep);
   cursor: pointer;
 }
-.nb-attribution {
-  margin: 0;
-  padding: 0;
-}
+/* The row holds one block on its own: no gutter, and the line faded with its
+   link inert while the body does not carry it. */
 .nb-attribution .nb-gutter {
   display: none;
 }
-.nb-attribution .nb-block[data-type="quote"] > .nb-content > .nb-text {
+.nb-attribution .is-attribution-off > .nb-content > .nb-text {
   opacity: 0.45;
 }
-.nb-attribution .nb-block[data-type="quote"] > .nb-content > .nb-text .link {
+.nb-attribution .is-attribution-off > .nb-content > .nb-text .link {
   pointer-events: none;
 }
 
