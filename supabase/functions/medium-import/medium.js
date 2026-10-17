@@ -957,3 +957,96 @@ export function htmlToSections(html, opts = {}) {
 
   return opts && opts.dropped ? { sections, dropped } : sections;
 }
+
+/**
+ * Trims text by Unicode code points (not UTF-16 code units), appending an ellipsis
+ * only when cutting occurred (for lengths > 2).
+ * @param {string} text
+ * @param {number} max
+ * @returns {string}
+ */
+export function clipText(text, max) {
+  const chars = [...String(text || "")];
+  if (chars.length <= max) {
+    return chars.join("");
+  }
+  return chars.slice(0, max).join("") + (max <= 2 ? "" : "…");
+}
+
+/**
+ * Fits sections within a maximum markdown body budget, breaking at the first overflow.
+ * @param {Array<object>} sections
+ * @param {{ maxBody?: number }} [opts]
+ * @returns {{ sections: Array<object>, dropped: Array<object> }}
+ */
+export function fitSections(sections, opts = {}) {
+  const maxBody = opts && opts.maxBody != null ? Number(opts.maxBody) : Infinity;
+  const kept = [];
+  const dropped = [];
+  let total = 0;
+  let overflowing = false;
+
+  for (const s of sections || []) {
+    if (overflowing) {
+      dropped.push(s);
+      continue;
+    }
+    const len = [...String(s?.markdown || "")].length;
+    const joinCost = kept.length > 0 ? 2 : 0;
+    if (total + joinCost + len > maxBody) {
+      overflowing = true;
+      dropped.push(s);
+    } else {
+      total += joinCost + len;
+      kept.push(s);
+    }
+  }
+
+  return { sections: kept, dropped };
+}
+
+/**
+ * Emits the canonical attribution line linking the original Medium story.
+ * @param {{ url?: string }|string} story
+ * @returns {string}
+ */
+export function attributionLine(story) {
+  const url = typeof story === "string" ? story : (story && story.url) || "";
+  return `Originally published on [Medium](${url})`;
+}
+
+/**
+ * Extracts the asset identifier from a Medium CDN image address, or null if not Medium CDN.
+ * @param {string} url
+ * @returns {string|null}
+ */
+export function mediumImageID(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(String(url));
+    if (!/^(?:cdn-images-\d+|miro)\.medium\.com$/i.test(u.hostname)) {
+      return null;
+    }
+    let p = u.pathname.replace(/^\/+/, "");
+    if (/^max\/\d+\//i.test(p)) {
+      p = p.replace(/^max\/\d+\//i, "");
+    } else if (/^v2\/resize:fit:\d+\//i.test(p)) {
+      p = p.replace(/^v2\/resize:fit:\d+\//i, "");
+    } else if (/^v2\//i.test(p)) {
+      p = p.replace(/^v2\//i, "");
+    }
+    return p || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Returns a resized miro.medium.com URL for an image asset ID.
+ * @param {string} id
+ * @param {number} [width=1400]
+ * @returns {string}
+ */
+export function resizeURL(id, width = 1400) {
+  return `https://miro.medium.com/v2/resize:fit:${width}/${id}`;
+}
