@@ -1451,7 +1451,7 @@ function renderBlogPage(page) {
     ${pageHead(page, {
       count: all.length,
       newLabel: "New post",
-      extra: `<button type="button" class="btn btn-quiet" id="page-import">${icon("download")}<span>Import from Medium</span></button>`,
+      extra: `<button type="button" class="btn btn-quiet" id="page-import">${icon("arrow-down")}<span>Import from Medium</span></button>`,
     })}
     <p class="page-intro">${escapeHTML(editor.intro)}</p>
     <div class="blog-toolbar">
