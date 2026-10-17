@@ -20,8 +20,9 @@ import {
   applyShortcut,
   summarise,
   findDuplicate,
+  storyAddress,
 } from "./lib/medium-wizard.js";
-import { escapeHTML } from "./render.js";
+import { escapeHTML, escapeAttr, safeURL } from "./render.js";
 
 let open = null;
 
@@ -34,19 +35,6 @@ export function closeMediumImport() {
     open.returnFocus.focus();
   }
   open = null;
-}
-
-/**
- * Checks whether an input string looks like a direct Medium story address.
- * Matches 12-hex story post IDs in URL path.
- *
- * @param {string} text
- * @returns {boolean}
- */
-function isStoryAddress(text) {
-  const s = String(text || "").trim();
-  if (!s.startsWith("http://") && !s.startsWith("https://")) return false;
-  return /\/p\/[0-9a-f]{12}(?:[?#]|$)/i.test(s) || /-[0-9a-f]{12}(?:[?#]|$)/i.test(s);
 }
 
 /**
@@ -96,6 +84,7 @@ export function openMediumImport(opts = {}) {
   let selectedSectionIds = new Set();
   let duplicateOverridden = false;
   let previewRaf = null;
+  let knownFeedHandle = null;
 
   function render() {
     dialog.innerHTML = "";
@@ -171,7 +160,7 @@ export function openMediumImport(opts = {}) {
         const clash = findDuplicate(opts.existing, s.url);
         const dateStr = formatDate(s.publishedAt || s.published_at);
         return `
-          <div class="mi-story-card${isImportable ? "" : " is-disabled"}" data-url="${escapeHTML(s.url)}" ${isImportable ? 'tabindex="0" role="button"' : 'aria-disabled="true"'}>
+          <div class="mi-story-card${isImportable ? "" : " is-disabled"}" data-url="${escapeAttr(s.url)}" ${isImportable ? 'tabindex="0" role="button"' : 'aria-disabled="true"'}>
             <div class="mi-story-main">
               <div class="mi-story-header">
                 ${dateStr ? `<time class="mi-story-date">${escapeHTML(dateStr)}</time>` : ""}
@@ -182,8 +171,8 @@ export function openMediumImport(opts = {}) {
               ${s.excerpt ? `<p class="mi-story-summary">${escapeHTML(s.excerpt)}</p>` : ""}
               ${!isImportable && s.reason ? `<p class="mi-story-reason">${escapeHTML(s.reason)}</p>` : ""}
             </div>
-            ${s.thumbnail ? `<div class="mi-story-thumb"><img src="${escapeHTML(s.thumbnail)}" alt="" loading="lazy" /></div>` : ""}
-            ${isImportable ? `<div class="mi-story-action"><button type="button" class="btn btn-quiet" data-pick="${escapeHTML(s.url)}">Choose</button></div>` : ""}
+            ${s.thumbnail ? `<div class="mi-story-thumb"><img src="${safeURL(s.thumbnail)}" alt="" loading="lazy" /></div>` : ""}
+            ${isImportable ? `<div class="mi-story-action"><button type="button" class="btn btn-quiet" data-pick="${escapeAttr(s.url)}">Choose</button></div>` : ""}
           </div>
         `;
       }).join("");
@@ -201,7 +190,7 @@ export function openMediumImport(opts = {}) {
           showLoading(true);
           showError("");
           try {
-            const storyRes = await mediumStory(url, authorHandle || currentSource?.handle || null);
+            const storyRes = await mediumStory(url, authorHandle || knownFeedHandle || null);
             if (Array.isArray(storyRes.stories)) {
               showLoading(false);
               showError(storyRes.error || "That story could not be loaded.");
@@ -242,9 +231,11 @@ export function openMediumImport(opts = {}) {
       resultsBox.innerHTML = "";
       showLoading(true);
 
-      if (isStoryAddress(val)) {
+      const directStoryUrl = storyAddress(val);
+      if (directStoryUrl) {
+        knownFeedHandle = null;
         try {
-          const storyRes = await mediumStory(val);
+          const storyRes = await mediumStory(directStoryUrl);
           showLoading(false);
           if (Array.isArray(storyRes.stories)) {
             // Not in newest ten: server error sentence + stories list + ten-story hint
@@ -265,6 +256,7 @@ export function openMediumImport(opts = {}) {
         try {
           const feedRes = await mediumFeed(val);
           showLoading(false);
+          knownFeedHandle = feedRes.source?.handle || null;
           currentSource = feedRes.source;
           paintStories(feedRes.stories, feedRes.source?.handle);
         } catch (err) {
@@ -298,7 +290,7 @@ export function openMediumImport(opts = {}) {
           <h3 class="mi-story-summary-title">${escapeHTML(source?.title || "Untitled")}</h3>
           <p class="mi-story-summary-meta">
             ${source?.author ? `<span>By ${escapeHTML(source.author)}</span>` : ""}
-            ${source?.url ? `<a href="${escapeHTML(source.url)}" target="_blank" rel="noopener noreferrer">View original on Medium</a>` : ""}
+            ${source?.url ? `<a href="${safeURL(source.url)}" target="_blank" rel="noopener noreferrer">View original on Medium</a>` : ""}
           </p>
         </div>
 
@@ -314,10 +306,10 @@ export function openMediumImport(opts = {}) {
             <div class="mi-section-list" role="group" aria-label="Sections to import" data-sections-list>
               ${sections.map((sec) => `
                 <label class="mi-section-row">
-                  <input type="checkbox" data-id="${escapeHTML(sec.id)}" ${selectedSectionIds.has(sec.id) ? "checked" : ""} />
+                  <input type="checkbox" data-id="${escapeAttr(sec.id)}" ${selectedSectionIds.has(sec.id) ? "checked" : ""} />
                   <span class="badge mi-kind-badge">${escapeHTML(sec.kind || "text")}</span>
                   <span class="mi-section-label">${escapeHTML(sec.label || "")}</span>
-                  ${sec.kind === "image" && sec.images && sec.images[0] ? `<img class="mi-section-thumb" src="${escapeHTML(sec.images[0])}" alt="" loading="lazy" />` : ""}
+                  ${sec.kind === "image" && sec.images && sec.images[0] ? `<img class="mi-section-thumb" src="${safeURL(sec.images[0])}" alt="" loading="lazy" />` : ""}
                 </label>
               `).join("")}
             </div>
@@ -420,7 +412,7 @@ export function openMediumImport(opts = {}) {
           <h3 class="mi-story-summary-title">${escapeHTML(source?.title || "Untitled")}</h3>
           <p class="mi-story-summary-meta">
             <span>${selectedSectionIds.size} section${selectedSectionIds.size === 1 ? "" : "s"} selected</span>
-            ${source?.url ? `<a href="${escapeHTML(source.url)}" target="_blank" rel="noopener noreferrer">View original on Medium</a>` : ""}
+            ${source?.url ? `<a href="${safeURL(source.url)}" target="_blank" rel="noopener noreferrer">View original on Medium</a>` : ""}
           </p>
         </div>
 
@@ -486,9 +478,8 @@ the one that receives the complaint.</p>
       openPostBtn.addEventListener("click", () => {
         if (typeof opts.onOpenPost === "function") {
           opts.onOpenPost(clash);
-        } else {
-          const rowOpener = document.querySelector(`[data-key="${clash.id}"] [data-open], [data-key="${clash.id}"] .post-card-link`);
-          if (rowOpener) rowOpener.click();
+        } else if (typeof opts.toast === "function") {
+          opts.toast("This post is already in the list.", "info");
         }
         closeMediumImport();
       });
@@ -519,8 +510,8 @@ the one that receives the complaint.</p>
 
         try {
           // Ruling R17: server handles attribution line appending via 4th argument
-          const result = await mediumImport(source.url, keptIds, source.handle, attribution);
-          const { markdown, cover, warnings = [], copied = 0, left = [] } = result;
+          const result = await mediumImport(source.url, keptIds, knownFeedHandle, attribution);
+          const { markdown, cover, images = {}, warnings = [] } = result;
 
           if (opts.mode === "new") {
             const title = clipTitle(source.title, 160) || "Untitled Medium Story";
@@ -541,7 +532,7 @@ the one that receives the complaint.</p>
             }
           }
 
-          const toastSummary = summarise(warnings, { copied, left });
+          const toastSummary = summarise(warnings, images);
           if (typeof opts.toast === "function") {
             opts.toast(toastSummary.message, toastSummary.tone);
           }

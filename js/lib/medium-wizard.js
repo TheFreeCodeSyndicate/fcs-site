@@ -96,3 +96,40 @@ export function findDuplicate(existing, url) {
   if (!Array.isArray(existing) || !url) return null;
   return existing.find((p) => p && p.source_url === url) || null;
 }
+
+/**
+ * Returns the story address to send to the server as an absolute https URL,
+ * or null when the input is not a story address.
+ *
+ * @param {string|null|undefined} input
+ * @returns {string|null}
+ */
+export function storyAddress(input) {
+  if (input == null) return null;
+  const s = String(input).trim();
+  if (!s || /\s/.test(s)) return null;
+
+  const hasStoryId = /\/p\/[0-9a-f]{12}(?:[?#]|$)/i.test(s) || /-[0-9a-f]{12}(?:[?#]|$)/i.test(s);
+  if (!hasStoryId) return null;
+
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      if (!u.hostname.includes(".")) return null;
+      return s;
+    } catch {
+      return null;
+    }
+  }
+
+  if (s.startsWith("@")) return null;
+
+  try {
+    const candidate = `https://${s}`;
+    const u = new URL(candidate);
+    if (!u.hostname.includes(".")) return null;
+    return candidate;
+  } catch {
+    return null;
+  }
+}

@@ -6,6 +6,7 @@ import {
   applyShortcut,
   summarise,
   findDuplicate,
+  storyAddress,
 } from "./medium-wizard.js";
 
 test("clipTitle collapses whitespace and trims", () => {
@@ -36,10 +37,10 @@ test("clipTitle boundaries: 160-char untouched, 161-char clipped, never exceeds 
 
 test("clipTitle never splits a surrogate pair", () => {
   // An emoji is a surrogate pair (2 code units, 1 code point: \uD83D\uDE00)
-  const text = "abc😀def";
-  // Slicing to 4 code points returns "abc😀"
+  const text = "abc\ud83d\ude00def";
+  // Slicing to 4 code points returns "abc\ud83d\ude00"
   const clipped4 = clipTitle(text, 4);
-  assert.equal(clipped4, "abc😀");
+  assert.equal(clipped4, "abc\ud83d\ude00");
   assert.equal([...clipped4].length, 4);
 
   // If clipped to 3 code points, it cleanly drops the emoji without a dangling surrogate
@@ -47,9 +48,9 @@ test("clipTitle never splits a surrogate pair", () => {
   assert.equal(clipped3, "abc");
 
   // String of emojis
-  const emojis = "😀😃😄😁😆";
+  const emojis = "\ud83d\ude00\ud83d\ude03\ud83d\ude04\ud83d\ude01\ud83d\ude06";
   const threeEmojis = clipTitle(emojis, 3);
-  assert.equal(threeEmojis, "😀😃😄");
+  assert.equal(threeEmojis, "\ud83d\ude00\ud83d\ude03\ud83d\ude04");
   assert.equal([...threeEmojis].length, 3);
 });
 
@@ -131,4 +132,53 @@ test("findDuplicate finds the first matching post by source_url or null", () => 
   assert.equal(findDuplicate(null, "https://medium.com/@author/story-one-111111111111"), null);
   assert.equal(findDuplicate(posts, null), null);
   assert.equal(findDuplicate(posts, ""), null);
+});
+
+test("storyAddress normalises schemeless story links and rejects non-story inputs", () => {
+  // https:// and http:// Medium-family story addresses returned unchanged
+  assert.equal(
+    storyAddress("https://medium.com/@jane/my-post-1a2b3c4d5e6f"),
+    "https://medium.com/@jane/my-post-1a2b3c4d5e6f"
+  );
+  assert.equal(
+    storyAddress("http://medium.com/@jane/my-post-1a2b3c4d5e6f"),
+    "http://medium.com/@jane/my-post-1a2b3c4d5e6f"
+  );
+  assert.equal(
+    storyAddress("https://medium.com/p/1a2b3c4d5e6f"),
+    "https://medium.com/p/1a2b3c4d5e6f"
+  );
+  assert.equal(
+    storyAddress("https://levelup.gitconnected.com/my-post-1a2b3c4d5e6f"),
+    "https://levelup.gitconnected.com/my-post-1a2b3c4d5e6f"
+  );
+
+  // Schemeless addresses with 12-hex story id normalised with https://
+  assert.equal(
+    storyAddress("medium.com/@jane/my-post-1a2b3c4d5e6f"),
+    "https://medium.com/@jane/my-post-1a2b3c4d5e6f"
+  );
+  assert.equal(
+    storyAddress("medium.com/p/1a2b3c4d5e6f"),
+    "https://medium.com/p/1a2b3c4d5e6f"
+  );
+  assert.equal(
+    storyAddress("levelup.gitconnected.com/my-post-1a2b3c4d5e6f"),
+    "https://levelup.gitconnected.com/my-post-1a2b3c4d5e6f"
+  );
+
+  // Schemeless links without 12-hex id stay null on purpose
+  assert.equal(storyAddress("medium.com/@jane"), null);
+  assert.equal(storyAddress("medium.com"), null);
+  assert.equal(storyAddress("levelup.gitconnected.com"), null);
+  assert.equal(storyAddress("https://medium.com/@jane"), null);
+
+  // Handles, empty, null, undefined, prose all return null
+  assert.equal(storyAddress("@jane"), null);
+  assert.equal(storyAddress("jane"), null);
+  assert.equal(storyAddress(""), null);
+  assert.equal(storyAddress(null), null);
+  assert.equal(storyAddress(undefined), null);
+  assert.equal(storyAddress("ordinary prose"), null);
+  assert.equal(storyAddress("have you seen this article"), null);
 });
