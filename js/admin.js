@@ -897,7 +897,7 @@ const EDITORS = {
     badges: (r) => [`<span class="badge">${r.status === "published" ? "Published" : "Draft"}</span>`],
     filters: [{ key: "status", label: "Status", options: [["all", "All"], ["draft", "Drafts"], ["published", "Published"]], initial: "all" }],
     searchIn: (r) => [r.title, r.slug, r.excerpt, r.author_name],
-    open: (row) => openPostEditor(row),
+    open: (row, opts) => openPostEditor(row, opts),
   },
 
   groups: {
@@ -1005,7 +1005,7 @@ async function rebuildSite() {
   }
 }
 
-async function openPostEditor(row, { replace = false } = {}) {
+async function openPostEditor(row, { replace = false, initial = null } = {}) {
   // The people who can be authors; the editor works without them (guests only).
   const [team, draft] = await Promise.all([
     listBlogAuthors().catch(() => []),
@@ -1023,6 +1023,7 @@ async function openPostEditor(row, { replace = false } = {}) {
   const me = team.find((t) => t.id === state.user.id) || { id: state.user.id, name: state.user.email.split("@")[0] };
   entry.handle = openBlogEditor({
     row,
+    initial,
     team,
     me,
     draft,
@@ -1644,9 +1645,9 @@ function moveRow(id, row, delta) {
   });
 }
 
-function openEditor(id, row) {
+function openEditor(id, row, initial = null) {
   const editor = EDITORS[id];
-  if (editor.open) return editor.open(row);
+  if (editor.open) return editor.open(row, { initial });
   const key = row ? rowKey(editor, row) : null;
   const refresh = async () => {
     await reload(editor.table);

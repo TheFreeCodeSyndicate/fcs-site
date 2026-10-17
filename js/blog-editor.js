@@ -289,6 +289,7 @@ function downloadFile(name, type, text) {
 /**
  * @param {object} opts
  * @param {object|null} opts.row          the post, or null for a new one
+ * @param {object} [opts.initial]         a new post's starting title/excerpt/body/cover_url/source_url
  * @param {boolean} opts.isAdmin          admins may delete
  * @param {(values, {id, wasLive}) => Promise<object>} opts.save  create or update; returns the saved row
  * @param {(id, wasLive) => Promise<void>} opts.remove
@@ -312,6 +313,8 @@ export function openBlogEditor(opts) {
     font: "default", small_text: false, full_width: false, locked: false,
     ...(opts.row || {}),
   };
+  // An imported post arrives pre-filled; it is still an unsaved draft.
+  if (opts.initial) Object.assign(post, opts.initial);
   // A published post's unpublished edits, saved by autosave, pick up where they left off.
   let hasDraft = Boolean(opts.draft && post.id && post.status === "published");
   if (hasDraft) Object.assign(post, contentOf(opts.draft.content));
