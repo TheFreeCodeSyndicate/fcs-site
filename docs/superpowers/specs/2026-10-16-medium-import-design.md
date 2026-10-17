@@ -532,8 +532,12 @@ against a real handle and a real story link (Phase 6).
    editor-menu path: not "append everything", but "bring across this part".
 5. **The copyright confirmation is required** and stands before any content is
    created. Its wording names the risk and the responsibility.
-6. **The attribution line is the writer's choice, ticked by default:**
-   `Originally published on Medium`, hyperlinked to the original story.
+6. **The attribution line is the writer's choice, ticked by default:** a quote
+   block, `> Originally published on [Medium](<story>)`. The import screen's box
+   decides whether it is written at all; the editor then gives the line its own
+   box, which takes it out of the body and puts it back, faded, as the way home.
+   The address that rebuilds it comes from `source_url`, so the box only exists
+   for a post that carries one.
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member
@@ -558,6 +562,10 @@ against a real handle and a real story link (Phase 6).
   Embedly frame.
 - **A very image-heavy story takes a minute.** Each image is a separate commit.
   The writer waits once, then edits.
+- **A post imported before the line became a quote shows its paragraph on the
+  live page until it is next saved.** The editor opens it as the quote it is now
+  and writes it back as one, so the page catches up on the next save; no
+  migration and no hand-editing is needed.
 - **Member-paywalled stories cannot be imported at all**, not even the author's
   own — and if an author publishes only inside a Partner-Program publication,
   none of their work is importable, because that publication's entire feed is
