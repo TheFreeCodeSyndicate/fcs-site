@@ -538,14 +538,23 @@ against a real handle and a real story link (Phase 6).
    box, which takes it out of the body and puts it back, faded, as the way home.
    The address that rebuilds it comes from `source_url`, so the box only exists
    for a post whose address the body can read back. The address *in the line* is
-   encoded (`lineAddress` in `js/lib/attribution.js`): the scheme lowercased,
-   since the dialect links nothing else, and the few characters it would
-   otherwise cut the link at or eat as formatting percent-encoded, so a story
-   address that holds one still makes a whole link and a body that is unchanged
-   by every save. A story addressed over plain `http` gets no line at all - the
+   encoded (`lineAddress` in `js/lib/attribution-line.js`, the leaf that holds the
+   line's grammar and is re-exported by `js/lib/attribution.js`): the scheme
+   lowercased, since the dialect links nothing else, and the few characters it
+   would otherwise cut the link at or eat as formatting percent-encoded, so a
+   story address that holds one still makes a whole link, and a body that is
+   unchanged by every save. A story addressed over plain `http` gets no line at all - the
    dialect links nothing but `https` - and that omission is reported on the
    import screen; the address the writer gave is used when the story's own
    cannot be.
+   The line then *reads* as a sign-off rather than as a quotation: italic and
+   centred, the opening mark raised above the cap line and the closing dropped
+   to the baseline, where an underline sits, so the pair reads as a reversed
+   quotation - no rule and no indent. The renderer marks the blockquote it
+   renders (`class="attr-quote"`) and the stylesheet draws the marks in the
+   theme's accent as pseudo-elements, so nothing of the treatment reaches the
+   body; the editor's own row is found by the include box the row holds, which
+   leaves the faded row that holds the line while it is switched off plain.
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member

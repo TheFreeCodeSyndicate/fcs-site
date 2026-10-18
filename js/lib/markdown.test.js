@@ -188,3 +188,17 @@ test("bookmarks: a full card with details, the site's name without", () => {
   assert.match(full, /<span class="bookmark-thumb"><img src="https:\/\/opengraph\.githubassets\.com\/x\.png"/);
   assert.ok(!renderMarkdown(`@[bookmark](${url})`, { links: { [url]: { image: "javascript:alert(1)" } } }).includes("javascript:"));
 });
+
+test("the attribution line renders as a sign-off; an ordinary quote stays plain", () => {
+  const url = "https://medium.com/@jane/a-story-1a2b3c4d5e6f";
+  const html = renderMarkdown(`> Originally published on [Medium](${url})`);
+  assert.match(html, /^<blockquote class="attr-quote"><p>Originally published on /);
+  assert.ok(html.includes(`href="${url}"`));
+  assert.equal(renderMarkdown("> An ordinary quotation."), "<blockquote><p>An ordinary quotation.</p></blockquote>");
+  assert.equal(renderMarkdown("> Originally published on Medium."), "<blockquote><p>Originally published on Medium.</p></blockquote>");
+  assert.match(renderMarkdown(`Originally published on [Medium](${url})`), /^<p>Originally published on /);
+});
+
+test("a block's own classes and the sign-off class share one attribute", () => {
+  assert.match(renderMarkdown("> Originally published on [Medium](https://medium.com/@jane/a-story-1a2b3c4d5e6f) {: color=red}"), /^<blockquote class="attr-quote c-red">/);
+});

@@ -36,6 +36,7 @@
  */
 import katex from "../vendor/katex/katex.mjs";
 import hljs from "../vendor/hljs/highlight.min.js";
+import { isAttributionLine } from "./attribution-line.js";
 
 export const escapeHTML = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -229,10 +230,10 @@ const attrsTail = (attrs, type) => {
   return kv.length ? ` {: ${kv.map(([k, v]) => `${k}=${v}`).join(" ")}}` : "";
 };
 
-/** Classes and style for a rendered block's attributes. */
-const blockAttrs = (attrs) => {
-  if (!attrs) return "";
-  const cls = [attrs.color && `c-${attrs.color}`, attrs.bg && `bg-${attrs.bg} has-bg`, attrs.align && attrs.align !== "left" && `align-${attrs.align}`].filter(Boolean);
+/** Classes and style for a rendered block's attributes. `extra`: a class the
+ *  block earns from what it holds, kept in the same attribute. */
+const blockAttrs = (attrs, extra = null) => {
+  const cls = [extra, attrs && attrs.color && `c-${attrs.color}`, attrs && attrs.bg && `bg-${attrs.bg} has-bg`, attrs && attrs.align && attrs.align !== "left" && `align-${attrs.align}`].filter(Boolean);
   return cls.length ? ` class="${cls.join(" ")}"` : "";
 };
 
@@ -528,7 +529,11 @@ function renderBlocks(blocks, ctx) {
         break;
       }
       case "p": out.push(`<p${at}>${inline(b.text)}</p>`); break;
-      case "quote": out.push(`<blockquote${at}><p>${inline(b.text)}</p></blockquote>`); break;
+      /* The attribution line is a quote in the body's grammar; on the page it is
+         the sign-off under the article, and this class is how the stylesheet
+         finds it. Nothing of the treatment reaches the body: the marks are
+         drawn by the stylesheet. */
+      case "quote": out.push(`<blockquote${blockAttrs(b.attrs, isAttributionLine(b.text) && "attr-quote")}><p>${inline(b.text)}</p></blockquote>`); break;
       case "callout":
         out.push(`<aside class="callout${b.attrs && b.attrs.bg ? ` bg-${b.attrs.bg}` : ""}${b.attrs && b.attrs.color ? ` c-${b.attrs.color}` : ""}${b.attrs && b.attrs.align && b.attrs.align !== "left" ? ` align-${b.attrs.align}` : ""}"><span class="callout-icon" aria-hidden="true">${emojiHTML(b.icon || "💡")}</span><div>${inline(b.text)}</div></aside>`);
         break;
