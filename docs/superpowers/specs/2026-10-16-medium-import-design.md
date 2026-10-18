@@ -550,8 +550,9 @@ against a real handle and a real story link (Phase 6).
    The line then *reads* as a sign-off rather than as a quotation: italic and
    centred, with air above it so it stands clear of the article's last line, the
    opening mark raised above the cap line and the closing one dropped past the
-   line the words sit on - below the underline the link carries - so the pair
-   reads as a reversed quotation. No rule and no indent. The renderer marks the
+   line the words sit on - below the underline the link carries, and just clear
+   of it - so the pair reads as a reversed quotation. No rule and no indent. The
+   renderer marks the
    blockquote it renders (`class="attr-quote"`) and the stylesheet draws the
    marks in the theme's accent as pseudo-elements, so nothing of the treatment
    reaches the body; the editor's own row is found by the include box the row
