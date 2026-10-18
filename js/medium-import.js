@@ -86,6 +86,25 @@ export function openMediumImport(opts = {}) {
   let duplicateOverridden = false;
   let previewRaf = null;
   let knownFeedHandle = null;
+  // What the last lookup found, so "Back to stories" comes back to the list
+  // rather than to an empty step: the query, the sentence under it, the stories
+  // it listed, and the handle they were listed for.
+  let lastQuery = "";
+  let lastError = "";
+  let lastStories = null;
+  let lastListHandle = null;
+  let lastMissedStory = false;
+  // The attribution checkbox in step 3 is redrawn when "Import anyway" is
+  // clicked; the answer is kept here so the redraw does not forget it.
+  let attributionWanted = true;
+
+  const rememberLookup = (query, { error = "", stories = null, handle = null, missedStory = false } = {}) => {
+    lastQuery = query;
+    lastError = error;
+    lastStories = stories;
+    lastListHandle = handle;
+    lastMissedStory = missedStory;
+  };
 
   function render() {
     dialog.innerHTML = "";
@@ -101,7 +120,7 @@ export function openMediumImport(opts = {}) {
   /* ------------------------------------------------------------------
      STEP 1: FIND
      ------------------------------------------------------------------ */
-  function renderStep1(initialError = "", initialStories = null) {
+  function renderStep1() {
     dialog.innerHTML = `
       <div class="mi-header">
         <h2>Import from Medium</h2>
@@ -118,7 +137,7 @@ export function openMediumImport(opts = {}) {
           />
           <button type="submit" class="btn btn-primary" data-find-btn>Find</button>
         </form>
-        <div class="mi-error" data-error ${initialError ? "" : "hidden"}>${escapeHTML(initialError)}</div>
+        <div class="mi-error" data-error ${lastError ? "" : "hidden"}>${escapeHTML(lastError)}</div>
         <div class="mi-loading" data-loading hidden>Looking up Medium feed…</div>
         <div class="mi-results" data-results></div>
       </div>
@@ -191,10 +210,16 @@ export function openMediumImport(opts = {}) {
           showLoading(true);
           showError("");
           try {
+            // The handle passed here is the feed's own, taken from the lookup
+            // that listed these cards ("@theyasser") - never one made out of
+            // the author's display name, which is not the handle and would send
+            // the server to the wrong feed.
             const storyRes = await mediumStory(url, authorHandle || knownFeedHandle || null);
             if (Array.isArray(storyRes.stories)) {
+              const msg = storyRes.error || "That story could not be loaded.";
               showLoading(false);
-              showError(storyRes.error || "That story could not be loaded.");
+              showError(msg);
+              rememberLookup(lastQuery, { error: msg, stories: storyRes.stories, handle: authorHandle, missedStory: true });
               paintStories(storyRes.stories, authorHandle, { missedStory: true });
               return;
             }
@@ -231,6 +256,8 @@ export function openMediumImport(opts = {}) {
       showError("");
       resultsBox.innerHTML = "";
       showLoading(true);
+      lastQuery = val;
+      lastError = "";
 
       const directStoryUrl = storyAddress(val);
       if (directStoryUrl) {
@@ -240,7 +267,9 @@ export function openMediumImport(opts = {}) {
           showLoading(false);
           if (Array.isArray(storyRes.stories)) {
             // Not in newest ten: server error sentence + stories list + ten-story hint
-            showError(storyRes.error || "That story is not in the newest ten.");
+            const msg = storyRes.error || "That story is not in the newest ten.";
+            showError(msg);
+            rememberLookup(val, { error: msg, stories: storyRes.stories, missedStory: true });
             paintStories(storyRes.stories, null, { missedStory: true });
             return;
           }
@@ -259,6 +288,7 @@ export function openMediumImport(opts = {}) {
           showLoading(false);
           knownFeedHandle = feedRes.source?.handle || null;
           currentSource = feedRes.source;
+          rememberLookup(val, { stories: feedRes.stories, handle: knownFeedHandle });
           paintStories(feedRes.stories, feedRes.source?.handle);
         } catch (err) {
           showLoading(false);
@@ -267,10 +297,11 @@ export function openMediumImport(opts = {}) {
       }
     });
 
-    if (initialStories) {
-      paintStories(initialStories);
+    if (lastStories) {
+      paintStories(lastStories, lastListHandle, { missedStory: lastMissedStory });
     }
 
+    input.value = lastQuery;
     input.focus();
   }
 
@@ -428,7 +459,7 @@ the one that receives the complaint.</p>
             <span>This is my own article, or I have the author's permission to republish it. <em>(required)</em></span>
           </label>
           <label class="mi-checkbox-row">
-            <input type="checkbox" data-attribution checked />
+            <input type="checkbox" data-attribution ${attributionWanted ? "checked" : ""} />
             <span>Add "Originally published on Medium", linked to the original, at the end.</span>
           </label>
         </div>
@@ -472,6 +503,10 @@ the one that receives the complaint.</p>
     const submitBtn = dialog.querySelector("[data-submit]");
     const errBox = dialog.querySelector("[data-submit-error]");
 
+    attrCb.addEventListener("change", () => {
+      attributionWanted = attrCb.checked;
+    });
+
     if (showDuplicateNotice) {
       const openPostBtn = dialog.querySelector("[data-open-post]");
       const importAnywayBtn = dialog.querySelector("[data-import-anyway]");
@@ -487,6 +522,8 @@ the one that receives the complaint.</p>
 
       importAnywayBtn.addEventListener("click", () => {
         duplicateOverridden = true;
+        // The redraw below builds the checkbox again: keep the answer.
+        attributionWanted = attrCb.checked;
         renderStep3();
       });
     }
