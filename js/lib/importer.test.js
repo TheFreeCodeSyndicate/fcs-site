@@ -633,6 +633,47 @@ test("handleAction import action completes full flow with rehosting, assembly, a
   assert.ok(Array.isArray(res.body.warnings));
 });
 
+test("a story that fills the body still leaves room for the attribution line", async () => {
+  // 250 full sections is well over what a post can hold: the fit keeps what the
+  // budget allows and drops the rest. The line goes on the end of those kept
+  // sections within the same budget, so its room has to be reserved before the
+  // fit: without that, the kept sections come within a section of the limit and
+  // the line pushes the assembled body over it.
+  const paragraphs = Array.from({ length: 250 }, () => `<p>${"x".repeat(1003)}</p>`).join("");
+  const bigFeed = `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" version="2.0">
+  <channel>
+    <title><![CDATA[Stories by Yasser El-Sayed on Medium]]></title>
+    <link>https://medium.com/@theyasser</link>
+    <item>
+      <title><![CDATA[A very long story]]></title>
+      <link>https://levelup.gitconnected.com/a-very-long-story-abcdef123456</link>
+      <guid isPermaLink="false">https://medium.com/p/abcdef123456</guid>
+      <dc:creator><![CDATA[Yasser El-Sayed]]></dc:creator>
+      <pubDate>Thu, 19 Sep 2024 21:02:20 GMT</pubDate>
+      <content:encoded><![CDATA[${paragraphs}]]></content:encoded>
+    </item>
+  </channel>
+</rss>`;
+  const deps = {
+    fetchText: async () => bigFeed,
+    fetchBytes: async () => null,
+    putAsset: async () => ({ sha: "sha123" }),
+    now: new Date(Date.UTC(2026, 9, 17)),
+    newID: () => "uuid",
+  };
+
+  const res = await handleAction(
+    { action: "import", url: "https://levelup.gitconnected.com/a-very-long-story-abcdef123456", attribution: true },
+    deps
+  );
+
+  assert.equal(res.status, 200);
+  assert.ok(res.body.markdown.includes("Originally published on [Medium]"));
+  assert.ok(res.body.warnings.some((w) => w.includes("longer than a post can hold")), JSON.stringify(res.body.warnings));
+  assert.ok(res.body.markdown.length <= 200000, "the body came to " + res.body.markdown.length);
+});
+
 test("handleAction story action returns 404 for unlisted story on custom domain publication feed without misattributing author", async () => {
   const deps = {
     fetchText: async () => PUBLICATION_FEED_XML,

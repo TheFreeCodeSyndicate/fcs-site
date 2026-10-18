@@ -416,25 +416,6 @@ export async function handleAction(body, deps = {}) {
     }
 
     const storyMeta = stories.find((s) => s.id === parsed.postId) || {};
-    const { sections, dropped } = htmlToSections(storyHtml, { blocks: true, dropped: true });
-    const { kept, warnings: selectWarnings } = selectSections(sections, body.ids, { maxBody: 200000 });
-    const { sections: rehosted, copied, left, warnings: rehostWarnings } = await rehostImages(kept, deps);
-
-    let recoveredEmbeds = 0;
-    for (const s of kept) {
-      if (s.blocks) {
-        for (const b of s.blocks) {
-          if (b.type === "video" || b.type === "bookmark") {
-            recoveredEmbeds++;
-          }
-        }
-      }
-    }
-    const embedWarnings = [];
-    if (recoveredEmbeds > 0) {
-      const sWord = recoveredEmbeds === 1 ? "embed" : "embeds";
-      embedWarnings.push(`${recoveredEmbeds} ${sWord} came through as a link rather than the original player.`);
-    }
 
     // Which address the attribution line points at: the story's own address,
     // so the reader can reach the original. Only an https address can be put in
@@ -454,6 +435,31 @@ export async function handleAction(body, deps = {}) {
     const attributionWarnings = [];
     if (wantedAttribution && !attributionUrl) {
       attributionWarnings.push("The story's address is not an https link, so the attribution line was left out of the draft.");
+    }
+
+    const { sections, dropped } = htmlToSections(storyHtml, { blocks: true, dropped: true });
+
+    // What a post can hold is the whole body, and the line is written on the end
+    // of it after the sections are picked. Its room is reserved here, so a story
+    // that just fits does not go over the limit the moment the line is added.
+    const attributionRoom = attributionUrl ? attributionLine(attributionUrl).length + 2 : 0;
+    const { kept, warnings: selectWarnings } = selectSections(sections, body.ids, { maxBody: 200000 - attributionRoom });
+    const { sections: rehosted, copied, left, warnings: rehostWarnings } = await rehostImages(kept, deps);
+
+    let recoveredEmbeds = 0;
+    for (const s of kept) {
+      if (s.blocks) {
+        for (const b of s.blocks) {
+          if (b.type === "video" || b.type === "bookmark") {
+            recoveredEmbeds++;
+          }
+        }
+      }
+    }
+    const embedWarnings = [];
+    if (recoveredEmbeds > 0) {
+      const sWord = recoveredEmbeds === 1 ? "embed" : "embeds";
+      embedWarnings.push(`${recoveredEmbeds} ${sWord} came through as a link rather than the original player.`);
     }
 
     const { markdown, cover } = assembleImport(rehosted, { attributionUrl });
