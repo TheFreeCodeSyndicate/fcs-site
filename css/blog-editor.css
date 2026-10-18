@@ -213,11 +213,13 @@ body.nb-open { overflow: hidden; }
 .nb-block[data-type="quote"] .nb-text { border-left: 3px solid var(--ink); padding-left: 14px; }
 /* The attribution line reads the same in the editor as on the page: italic and
    centred, the marks drawn around the sentence - the opening lifted above the
-   cap line, the closing dropped to the baseline where an underline would sit -
-   in the accent. The marks are pseudo-elements, so they never enter the body
-   the editor saves, and the block is found by the include box the row owns.
-   The faded row that holds the line while it is switched off sits outside
+   cap line, the closing dropped below the line the underline sits on - in the
+   accent, with room above the row so the sign-off stands clear of the paragraph
+   before it. The marks are pseudo-elements, so they never enter the body the
+   editor saves, and the block is found by the include box the row owns. The
+   faded row that holds the line while it is switched off sits outside
    [data-root], so it keeps the plain look. */
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) { margin-top: 1.5rem; }
 [data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text { border-left: 0; padding-left: 0; font-style: italic; text-align: center; }
 [data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::before,
 [data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::after {
@@ -225,7 +227,7 @@ body.nb-open { overflow: hidden; }
   font-size: 1.8em; color: var(--accent-text);
 }
 [data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::before { content: "\201C"; top: -0.19em; margin-right: -0.02em; }
-[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::after { content: "\201D"; top: 0.3em; margin-left: -0.02em; }
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::after { content: "\201D"; top: 0.8em; margin-left: -0.02em; }
 .nb-block[data-type="callout"] > .nb-content { padding: 12px 14px 12px 10px; border-radius: 6px; background: var(--hover); flex-wrap: nowrap; }
 .nb-callout-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 4px; background: none; font-size: 1.3rem; cursor: pointer; padding: 0; }
 .nb-callout-icon .emoji { width: 22px; height: 22px; }

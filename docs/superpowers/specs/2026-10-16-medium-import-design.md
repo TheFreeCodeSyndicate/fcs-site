@@ -548,13 +548,15 @@ against a real handle and a real story link (Phase 6).
    import screen; the address the writer gave is used when the story's own
    cannot be.
    The line then *reads* as a sign-off rather than as a quotation: italic and
-   centred, the opening mark raised above the cap line and the closing dropped
-   to the baseline, where an underline sits, so the pair reads as a reversed
-   quotation - no rule and no indent. The renderer marks the blockquote it
-   renders (`class="attr-quote"`) and the stylesheet draws the marks in the
-   theme's accent as pseudo-elements, so nothing of the treatment reaches the
-   body; the editor's own row is found by the include box the row holds, which
-   leaves the faded row that holds the line while it is switched off plain.
+   centred, with air above it so it stands clear of the article's last line, the
+   opening mark raised above the cap line and the closing one dropped past the
+   line the words sit on - below the underline the link carries - so the pair
+   reads as a reversed quotation. No rule and no indent. The renderer marks the
+   blockquote it renders (`class="attr-quote"`) and the stylesheet draws the
+   marks in the theme's accent as pseudo-elements, so nothing of the treatment
+   reaches the body; the editor's own row is found by the include box the row
+   holds, which leaves the faded row that holds the line while it is switched
+   off plain.
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member
