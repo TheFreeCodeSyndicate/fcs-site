@@ -580,3 +580,20 @@ export async function postAnalytics(slug, days = 28) {
 export const searchUnsplash = (query, page = 1) => invokeFunction("unsplash", { action: "search", query, page });
 /** Unsplash's rules: report each photo that is actually used. */
 export const trackUnsplash = (download) => invokeFunction("unsplash", { action: "download", download });
+
+/* ---- Medium importer (supabase/functions/medium-import). Admin and editor only. ---- */
+export const mediumFeed = (input) => invokeFunction("medium-import", { action: "feed", input });
+export const mediumImport = (url, ids, handle, attribution) => invokeFunction("medium-import", { action: "import", url, ids, handle, attribution });
+
+/**
+ * Fetch story sections, or newest-ten stories if not in the feed (which returns 404 with a stories array).
+ * A successful story answer never carries a stories array, so the two shapes cannot be confused.
+ */
+export async function mediumStory(url, handle) {
+  const { data, error } = await getClientOrThrow().functions.invoke("medium-import", { body: { action: "story", url, handle } });
+  if (!error) return data;
+  let body = null;
+  try { body = await error.context.json(); } catch { /* not JSON */ }
+  if (body && Array.isArray(body.stories)) return body;
+  throw new Error((body && body.error) || error.message);
+}

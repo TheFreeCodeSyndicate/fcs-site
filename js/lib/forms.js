@@ -59,3 +59,37 @@ export function slugify(text) {
     .slice(0, 80)
     .replace(/-+$/, "");
 }
+
+/** Returns base if free, else base-2, base-3, ... truncated to fit within max (default 80). */
+export function uniqueSlug(base, taken, { max = 80 } = {}) {
+  if (!base) return "";
+  const takenSet = taken instanceof Set ? taken : new Set(taken || []);
+  const initial = String(base).slice(0, max).replace(/-+$/, "");
+  if (!initial) return "";
+  if (!takenSet.has(initial)) return initial;
+  for (let n = 2; ; n++) {
+    const suffix = `-${n}`;
+    const allowed = Math.max(0, max - suffix.length);
+    const prefix = initial.slice(0, allowed).replace(/-+$/, "");
+    if (!prefix) return "";
+    const candidate = `${prefix}${suffix}`;
+    if (!takenSet.has(candidate)) return candidate;
+  }
+}
+
+/**
+ * The address for a duplicated post: "<slug>-copy", then -2, -3, ... within max (default 80).
+ * Room is left for the marker and a counter so neither is cut in half on a long address.
+ *
+ * @param {string} slug
+ * @param {Iterable<string>|Set<string>} [taken]
+ * @param {{ max?: number }} [opts]
+ * @returns {string}
+ */
+export function duplicateSlug(slug, taken, { max = 80 } = {}) {
+  const base = String(slug || "").trim().replace(/-+$/, "") || "post";
+  const marker = "-copy";
+  const room = Math.max(1, max - marker.length - 3);
+  const stem = base.slice(0, room).replace(/-+$/, "") || "post";
+  return uniqueSlug(stem + marker, taken, { max });
+}

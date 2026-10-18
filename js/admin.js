@@ -36,11 +36,13 @@ import {
 } from "./supabase.js";
 import { nextOccurrence } from "./lib/schedule.js";
 import { deriveEventState } from "./lib/derive.js";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./lib/forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify, duplicateSlug } from "./lib/forms.js";
 import { iconHTML, avatarHTML, avatarGroupHTML, postAuthors, authorNames, postCardHTML } from "./lib/blog-pages.js";
 import { openBlogEditor } from "./blog-editor.js";
+import { openMediumImport } from "./medium-import.js";
 import { openMemberPicker, memberCard } from "./member-picker.js";
 import { guessMember } from "./lib/member-match.js";
+import { clipTitle } from "./lib/medium-wizard.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
   coreCardHTML, portraitHTML, roleStamp,
@@ -730,7 +732,7 @@ function renderPage() {
   else renderListPage(page);
 }
 
-function pageHead(page, { count, newLabel, search = true } = {}) {
+function pageHead(page, { count, newLabel, search = true, extra = "", newPre = "", newPreLabel = "" } = {}) {
   return `
     <div class="page-head">
       <h1 tabindex="-1">${escapeHTML(page.label)}${count != null ? ` <span class="page-count">${count}</span>` : ""}</h1>
@@ -741,8 +743,13 @@ function pageHead(page, { count, newLabel, search = true } = {}) {
             <span class="visually-hidden">Search ${escapeHTML(page.label)}</span>
             <input type="search" id="page-search" placeholder="Search  /" value="${escapeAttr(state.search)}" autocomplete="off" />
           </label>` : ""}
+        ${extra}
         ${page.site ? `<a class="btn btn-quiet" href="./${page.site}" target="_blank" rel="noopener">${icon("eye")}<span>View on site</span></a>` : ""}
-        ${newLabel ? `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>` : ""}
+        ${newLabel ? (newPre ? `
+          <div class="btn-group" role="group" aria-label="${escapeAttr(newPreLabel || "Create")}">
+            ${newPre}
+            <button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>
+          </div>` : `<button type="button" class="btn btn-primary" id="page-new">${icon("plus")}<span>${escapeHTML(newLabel)}</span></button>`) : ""}
       </div>
     </div>`;
 }
@@ -895,7 +902,7 @@ const EDITORS = {
     badges: (r) => [`<span class="badge">${r.status === "published" ? "Published" : "Draft"}</span>`],
     filters: [{ key: "status", label: "Status", options: [["all", "All"], ["draft", "Drafts"], ["published", "Published"]], initial: "all" }],
     searchIn: (r) => [r.title, r.slug, r.excerpt, r.author_name],
-    open: (row) => openPostEditor(row),
+    open: (row, opts) => openPostEditor(row, opts),
   },
 
   groups: {
@@ -1003,7 +1010,7 @@ async function rebuildSite() {
   }
 }
 
-async function openPostEditor(row, { replace = false } = {}) {
+async function openPostEditor(row, { replace = false, initial = null } = {}) {
   // The people who can be authors; the editor works without them (guests only).
   const [team, draft] = await Promise.all([
     listBlogAuthors().catch(() => []),
@@ -1021,6 +1028,7 @@ async function openPostEditor(row, { replace = false } = {}) {
   const me = team.find((t) => t.id === state.user.id) || { id: state.user.id, name: state.user.email.split("@")[0] };
   entry.handle = openBlogEditor({
     row,
+    initial,
     team,
     me,
     draft,
@@ -1029,10 +1037,18 @@ async function openPostEditor(row, { replace = false } = {}) {
     clearDraft: (id) => clearBlogDraft(id),
     snapshot: (id, values, kind) => addBlogVersion(id, values, kind),
     versions: (id) => listBlogVersions(id),
+    otherSlugs: (currentId) => (state.data.blog_posts || [])
+      .filter((p) => (!currentId || p.id !== currentId) && p.slug)
+      .map((p) => p.slug),
     onSaved: (saved) => {
       if (!entry.id && saved.id) {
         entry.id = saved.id;
         showInAddress(saved.id);
+      }
+      if (saved && Array.isArray(state.data.blog_posts)) {
+        const idx = state.data.blog_posts.findIndex((p) => p.id === saved.id);
+        if (idx >= 0) state.data.blog_posts[idx] = { ...state.data.blog_posts[idx], ...saved };
+        else state.data.blog_posts.unshift(saved);
       }
     },
     // Until linked, the Authors row asks "Which member card are you?".
@@ -1041,6 +1057,16 @@ async function openPostEditor(row, { replace = false } = {}) {
     isAdmin: isAdmin(),
     toast,
     uploadImage: async (file) => uploadBlogImage(await shrinkForBlog(file)),
+    importMedium: (insert) => openMediumImport({
+      mode: "insert",
+      existing: state.data.blog_posts,
+      toast,
+      onInsert: insert,
+      onOpenPost: (clash) => {
+        const row = (state.data.blog_posts || []).find((p) => p.id === clash.id) || clash;
+        openEditor("blog", row);
+      },
+    }),
     save: async (values, { id, wasLive }) => {
       const saved = id ? await updateBlogPost(id, values) : await createBlogPost(values);
       // The rebuild runs on its own: the save (and clearing the draft) need not wait for it.
@@ -1053,12 +1079,14 @@ async function openPostEditor(row, { replace = false } = {}) {
       if (wasLive) await rebuildSite();
     },
     duplicate: async (values) => {
-      const taken = new Set(state.data.blog_posts.map((p) => p.slug));
-      let slug = `${values.slug}-copy`;
-      for (let n = 2; taken.has(slug); n++) slug = `${values.slug}-copy-${n}`;
-      await createBlogPost({ ...values, title: `Copy of ${values.title}`, slug, status: "draft", locked: false });
+      const taken = new Set((state.data.blog_posts || []).map((p) => p.slug));
+      const slug = duplicateSlug(values.slug, taken);
+      // 022 caps a title at 160 characters, and the prefix can push a long one
+      // over: the same clip the importer uses, so the copy always fits.
+      const title = clipTitle(`Copy of ${values.title}`, 160) || "Copy";
+      await createBlogPost({ ...values, title, slug, status: "draft", locked: false });
       await reload("blog_posts");
-      toast(`Saved a copy as a draft: “Copy of ${values.title}”.`, "info");
+      toast(`Saved a copy as a draft: “${title}”.`, "info");
     },
     history: (id) => listRowHistory("blog_posts", id, 100),
     analytics: (slug, days) => postAnalytics(slug, days),
@@ -1435,7 +1463,12 @@ function renderBlogPage(page) {
     </ul>`;
 
   root().innerHTML = `
-    ${pageHead(page, { count: all.length, newLabel: "New post" })}
+    ${pageHead(page, {
+      count: all.length,
+      newLabel: "New post",
+      newPre: `<button type="button" class="btn btn-quiet" id="page-import">${icon("medium")}<span>Import from Medium</span></button>`,
+      newPreLabel: "Create a post",
+    })}
     <p class="page-intro">${escapeHTML(editor.intro)}</p>
     <div class="blog-toolbar">
       <div class="page-filters" role="group" aria-label="Status">
@@ -1455,6 +1488,17 @@ function renderBlogPage(page) {
 
   const openNew = () => openEditor("blog", null);
   root().querySelector("#page-new").addEventListener("click", openNew);
+  const openImport = () => openMediumImport({
+    mode: "new",
+    existing: state.data.blog_posts,
+    toast,
+    onCreate: (draft) => openEditor("blog", null, draft),
+    onOpenPost: (clash) => {
+      const row = (state.data.blog_posts || []).find((p) => p.id === clash.id) || clash;
+      openEditor("blog", row);
+    },
+  });
+  root().querySelector("#page-import").addEventListener("click", openImport);
   const emptyNew = root().querySelector("[data-empty-new]");
   if (emptyNew) emptyNew.addEventListener("click", openNew);
   bindSearch();
@@ -1627,9 +1671,9 @@ function moveRow(id, row, delta) {
   });
 }
 
-function openEditor(id, row) {
+function openEditor(id, row, initial = null) {
   const editor = EDITORS[id];
-  if (editor.open) return editor.open(row);
+  if (editor.open) return editor.open(row, { initial });
   const key = row ? rowKey(editor, row) : null;
   const refresh = async () => {
     await reload(editor.table);

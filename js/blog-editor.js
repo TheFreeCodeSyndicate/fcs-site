@@ -30,10 +30,11 @@ import {
   mentionHTML, dateMentionHTML, bookmarkHTML,
 } from "./lib/markdown.js";
 import { diffBlocks, changeSummary, joinBlocks } from "./lib/block-diff.js";
+import { attributionLine, isAttributionLine, isSourceURL, normaliseAttribution } from "./lib/attribution.js";
 import { iconHTML, postArticleHTML, railHTML, ICON_COLORS, SITE, postAuthors, authorNames, avatarHTML, avatarGroupHTML, assetSrc, coverCreditHTML, UNSPLASH_LOGO, UNSPLASH_UTM } from "./lib/blog-pages.js";
 import { mountRail } from "./post-rail.js";
-import { slugify } from "./lib/forms.js";
-import { escapeHTML, escapeAttr, icon } from "./render.js";
+import { slugify, uniqueSlug } from "./lib/forms.js";
+import { escapeHTML, escapeAttr, icon, safeURL } from "./render.js";
 import "./link-preview.js";
 import "./image-zoom.js";
 
@@ -241,7 +242,7 @@ function fillInline(el, md) {
 }
 
 /** The parts of a post a draft or a version holds (not its address, status or dates). */
-const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "authors", "author_name", "body"];
+const CONTENT_KEYS = ["title", "excerpt", "cover_url", "cover_credit", "cover_position", "icon", "font", "small_text", "full_width", "locked", "source_url", "authors", "author_name", "body"];
 const contentOf = (c) => Object.fromEntries(CONTENT_KEYS.filter((k) => c && k in c).map((k) => [k, c[k]]));
 /** Content as a comparable string: "", [] and missing all read as nothing,
  * and object keys in any order (the database's jsonb reorders them). */
@@ -289,10 +290,12 @@ function downloadFile(name, type, text) {
 /**
  * @param {object} opts
  * @param {object|null} opts.row          the post, or null for a new one
+ * @param {object} [opts.initial]         a new post's starting title/excerpt/body/cover_url/source_url
  * @param {boolean} opts.isAdmin          admins may delete
  * @param {(values, {id, wasLive}) => Promise<object>} opts.save  create or update; returns the saved row
  * @param {(id, wasLive) => Promise<void>} opts.remove
  * @param {(file: File) => Promise<string>} opts.uploadImage      returns the image's address
+ * @param {(insert: (markdown: string) => void) => void} [opts.importMedium]
  * @param {(values) => Promise<void>} [opts.duplicate]           saves a copy as a new draft
  * @param {(id) => Promise<Array>} [opts.history]                 this post's activity log (used when versions are unavailable)
  * @param {{content, updated_at}|null} [opts.draft]              a published post's saved, unpublished edits
@@ -312,6 +315,8 @@ export function openBlogEditor(opts) {
     font: "default", small_text: false, full_width: false, locked: false,
     ...(opts.row || {}),
   };
+  // An imported post arrives pre-filled; it is still an unsaved draft.
+  if (opts.initial) Object.assign(post, opts.initial);
   // A published post's unpublished edits, saved by autosave, pick up where they left off.
   let hasDraft = Boolean(opts.draft && post.id && post.status === "published");
   if (hasDraft) Object.assign(post, contentOf(opts.draft.content));
@@ -388,6 +393,7 @@ export function openBlogEditor(opts) {
           <h1 class="nb-title" contenteditable="true" spellcheck="true" data-placeholder="Untitled" data-title aria-label="Title"></h1>
           <div class="nb-props" data-props></div>
           <div class="nb-blocks" data-root></div>
+          <div class="nb-attribution" data-attribution hidden></div>
           <div class="nb-tail" data-tail aria-hidden="true"></div>
         </div>
       </div>
@@ -515,6 +521,15 @@ export function openBlogEditor(opts) {
         <button type="button" class="nb-drag" tabindex="-1" aria-label="Drag to move, click for options">${GUTTER_GRIP}<span class="nb-tip" role="tooltip"><b>Drag</b> to move<br /><b>Click</b> or <b>Ctrl+/</b> to open menu</span></button>
       </div>`;
 
+  const INCLUDE_LABEL = "Include the link to the original Medium story";
+  const RESTORE_LABEL = "Put the link to the original Medium story back";
+
+  const attributionBox = (checked, label, cls) => {
+    const box = h(`<input type="checkbox" class="${cls}" aria-label="${escapeAttr(label)}" title="${escapeAttr(label)}" />`);
+    box.checked = checked;
+    return box;
+  };
+
   function blockEl(b) {
     const el = h(`<div class="nb-block" data-type="${b.type}">${gutterHTML}<div class="nb-content"></div></div>`);
     const content = el.querySelector(".nb-content");
@@ -539,6 +554,9 @@ export function openBlogEditor(opts) {
         content.append(h(`<button type="button" class="nb-caret" aria-label="Open or close" aria-expanded="true">${pixelIcon("chevron-right")}</button>`));
         el.classList.add("is-open");
       }
+      /* No attribution box here: a block is built detached, so it cannot know
+         whether it is top level, and only a top-level line gets one (the rule
+         lives in syncAttribution, which sees the whole body). */
       content.append(text);
       if (/^h\d$/.test(b.type)) content.append(h(`<button type="button" class="nb-anchor" contenteditable="false" tabindex="-1" title="Copy link to this heading" aria-label="Copy link to this heading">${pixelIcon("link")}</button>`));
       if (b.type === "toggle") {
@@ -787,6 +805,60 @@ export function openBlogEditor(opts) {
     $("[data-words]").textContent = words ? `${words} words · ${minutes} min read` : "";
   }
 
+  /* ---- the attribution line -------------------------------------------
+   * A post imported from Medium ends with "> Originally published on
+   * [Medium](url)". One box swaps that line in and out of the body: ticked it
+   * is an ordinary quote block, unticked the block leaves the body - so it
+   * goes from the Preview and from the published page - and the same line
+   * stays on screen, faded, as the way back. The address comes from the post's
+   * source_url, which is kept whether or not the line is in the body. */
+  const sourceURL = () => {
+    const raw = String(post.source_url || "").trim();
+    return isSourceURL(raw) ? raw : "";
+  };
+
+  /* The line a block shows, or "" for a block with no text at all - a code
+   * block, an image, a divider: there is no .nb-text to read there. */
+  const lineIn = (b) => {
+    const th = textEl(b);
+    return th ? textOf(th, false) : "";
+  };
+
+  /* Every block that shows the line, at any depth: a line inside a column or a
+     toggle is in the body just the same, so the row stays away while it is
+     there. Only a top-level line gets a checkbox, though. */
+  const attributionBlocks = () => [...root.querySelectorAll(".nb-block")]
+    .filter((b) => isAttributionLine(lineIn(b)));
+
+  function syncAttribution() {
+    const url = sourceURL();
+    for (const b of root.querySelectorAll(":scope > .nb-block")) {
+      const is = isAttributionLine(lineIn(b));
+      const box = b.querySelector(":scope > .nb-content > .nb-attr-check");
+      const wanted = is && Boolean(url);
+      if (wanted && !box) {
+        // Typed by hand into a paragraph: the line is a quote from here on.
+        if (typeOf(b) === "p") b.dataset.type = "quote";
+        b.querySelector(":scope > .nb-content").prepend(attributionBox(true, INCLUDE_LABEL, "nb-attr-check"));
+      } else if (!wanted && box) {
+        // The line left, or the post lost its address: no box, and the line stays.
+        box.remove();
+      }
+    }
+    const row = $("[data-attribution]");
+    if (!url || attributionBlocks().length) {
+      if (!row.hidden) { row.hidden = true; row.innerHTML = ""; }
+      return;
+    }
+    if (!row.hidden) return;   // already on screen: this runs on every keystroke
+    const b = blockEl({ type: "quote", text: attributionLine(url) });
+    b.classList.add("is-attribution-off");
+    b.querySelector(":scope > .nb-content").prepend(attributionBox(false, RESTORE_LABEL, "nb-attr-check"));
+    b.querySelector(":scope > .nb-content > .nb-text").removeAttribute("contenteditable");
+    row.append(b);
+    row.hidden = false;
+  }
+
   function numberIn(container) {
     const counts = [];
     const formats = [];
@@ -869,6 +941,7 @@ export function openBlogEditor(opts) {
     if (structural) tidyColumns();
     dirty = true;
     refreshDerived();
+    syncAttribution();
     paintState();
     $("[data-crumb]").textContent = titleEl.textContent.trim() || "Untitled";
     if (structural) commitHistory();
@@ -1002,9 +1075,20 @@ export function openBlogEditor(opts) {
   function values() {
     const title = titleEl.textContent.replace(/\s+/g, " ").trim();
     const slugInput = ed.querySelector("[data-prop=slug]");
+    const rawSlug = slugInput ? slugInput.value.trim() : "";
+    const otherSlugs = typeof opts.otherSlugs === "function" ? opts.otherSlugs(post.id) : (opts.otherSlugs || []);
+    const taken = new Set(otherSlugs || []);
+    let slug = "";
+    if (post.published_at) {
+      slug = post.slug;
+    } else if (rawSlug) {
+      slug = slugify(rawSlug);
+    } else {
+      slug = uniqueSlug(slugify(title), taken);
+    }
     return {
       title,
-      slug: post.published_at ? post.slug : slugify(slugInput.value) || slugify(title),
+      slug,
       status: post.status,
       authors: post.authors,
       author_name: authorNames(post.authors) || null,
@@ -1017,6 +1101,7 @@ export function openBlogEditor(opts) {
       small_text: Boolean(post.small_text),
       full_width: Boolean(post.full_width),
       locked: Boolean(post.locked),
+      source_url: post.source_url || null,
       body: bodyMarkdown(),
     };
   }
@@ -1046,6 +1131,19 @@ export function openBlogEditor(opts) {
       }
       return false;
     }
+    const slugInput = ed.querySelector("[data-prop=slug]");
+    const rawSlug = slugInput ? slugInput.value.trim() : "";
+    if (!post.published_at && rawSlug) {
+      const otherSlugs = typeof opts.otherSlugs === "function" ? opts.otherSlugs(post.id) : (opts.otherSlugs || []);
+      const taken = new Set(otherSlugs || []);
+      if (v.slug && taken.has(v.slug)) {
+        if (!quiet) {
+          opts.toast("That address is already used by another post. Edit the Address field.", "error");
+          if (slugInput) slugInput.focus();
+        }
+        return false;
+      }
+    }
     if (!v.slug) {
       if (!quiet) opts.toast("Use some letters or numbers in the title or address.", "error");
       return false;
@@ -1072,7 +1170,13 @@ export function openBlogEditor(opts) {
       return true;
     } catch (err) {
       dirty = dirty || was;
-      opts.toast(err.message || "Could not save.", "error");
+      const isDuplicate = /blog_posts_slug_key|duplicate key/i.test(err && err.message ? err.message : "");
+      if (isDuplicate) {
+        opts.toast("That address is already used by another post. Edit the Address field.", "error");
+        if (slugInput) slugInput.focus();
+      } else {
+        opts.toast(err.message || "Could not save.", "error");
+      }
       paintState("Save failed");
       return false;
     } finally {
@@ -1137,12 +1241,20 @@ export function openBlogEditor(opts) {
       <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("users")}Authors</span><span><button type="button" class="nb-authors" data-authors aria-haspopup="dialog"></button></span></div>
       ${whoamiRow()}
       <label class="nb-prop"><span class="nb-prop-label">${pixelIcon("pencil")}Summary</span><textarea data-prop="excerpt" rows="1" maxlength="300" placeholder="Empty: the start of the post is used in link previews"></textarea></label>
-      <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("calendar")}Published</span><span data-published>${post.published_at ? escapeHTML(dateText(post.published_at)) : "Not yet"}</span></div>`;
+      <div class="nb-prop"><span class="nb-prop-label">${pixelIcon("calendar")}Published</span><span data-published>${post.published_at ? escapeHTML(dateText(post.published_at)) : "Not yet"}</span></div>
+      ${sourceRow()}`;
     props.dataset.built = "1";
     props.querySelector("[data-prop=slug]").value = locked ? post.slug : (current && current.slug) || post.slug || "";
     paintAuthors();
     props.querySelector("[data-prop=excerpt]").value = current ? current.excerpt : post.excerpt || "";
     autosize(props.querySelector("[data-prop=excerpt]"));
+  }
+
+  function sourceRow() {
+    if (!post.source_url) return "";
+    const safe = safeURL(post.source_url);
+    if (!safe) return "";
+    return `<div class="nb-prop nb-prop-source"><span class="nb-prop-label">${pixelIcon("link")}Source</span><span><a href="${safe}" target="_blank" rel="noopener">${escapeHTML(post.source_url)}</a><span class="nb-prop-note">Imported from Medium</span></span></div>`;
   }
 
   /** Until you link your login to your member card, ask (once linked, the Team page changes it). */
@@ -2779,6 +2891,7 @@ export function openBlogEditor(opts) {
         ${act("find", "Find and replace", "search", "Ctrl+F")}
         <hr />
         ${act("import", "Import Markdown", "upload")}
+        ${act("import-medium", "Import from Medium", "medium")}
         ${act("export-md", "Export as Markdown", "download")}
         ${act("export-html", "Export as HTML", "file-text")}
         ${act("export-pdf", "Print or save as PDF", "printer")}
@@ -2843,6 +2956,14 @@ export function openBlogEditor(opts) {
       } else if (a === "undo") undo();
       else if (a === "find") openFind();
       else if (a === "import") $("[data-import]").click();
+      else if (a === "import-medium") {
+        if (opts.importMedium) {
+          insertCaretBlock = blockOfCaret();
+          opts.importMedium(insertBlocksAtCaret);
+        } else {
+          opts.toast("Importing from Medium is not available here.", "error");
+        }
+      }
       else if (a === "export-md") downloadFile(`${fileBase}.md`, "text/markdown", `# ${v.title}\n\n${v.body}\n`);
       else if (a === "export-html") downloadFile(`${fileBase}.html`, "text/html", exportHTML(v));
       else if (a === "export-pdf") printPost();
@@ -3170,6 +3291,26 @@ export function openBlogEditor(opts) {
     blocks.forEach((b) => root.append(blockEl(b)));
     changed({ structural: true });
     opts.toast(`Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} at the end of the post.`, "info");
+  }
+
+  let insertCaretBlock = null;
+
+  function insertBlocksAtCaret(markdown) {
+    const blocks = parseBlocks(markdown);
+    if (!blocks.length) return opts.toast("Nothing was chosen to insert.", "error");
+    const caret = (insertCaretBlock && root.contains(insertCaretBlock)) ? insertCaretBlock : blockOfCaret();
+    insertCaretBlock = null;
+    let ref = (caret && root.contains(caret)) ? caret : root.lastElementChild;
+    let last = null;
+    blocks.forEach((b) => {
+      const el = blockEl(b);
+      if (ref) ref.after(el); else root.append(el);
+      ref = el;
+      last = el;
+    });
+    changed({ structural: true });
+    if (last) focusBlock(last, true);
+    opts.toast(`Imported ${blocks.length} block${blocks.length === 1 ? "" : "s"} into the post.`, "info");
   }
 
   /* ---- floating format toolbar ----------------------------------------------- */
@@ -3514,6 +3655,30 @@ export function openBlogEditor(opts) {
     }
 
     const block = t.closest(".nb-block");
+    if (t.closest(".nb-attr-check")) {
+      const box = t.closest(".nb-attr-check");
+      const row = box.closest("[data-attribution]");
+      // The box in the faded row: ticking it puts the line back at the end of
+      // the body. Unticking it is not a state that exists, so nothing happens.
+      if (row) {
+        if (!box.checked) return;
+        if (selectedBlock) selectBlock(null);
+        const b = blockEl({ type: "quote", text: attributionLine(sourceURL()) });
+        root.append(b);
+        changed({ structural: true });
+        // Focus would otherwise stay on a box that is now hidden with its row.
+        const fresh = b.querySelector(".nb-attr-check");
+        if (fresh) fresh.focus();
+        return;
+      }
+      if (box.checked) return;
+      if (selectedBlock === block) selectBlock(null);
+      block.remove();
+      changed({ structural: true });
+      const fresh = $("[data-attribution]").querySelector(".nb-attr-check");
+      if (fresh) fresh.focus();
+      return;
+    }
     if (!block || !root.contains(block)) {
       if (t.closest("[data-tail]")) {
         const blocks = [...root.children];
@@ -3917,9 +4082,12 @@ export function openBlogEditor(opts) {
 
   function loadBody(md) {
     root.innerHTML = "";
-    const blocks = parseBlocks(md);
+    const blocks = parseBlocks(normaliseAttribution(md));
     if (!blocks.length) blocks.push({ type: "p", text: "" });
     blocks.forEach((b) => root.append(blockEl(b)));
+    // Every path that fills the page comes through here - opening a post, a
+    // draft, a version, an undo - so the line's box is put on here, once.
+    syncAttribution();
   }
 
   function beforeUnload(e) {
@@ -3927,10 +4095,15 @@ export function openBlogEditor(opts) {
   }
 
   async function close(force = false) {
-    if (!force && dirty) {
-      const saved = post.status === "published"
+    // A save can still be in flight - a draft saves as you type, and an imported
+    // post writes itself the moment it opens - so wait for it before deciding:
+    // if it failed, the work counts as unsaved again, and the writer is warned
+    // rather than losing it quietly.
+    if (!force && (dirty || saving)) {
+      if (saving) await saving.catch(() => {});
+      const saved = !dirty || (post.status === "published"
         ? canDraft && (await saveDraft())
-        : titleEl.textContent.trim() && (await save({ quiet: true }));
+        : titleEl.textContent.trim() && (await save({ quiet: true }).catch(() => false)));
       if (!saved && !confirmLeave()) return false;
     }
     clearTimeout(autosaveTimer);
@@ -3947,7 +4120,9 @@ export function openBlogEditor(opts) {
 
   const confirmLeave = () => window.confirm(post.status === "published"
     ? "This post has changes that are not live yet. Leave without updating?"
-    : "This draft has no title, so it cannot be saved. Leave anyway?");
+    : titleEl.textContent.trim()
+      ? "This post could not be saved. Leave anyway?"
+      : "This draft has no title, so it cannot be saved. Leave anyway?");
 
   // Wire up and show.
   ed.addEventListener("keydown", onKeydown);
@@ -3981,7 +4156,7 @@ export function openBlogEditor(opts) {
 
   titleEl.textContent = post.title || "";
   $("[data-crumb]").textContent = post.title || "Untitled";
-  loadBody(post.body);
+  loadBody(post.body);          // the box for the line is put on in there
   paintCover();
   paintIcon();
   paintProps();
@@ -3992,7 +4167,10 @@ export function openBlogEditor(opts) {
   openedContent = values();
   // What's on the site, to tell real edits from ones that add up to nothing.
   // The draft's page can't show it, so it comes from the row; else from the page.
-  liveKey = post.status !== "published" ? null : contentKey(hasDraft ? opts.row : openedContent);
+  /* A row as the editor reads it: the attribution paragraph, written before the
+   * line became a quote, counts as the quote it is now. */
+  const rowContent = (row) => ({ ...row, body: normaliseAttribution(row && row.body) });
+  liveKey = post.status !== "published" ? null : contentKey(hasDraft ? rowContent(opts.row) : openedContent);
   if (hasDraft && contentKey(openedContent) === liveKey) {
     // A draft identical to the live post (edits made and undone): drop it.
     hasDraft = false;
@@ -4007,6 +4185,15 @@ export function openBlogEditor(opts) {
   // The first block you can type in (not a contents block or an image, which would light up as selected).
   else if (post.title) focusBlock(allBlocks().find((b) => textEl(b)) || allBlocks()[0], true);
   else placeCaret(titleEl);
+
+  // An imported post arrives already written but is not in the list yet. It
+  // counts as work in hand and saves itself at once, so turning straight back -
+  // or a refresh before a keystroke - leaves the draft behind rather than
+  // nothing at all. Typed posts save the moment they are touched.
+  if (opts.initial) {
+    dirty = true;
+    save({ quiet: true });
+  }
 
   return { close };
 }

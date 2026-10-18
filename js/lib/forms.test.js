@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify } from "./forms.js";
+import { toLocalInputValue, fromLocalInputValue, formatDateTimeLocal, slugify, uniqueSlug, duplicateSlug } from "./forms.js";
+
+const DB_SLUG_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 test("an ISO instant round-trips through the datetime-local value", () => {
   const original = "2026-10-05T18:30:00.000Z";
@@ -38,4 +40,106 @@ test("slugify makes a clean address, even from accents and symbols", () => {
   assert.equal(slugify("!!!"), "");
   assert.ok(slugify("a ".repeat(100)).length <= 80);
   assert.ok(!slugify("a".repeat(79) + " b").endsWith("-"));
+});
+
+test("uniqueSlug returns free base unchanged and satisfies db constraint", () => {
+  const cases = [
+    uniqueSlug("my-post", []),
+    uniqueSlug("my-post", ["other-post"]),
+    uniqueSlug("my-post", new Set(["different-post"])),
+  ];
+  for (const s of cases) {
+    assert.equal(s, "my-post");
+    assert.ok(s.length <= 80);
+    assert.match(s, DB_SLUG_REGEX);
+  }
+});
+
+test("uniqueSlug gives -2 when base is taken", () => {
+  const s = uniqueSlug("my-post", ["my-post"]);
+  assert.equal(s, "my-post-2");
+  assert.ok(s.length <= 80);
+  assert.match(s, DB_SLUG_REGEX);
+});
+
+test("uniqueSlug gives -3 when base and -2 are taken", () => {
+  const s = uniqueSlug("my-post", ["my-post", "my-post-2"]);
+  assert.equal(s, "my-post-3");
+  assert.ok(s.length <= 80);
+  assert.match(s, DB_SLUG_REGEX);
+});
+
+test("uniqueSlug gives empty string for empty base", () => {
+  assert.equal(uniqueSlug("", []), "");
+  assert.equal(uniqueSlug(null, []), "");
+  assert.equal(uniqueSlug(undefined, []), "");
+});
+
+test("uniqueSlug truncates long base to fit 80 chars, avoids trailing dash, and matches db regex", () => {
+  const base80 = "a".repeat(80);
+  const s2 = uniqueSlug(base80, [base80]);
+  assert.equal(s2, "a".repeat(78) + "-2");
+  assert.equal(s2.length, 80);
+  assert.match(s2, DB_SLUG_REGEX);
+  assert.ok(!s2.endsWith("-"));
+
+  const s3 = uniqueSlug(base80, [base80, s2]);
+  assert.equal(s3, "a".repeat(78) + "-3");
+  assert.equal(s3.length, 80);
+  assert.match(s3, DB_SLUG_REGEX);
+  assert.ok(!s3.endsWith("-"));
+
+  // Truncation boundary landing on a dash must not yield double dash or trailing dash
+  const baseDash = "a".repeat(77) + "-bc";
+  assert.equal(baseDash.length, 80);
+  const sDash = uniqueSlug(baseDash, [baseDash]);
+  assert.equal(sDash, "a".repeat(77) + "-2");
+  assert.equal(sDash.length, 79);
+  assert.ok(sDash.length <= 80);
+  assert.match(sDash, DB_SLUG_REGEX);
+  assert.ok(!sDash.includes("--"));
+  assert.ok(!sDash.endsWith("-"));
+
+  // Multi-digit suffix truncation when suffixes -2 through -9 are taken
+  const takenSet = new Set([base80, ...Array.from({ length: 8 }, (_, i) => "a".repeat(78) + `-${i + 2}`)]);
+  const s10 = uniqueSlug(base80, takenSet);
+  assert.equal(s10, "a".repeat(77) + "-10");
+  assert.equal(s10.length, 80);
+  assert.match(s10, DB_SLUG_REGEX);
+  assert.ok(!s10.endsWith("-"));
+});
+
+test("duplicateSlug returns copy address with -copy suffix", () => {
+  assert.equal(duplicateSlug("hello-world"), "hello-world-copy");
+});
+
+test("duplicateSlug handles collisions with numbered suffixes", () => {
+  assert.equal(duplicateSlug("hello-world", ["hello-world-copy"]), "hello-world-copy-2");
+  assert.equal(duplicateSlug("hello-world", ["hello-world-copy", "hello-world-copy-2"]), "hello-world-copy-3");
+});
+
+test("duplicateSlug keeps an 80-character slug within limit and ends with -copy", () => {
+  const slug80 = "a".repeat(80);
+  const result = duplicateSlug(slug80);
+  assert.ok(result.length <= 80);
+  assert.ok(result.endsWith("-copy"));
+});
+
+test("duplicateSlug collision on an 80-character slug stays within limit", () => {
+  const slug80 = "a".repeat(80);
+  const first = duplicateSlug(slug80);
+  const second = duplicateSlug(slug80, [first]);
+  assert.ok(second.length <= 80);
+});
+
+test("duplicateSlug treats omitted taken parameter as empty", () => {
+  assert.equal(duplicateSlug("hello-world"), "hello-world-copy");
+  assert.equal(duplicateSlug("hello-world", undefined), "hello-world-copy");
+});
+
+test("duplicateSlug falls back to post-copy for empty or whitespace-only slug", () => {
+  assert.equal(duplicateSlug(""), "post-copy");
+  assert.equal(duplicateSlug("   "), "post-copy");
+  assert.equal(duplicateSlug(null), "post-copy");
+  assert.equal(duplicateSlug(undefined), "post-copy");
 });

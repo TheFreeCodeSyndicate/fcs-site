@@ -189,7 +189,46 @@ body.nb-open { overflow: hidden; }
 .nb-check { flex: none; width: 16px; height: 16px; margin: 8px 4px 0 2px; accent-color: var(--accent-deep); cursor: pointer; }
 .nb-block.is-done > .nb-content > .nb-text { text-decoration: line-through; color: var(--ink-muted); }
 
+/* ---- attribution checkbox and faded row ------------------------------ */
+.nb-attr-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 8px 4px 0 2px;
+  accent-color: var(--accent-deep);
+  cursor: pointer;
+}
+/* The row holds one block on its own: no gutter, and the line faded with its
+   link inert while the body does not carry it. */
+.nb-attribution .nb-gutter {
+  display: none;
+}
+.nb-attribution .is-attribution-off > .nb-content > .nb-text {
+  opacity: 0.45;
+}
+.nb-attribution .is-attribution-off > .nb-content > .nb-text .link {
+  pointer-events: none;
+}
+
 .nb-block[data-type="quote"] .nb-text { border-left: 3px solid var(--ink); padding-left: 14px; }
+/* The attribution line reads the same in the editor as on the page: italic and
+   centred, the marks drawn around the sentence - the opening lifted above the
+   cap line, the closing dropped below the line the underline sits on and set a
+   little clear of the link it follows - in the
+   accent, with room above the row so the sign-off stands clear of the paragraph
+   before it. The marks are pseudo-elements, so they never enter the body the
+   editor saves, and the block is found by the include box the row owns. The
+   faded row that holds the line while it is switched off sits outside
+   [data-root], so it keeps the plain look. */
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) { margin-top: 1.5rem; }
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text { border-left: 0; padding-left: 0; font-style: italic; text-align: center; }
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::before,
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::after {
+  font-style: normal; display: inline-block; line-height: 0; position: relative;
+  font-size: 1.8em; color: var(--accent-text);
+}
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::before { content: "\201C"; top: -0.19em; margin-right: -0.02em; }
+[data-root] .nb-block[data-type="quote"]:has(> .nb-content > .nb-attr-check) .nb-text::after { content: "\201D"; top: 0.8em; margin-left: 0.08em; }
 .nb-block[data-type="callout"] > .nb-content { padding: 12px 14px 12px 10px; border-radius: 6px; background: var(--hover); flex-wrap: nowrap; }
 .nb-callout-icon { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: 0; border-radius: 4px; background: none; font-size: 1.3rem; cursor: pointer; padding: 0; }
 .nb-callout-icon .emoji { width: 22px; height: 22px; }

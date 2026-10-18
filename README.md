@@ -192,6 +192,21 @@ Authors are named from core-member cards. Each admin and editor links their
 own login to their card once (Team page, or the prompt in a post's Authors
 row; the card is guessed from their email). Only they can change it.
 
+### Medium import
+
+Admin > **Blog** has an **Import from Medium** button in the header, and the editor's **⋯** menu has **Import from Medium**. There is no Medium account or OAuth involved: Medium's API is closed, so the importer reads only the public RSS feed (`medium.com/feed/@handle`) and the public story address.
+
+A feed carries only the author's ten newest stories (Medium does not paginate feeds). Pasting a story address reads the feed that address points at — the author's feed for a `medium.com/@handle/...` address, the publication's own feed for a publication domain — so it reaches an older story only when that feed still lists it. A story outside both its author's and its publication's newest ten cannot be reached at all: the story page and Medium's oEmbed endpoint both refuse a plain fetch, so the public feed is the only surface. Member-only stories are refused with the reason; stories from authors in the Partner Program are published as teasers in the RSS feed and are also refused.
+
+**Fidelity:**
+- **Lost:** code block language tags (Medium feeds emit plain `<pre>`), GitHub gists (a gist is a `<script>`, and the feed carries none), native Medium embeds, and LaTeX equations (the feed carries only the image Medium rendered).
+- **Preserved:** headings, paragraphs, blockquotes, lists, dividers, inline formatting (bold, italic, links, inline code), and third-party embeds recovered from Embedly: a YouTube video becomes a video block, and a tweet, Vimeo or CodeSandbox embed keeps its recovered address as an ordinary link.
+- **Images:** copied into `TheFreeCodeSyndicate/fcs-assets` by the `medium-import` function itself — its own copy of the same asset helpers, the same `GITHUB_ASSETS_TOKEN` and the same 2 MB sniff rules as a normal upload — and served from `cdn.jsdelivr.net`. Images larger than 2 MB, a GIF, an SVG, or images beyond the 40-image cap on one story stay hotlinked to Medium, and the import summary says so.
+
+An optional attribution paragraph ("Originally published on Medium" linked to the story URL) is ticked by default, appended at the end of the post, and can be edited or deleted. Regardless of whether attribution is included, the story's canonical address is saved in `source_url` for provenance and duplicate detection, and shown read-only under **Properties > Source**.
+
+Import requires confirming that you hold the rights to publish the story. Every import lands as an unpublished draft.
+
 ## Analytics
 
 Admin > **Analytics** shows how the public site is used, over the last
