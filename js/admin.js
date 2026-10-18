@@ -42,6 +42,7 @@ import { openBlogEditor } from "./blog-editor.js";
 import { openMediumImport } from "./medium-import.js";
 import { openMemberPicker, memberCard } from "./member-picker.js";
 import { guessMember } from "./lib/member-match.js";
+import { clipTitle } from "./lib/medium-wizard.js";
 import {
   escapeHTML, escapeAttr, safeURL, icon, platformIcon, linkIcon, watchFavicons,
   coreCardHTML, portraitHTML, roleStamp,
@@ -1080,9 +1081,12 @@ async function openPostEditor(row, { replace = false, initial = null } = {}) {
     duplicate: async (values) => {
       const taken = new Set((state.data.blog_posts || []).map((p) => p.slug));
       const slug = duplicateSlug(values.slug, taken);
-      await createBlogPost({ ...values, title: `Copy of ${values.title}`, slug, status: "draft", locked: false });
+      // 022 caps a title at 160 characters, and the prefix can push a long one
+      // over: the same clip the importer uses, so the copy always fits.
+      const title = clipTitle(`Copy of ${values.title}`, 160) || "Copy";
+      await createBlogPost({ ...values, title, slug, status: "draft", locked: false });
       await reload("blog_posts");
-      toast(`Saved a copy as a draft: “Copy of ${values.title}”.`, "info");
+      toast(`Saved a copy as a draft: “${title}”.`, "info");
     },
     history: (id) => listRowHistory("blog_posts", id, 100),
     analytics: (slug, days) => postAnalytics(slug, days),
