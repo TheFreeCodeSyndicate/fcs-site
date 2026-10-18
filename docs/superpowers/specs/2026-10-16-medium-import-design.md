@@ -515,7 +515,7 @@ against a real handle and a real story link (Phase 6).
 | **Hotlink Medium's images** | Fastest, but the site stops owning its own content and Medium could move or drop the addresses. Used only as the fallback when an image genuinely cannot be copied. |
 | **Import the whole story, no picker** | The user asked for the ability to bring across *part* of a story into a draft already in progress. All-or-nothing cannot do that. |
 | **Auto-convert bare links into bookmark cards** | Cards need metadata fetched at deploy; inventing them would produce empty cards. |
-| **Create the post immediately, then open the editor** | Leaves junk drafts behind when a writer changes their mind. The content is handed to an unsaved draft instead. |
+| **Hand the imported content to an unsaved draft and stop there** | The first cut, and the user found its hole: nothing was written until the writer typed, so turning straight back after an import lost the whole article. The editor now writes the row itself as it opens (decision 8). Rejected alongside it: a browser-side draft — a draft that is not on the server is not a draft, and it is gone on another machine or after clearing site data. |
 
 ## 13. Decisions
 
@@ -561,7 +561,13 @@ against a real handle and a real story link (Phase 6).
 7. **`source_url` is always recorded**, independently of the line, for
    provenance and the duplicate warning.
 8. **Imports land as drafts**, never published, and are attributed to the member
-   who imported them exactly as a hand-written post would be.
+   who imported them exactly as a hand-written post would be. The editor writes
+   that draft as it opens, without waiting for a keystroke: the imported post
+   counts as work in hand from the first moment, so turning straight back - or a
+   refresh - finds it in the list instead of losing it. Leaving waits for a save
+   already in flight, and if the save failed the writer is told what happened
+   ("This post could not be saved") rather than being warned about a missing
+   title it plainly has.
 9. **Losses are stated in the interface**, not discovered later: code language,
    gists and native embeds, maths, member-paywalled stories (including every
    story in a Partner-Program publication), the ten-story window, and any image

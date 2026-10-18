@@ -4095,10 +4095,15 @@ export function openBlogEditor(opts) {
   }
 
   async function close(force = false) {
-    if (!force && dirty) {
-      const saved = post.status === "published"
+    // A save can still be in flight - a draft saves as you type, and an imported
+    // post writes itself the moment it opens - so wait for it before deciding:
+    // if it failed, the work counts as unsaved again, and the writer is warned
+    // rather than losing it quietly.
+    if (!force && (dirty || saving)) {
+      if (saving) await saving.catch(() => {});
+      const saved = !dirty || (post.status === "published"
         ? canDraft && (await saveDraft())
-        : titleEl.textContent.trim() && (await save({ quiet: true }));
+        : titleEl.textContent.trim() && (await save({ quiet: true }).catch(() => false)));
       if (!saved && !confirmLeave()) return false;
     }
     clearTimeout(autosaveTimer);
@@ -4115,7 +4120,9 @@ export function openBlogEditor(opts) {
 
   const confirmLeave = () => window.confirm(post.status === "published"
     ? "This post has changes that are not live yet. Leave without updating?"
-    : "This draft has no title, so it cannot be saved. Leave anyway?");
+    : titleEl.textContent.trim()
+      ? "This post could not be saved. Leave anyway?"
+      : "This draft has no title, so it cannot be saved. Leave anyway?");
 
   // Wire up and show.
   ed.addEventListener("keydown", onKeydown);
@@ -4178,6 +4185,15 @@ export function openBlogEditor(opts) {
   // The first block you can type in (not a contents block or an image, which would light up as selected).
   else if (post.title) focusBlock(allBlocks().find((b) => textEl(b)) || allBlocks()[0], true);
   else placeCaret(titleEl);
+
+  // An imported post arrives already written but is not in the list yet. It
+  // counts as work in hand and saves itself at once, so turning straight back -
+  // or a refresh before a keystroke - leaves the draft behind rather than
+  // nothing at all. Typed posts save the moment they are touched.
+  if (opts.initial) {
+    dirty = true;
+    save({ quiet: true });
+  }
 
   return { close };
 }
